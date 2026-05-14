@@ -1,0 +1,17 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css"><style>
+body{margin:0;padding:30px;display:flex;justify-content:center;align-items:center}
+.wrap{position:relative;width:100%;max-width:600px}
+.wrap::before{content:'';position:absolute;inset:-20px -40px;background:radial-gradient(ellipse 80% 200% at 50% 50%,rgba(196,168,240,.18),rgba(143,229,197,.10) 40%,transparent 70%);filter:blur(20px);pointer-events:none}
+.bar{position:relative;display:flex;align-items:center;gap:10px;padding:8px 8px 8px 22px;background:rgba(21,19,29,.65);border:1px solid rgba(220,210,255,.16);border-radius:20px;backdrop-filter:blur(40px) saturate(1.5);-webkit-backdrop-filter:blur(40px) saturate(1.5);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 12px 40px rgba(0,0,0,.5)}
+.in{flex:1;background:transparent;border:0;outline:0;color:var(--label);font-size:16px;font-family:var(--font-system);padding:14px 0;letter-spacing:-.005em}
+.in::placeholder{color:rgba(238,232,250,.4);font-family:var(--font-display);font-style:italic;font-size:17px}
+.send{position:relative;width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#F5F1FF,#C4A8F0);color:#1a1525;border:0;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 0 24px rgba(196,168,240,.45);overflow:hidden}
+.persona{position:relative;width:32px;height:32px;border-radius:50%;border:1px solid rgba(196,168,240,.45);background:radial-gradient(circle at 50% 55%,rgba(196,168,240,.18),transparent 68%);box-shadow:inset 0 0 18px rgba(196,168,240,.14)}
+.persona::before{content:'';position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:#C4A8F0;box-shadow:0 0 18px rgba(196,168,240,.8),0 0 38px rgba(196,168,240,.35)}
+.send::after{content:'';position:absolute;inset:3px;border-radius:50%;border:1px solid rgba(196,168,240,.22);border-top-color:rgba(196,168,240,.9);opacity:.55}
+</style></head><body>
+<div class="wrap"><div class="bar">
+  <input class="in" placeholder="ask, or describe what you need…">
+  <button class="send" aria-label="Send"><span class="persona" aria-hidden="true"></span></button>
+</div></div>
+</body></html>

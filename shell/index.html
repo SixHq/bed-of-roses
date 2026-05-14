@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <title>Bed of Roses</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/logo-mark.svg" />
+  <!-- Theme tokens load BEFORE the structural stylesheet so :root variables are
+       available everywhere style.css references them. The link tag carries
+       data-theme="..." so app.js can swap it out at runtime when the user
+       picks a different theme. The id below corresponds to shell/themes/<id>/. -->
+  <link rel="stylesheet" id="theme-tokens" href="/themes/bloom/tokens.css" data-theme="bloom" data-role="tokens" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+  <!-- Wallpaper backdrop: applied via CSS variable --wallpaper. Lives at the
+       very back so the chrome stays monochrome on top while the user's chosen
+       background tints the world. -->
+  <div id="wallpaper" class="wallpaper" aria-hidden="true"></div>
+
+  <!-- Ambient field: drifting motes that tint with the avatar color.
+       Sits at the back of every screen so onboarding and home share atmosphere. -->
+  <canvas id="ambient-bg" class="ambient-bg" aria-hidden="true"></canvas>
+
+  <!-- Decoration layer: autonomous SVG objects placed by create_svg. -->
+  <div id="decor-layer" class="decor-layer" aria-hidden="true"></div>
+
+  <!-- HUD: diegetic corner status lines. Visible during onboarding to signal
+       you're inside a system, faded out once you reach home. -->
+  <div class="hud" id="hud" aria-hidden="true">
+    <div class="hud-cell hud-tl">
+      <span class="hud-tick">●</span>
+      <span class="hud-label">BED · OF · ROSES</span>
+      <span class="hud-meta" id="hud-time">·</span>
+    </div>
+    <div class="hud-cell hud-tr">
+      <span class="hud-label">v0.3 · BRAINSTEM</span>
+      <span class="hud-meta">N7-A1</span>
+    </div>
+    <div class="hud-cell hud-bl">
+      <span class="hud-label" id="hud-stage">INIT · IDENTITY</span>
+    </div>
+    <div class="hud-cell hud-br">
+      <span class="hud-label">SYSTEM READY</span>
+      <span class="hud-tick">◐</span>
+    </div>
+  </div>
+
+  <!-- Splash: full brand lockup, fades in/out -->
+  <section id="splash" class="screen splash">
+    <img class="splash-logo" src="/assets/logo-full-dark.svg" alt="Bed of Roses" />
+  </section>
+
+  <!-- Onboarding: full-viewport, single-task panes, top progress bar -->
+  <section id="onboarding" class="screen onboarding hidden">
+    <div class="onboarding-progress" id="progress"></div>
+
+    <!-- Pane 1: welcome -->
+    <div class="pane active" data-pane="welcome">
+      <div class="pane-content">
+        <img class="pane-hero-mark" src="/assets/logo-mark.svg" alt="" aria-hidden="true" />
+        <h1 class="headline">Welcome.</h1>
+        <p class="subheadline">Your computer starts empty. Talk to it, and it builds itself around how you work.</p>
+        <button class="btn btn-primary" id="welcome-next" type="button">Get started</button>
+      </div>
+    </div>
+
+    <!-- Pane 2: name -->
+    <div class="pane" data-pane="name">
+      <div class="pane-content">
+        <div class="pane-hero" aria-hidden="true"></div>
+        <h1 class="headline">Name your AI.</h1>
+        <p class="subheadline">You'll see this name everywhere they show up.</p>
+
+        <div class="field">
+          <label class="field-label" for="ai-name">Name</label>
+          <input class="field-input" id="ai-name" type="text" placeholder="Atlas" maxlength="24" autocomplete="off" />
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" id="name-back" type="button">Back</button>
+          <button class="btn btn-primary" id="name-next" type="button">Continue</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pane 3: theme — pick the visual world you want to live in -->
+    <div class="pane" data-pane="theme">
+      <div class="pane-content theme-content">
+        <h1 class="headline">Pick a world.</h1>
+        <p class="subheadline">Themes are more than colors. Each is a different feel — the same OS, dressed for a different person.</p>
+
+        <div class="theme-grid" id="theme-grid" role="radiogroup" aria-label="Theme">
+          <!-- Theme cards inserted by app.js from publicThemeList() -->
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" id="theme-back" type="button">Back</button>
+          <button class="btn btn-primary" id="theme-next" type="button">Continue</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pane 4: presence (memoji preview cards + color picker) -->
+    <div class="pane" data-pane="presence">
+      <div class="pane-content presence-content">
+        <h1 class="headline">Choose a presence.</h1>
+        <p class="subheadline">Pick a personality and a color. Same intelligence — different feeling.</p>
+
+        <div class="presence-grid" id="presence-grid" role="radiogroup" aria-label="Presence">
+          <!-- Cards inserted by app.js so each canvas can be individually mounted -->
+        </div>
+
+        <div class="color-section">
+          <span class="color-section-label">Color</span>
+          <div class="color-picker" id="color-picker" role="radiogroup" aria-label="Color">
+            <!-- Color swatches inserted by app.js -->
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" id="presence-back" type="button">Back</button>
+          <button class="btn btn-primary" id="presence-next" type="button">Continue</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pane 4: connect — provider tile grid -->
+    <div class="pane" data-pane="connect">
+      <div class="pane-content connect-content">
+        <h1 class="headline">Connect a model.</h1>
+        <p class="subheadline">Choose your provider. You can add more — and switch between them anytime.</p>
+
+        <div class="provider-grid" id="provider-grid" role="list">
+          <!-- Tiles rendered by app.js from /api/providers -->
+        </div>
+
+        <p class="field-error hidden" id="onboarding-error"></p>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" id="connect-back" type="button">Back</button>
+          <button class="btn btn-primary" id="connect-finish" type="button" disabled>Begin</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Home -->
+  <section id="home" class="screen home hidden">
+    <header class="home-chrome">
+      <div class="home-chrome-left">
+        <div class="wordmark">
+          <img class="wordmark-mark" src="/assets/logo-mark.svg" alt="" aria-hidden="true" />
+          <span>Bed of Roses</span>
+        </div>
+        <button class="icon-button" id="reset-btn" type="button" aria-label="Settings" title="Settings">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4">
+            <circle cx="8" cy="8" r="2.4"></circle>
+            <path d="M8 1.2v1.8M8 13v1.8M14.8 8H13M3 8H1.2M12.8 3.2l-1.3 1.3M4.5 11.5l-1.3 1.3M12.8 12.8l-1.3-1.3M4.5 4.5L3.2 3.2"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Avatar: abstract canvas presence (Memoji renderer). -->
+    <button id="avatar" class="avatar avatar-center" data-state="idle" aria-label="Talk to your AI" type="button">
+      <canvas id="avatar-canvas" class="avatar-canvas" aria-hidden="true"></canvas>
+    </button>
+
+    <div id="greeting" class="greeting"></div>
+
+    <main id="grid" class="grid"></main>
+
+    <!-- Floating persona orb. Default state: 52px round persona button,
+         draggable anywhere on the viewport. Click expands it horizontally
+         into a pill at its current position; the persona stays as the right
+         edge and remains the send control. -->
+    <form id="chat-form" class="chat-orb" data-state="collapsed" autocomplete="off">
+      <input id="chat-input" class="chat-input" type="text" placeholder="Ask. Or describe what you need." autocomplete="off" />
+      <button type="submit" class="chat-send" aria-label="Send / drag persona" id="chat-send">
+        <canvas id="chat-send-canvas" class="send-persona-canvas" aria-hidden="true"></canvas>
+        <span class="persona-loader" aria-hidden="true"></span>
+        <span class="persona-xml-loader" aria-hidden="true">
+          <i></i><i></i><i></i>
+        </span>
+      </button>
+    </form>
+
+    <aside id="chat-log" class="chat-log" aria-live="polite"></aside>
+
+    <div id="widget-modal" class="modal hidden">
+      <div class="modal-backdrop" data-close="1"></div>
+      <div class="modal-frame">
+        <header class="modal-header">
+          <span class="modal-title" id="modal-title"></span>
+          <div class="modal-actions">
+            <button class="icon-button" id="modal-delete" type="button" aria-label="Delete widget" title="Delete">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+                <path d="M3 4h10M6 4V2.8h4V4M5 4l.7 9.2h4.6L11 4"></path>
+              </svg>
+            </button>
+            <button class="icon-button" id="modal-close" type="button" data-close="1" aria-label="Close" title="Close">
+              <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                <path d="M4 4l8 8M12 4l-8 8"></path>
+              </svg>
+            </button>
+          </div>
+        </header>
+        <iframe id="modal-iframe" sandbox="allow-scripts" title="Widget"></iframe>
+      </div>
+    </div>
+
+    <div id="system-modal" class="modal hidden">
+      <div class="modal-backdrop" data-system-close="1"></div>
+      <div class="modal-frame system-frame">
+        <header class="modal-header">
+          <span class="modal-title" id="system-title"></span>
+          <div class="modal-actions" id="system-actions"></div>
+          <button class="icon-button" id="system-close" type="button" data-system-close="1" aria-label="Close" title="Close">
+            <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+              <path d="M4 4l8 8M12 4l-8 8"></path>
+            </svg>
+          </button>
+        </header>
+        <div id="system-body" class="system-body"></div>
+      </div>
+    </div>
+  </section>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

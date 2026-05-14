@@ -1,0 +1,942 @@
+/* Pixel CRT — component-level overrides.
+
+   The shell's structural CSS uses subtle hairlines, soft halos, gradient
+   tiles, italic serif headlines, and rounded corners. None of that
+   belongs in a phosphor terminal. This file:
+     • Forces every element onto the monospace stack (no proportional
+       fonts in this theme — including body and field copy).
+     • Squares every theme-controlled radius (we already set --r-* to 0
+       in tokens but some selectors hard-code radii in the shell, so we
+       override those too).
+     • Replaces soft drop-shadows with emissive phosphor halos.
+     • Inverts hover on buttons (fill goes phosphor-green, text goes
+       canvas-black) — the canonical CRT click-feel.
+     • Adds the decorative CRT pattern: scanlines on the wallpaper,
+       blink animation on the chat cursor, ASCII corner markers on the
+       tile-thumb, and a subtle global contrast/brightness lift that
+       reads as the CRT's tube curvature without bending geometry.
+
+   Anything not redefined here keeps the shell's structure and
+   positioning. */
+
+/* ------------------------------------------------------------------
+   Global type — monospace EVERYTHING. There is no proportional font
+   in this theme. Even paragraph copy stays mono.
+------------------------------------------------------------------ */
+html,
+body,
+input,
+button,
+select,
+textarea {
+  font-family: var(--font-mono);
+  letter-spacing: 0;        /* mono needs no tracking compensation */
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The body picks up a faint phosphor glow on every glyph. Subtle —
+   noisy at high alpha. Use the same colour the text is painted in so
+   text-shadow tracks if a child element overrides --label. */
+body {
+  text-shadow: 0 0 6px rgba(51, 255, 102, 0.45);
+}
+
+/* SVG icons should render as bitmap pixels — the structural shell uses
+   vector glyphs at small sizes, and the CRT mood asks for hard pixel
+   edges instead of smoothed AA on those small sprites. */
+svg, img { image-rendering: pixelated; }
+
+/* ------------------------------------------------------------------
+   Wallpaper — flat near-black + horizontal scanlines.
+   The atmosphere token paints the canvas; we layer a 2px-period
+   scanline pattern on top so the WHOLE desktop reads as a CRT tube.
+   Kept at low alpha (0.18) so widgets stay legible on top.
+------------------------------------------------------------------ */
+.wallpaper {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 2px,
+      rgba(0, 0, 0, 0.18) 2px 3px
+    ),
+    var(--canvas);
+  /* Subtle vignette mimics the rolloff at the edges of the tube */
+  box-shadow: inset 0 0 240px rgba(0, 0, 0, 0.55);
+}
+
+/* The home and onboarding screens get a barely-perceptible contrast +
+   brightness lift — the "tube hum" without distorting layout. Reduced
+   motion users still get the look (it isn't motion). */
+.onboarding,
+.home,
+.splash {
+  filter: contrast(1.02) brightness(1.02);
+}
+
+/* ------------------------------------------------------------------
+   Headlines + display — VT323 for the hero, ALL CAPS, tight leading.
+   Plex Mono renders headlines crisply but loses the bitmap charm at
+   hero scale. Switch to VT323 once we cross 30px or so.
+------------------------------------------------------------------ */
+.headline,
+.subheadline,
+.modal-title,
+.tile-name,
+.greeting,
+.wordmark span,
+.presence-card-label,
+.theme-label {
+  font-style: normal;
+  letter-spacing: 0.02em;
+}
+
+.headline {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  font-size: 64px;
+  line-height: 0.95;
+  letter-spacing: 0.02em;
+  color: var(--phosphor);
+  text-shadow:
+    0 0 8px rgba(51, 255, 102, 0.65),
+    0 0 24px rgba(51, 255, 102, 0.35);
+}
+/* The welcome pane upsizes the headline. VT323 holds up at 84px. */
+.pane[data-pane="welcome"] .headline {
+  font-size: 84px;
+  line-height: 0.92;
+}
+.subheadline {
+  font-family: var(--font-mono);
+  color: var(--phosphor-dim);
+  text-shadow: 0 0 4px rgba(31, 166, 62, 0.45);
+}
+/* Lead with a structural caret on the subheadline, terminal-style. */
+.subheadline::before {
+  content: "> ";
+  color: var(--phosphor);
+  opacity: 0.85;
+}
+
+/* Greeting on the empty home screen */
+.greeting {
+  font-family: var(--font-mono);
+  color: var(--phosphor-dim);
+  text-shadow: 0 0 4px rgba(31, 166, 62, 0.45);
+  letter-spacing: 0.02em;
+}
+
+/* Wordmark — uppercase mono with phosphor glow, no italic. */
+.wordmark span {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--phosphor);
+  text-shadow: 0 0 6px rgba(51, 255, 102, 0.60);
+}
+.wordmark { color: var(--phosphor-dim); }
+
+/* HUD corner labels — the structural shell already uses mono. Switch
+   the colour to phosphor-amber so HUD reads as system chatter, not
+   primary content. Magenta is reserved for hud labels marked .error. */
+.hud-cell { color: var(--phosphor-amber); }
+.hud-label {
+  color: var(--phosphor-amber);
+  text-shadow: 0 0 4px rgba(255, 176, 0, 0.55);
+}
+.hud-meta { color: rgba(255, 176, 0, 0.45); }
+.hud-tick { color: var(--phosphor); }
+.hud-cell.error,
+.hud-cell[data-error] {
+  color: var(--phosphor-magenta);
+  text-shadow: 0 0 6px rgba(255, 59, 139, 0.65);
+}
+
+/* ------------------------------------------------------------------
+   Buttons — square, transparent, 1px phosphor border. Hover INVERTS
+   (green fill, canvas text). Active flashes brighter for 1 frame.
+------------------------------------------------------------------ */
+.btn {
+  border: 1px solid var(--phosphor);
+  border-radius: 0;
+  background: transparent;
+  color: var(--phosphor);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-shadow: 0 0 6px rgba(51, 255, 102, 0.65);
+  box-shadow:
+    inset 0 0 0 1px var(--canvas),
+    0 0 12px rgba(51, 255, 102, 0.30);
+  /* Hard-cut transitions — terminals don't ease */
+  transition: background 60ms steps(1, end),
+              color 60ms steps(1, end),
+              box-shadow 80ms steps(1, end);
+  animation: none;          /* kill Bloom's portal-breathe primary anim */
+}
+.btn:hover:not(:disabled) {
+  background: var(--phosphor);
+  color: var(--canvas);
+  text-shadow: none;
+  box-shadow:
+    inset 0 0 0 1px var(--phosphor),
+    0 0 18px rgba(51, 255, 102, 0.70);
+}
+.btn:active:not(:disabled) {
+  /* The 1-frame flash on click — phosphor just got struck */
+  background: #66FF99;
+  color: var(--canvas);
+  box-shadow:
+    inset 0 0 0 1px #66FF99,
+    0 0 28px rgba(51, 255, 102, 0.95);
+  transform: none;
+}
+.btn-primary {
+  background: var(--phosphor);
+  color: var(--canvas);
+  text-shadow: none;
+  box-shadow:
+    inset 0 0 0 1px var(--phosphor),
+    0 0 18px rgba(51, 255, 102, 0.65);
+  animation: none;
+}
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.15);
+  box-shadow:
+    inset 0 0 0 1px #66FF99,
+    0 0 24px rgba(51, 255, 102, 0.85);
+}
+.btn-secondary {
+  background: transparent;
+  color: var(--phosphor);
+  border-color: var(--phosphor);
+}
+.btn-secondary:hover {
+  background: var(--phosphor);
+  color: var(--canvas);
+}
+.btn:disabled,
+.btn[disabled] {
+  background: transparent;
+  color: var(--phosphor-deep);
+  border-color: var(--phosphor-deep);
+  text-shadow: none;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 1;            /* the dim color does the dim work */
+}
+
+/* Make the primary button look like a "RUN" key — leading caret */
+.btn-primary::before {
+  content: "▶ ";
+  font-size: 0.85em;
+  margin-right: 2px;
+  letter-spacing: 0;
+}
+
+/* ------------------------------------------------------------------
+   Inputs — square, transparent fill, 1px phosphor border, monospace
+   caret. Focus state rings the field with a brighter glow rather than
+   shifting border color (which would feel un-terminal).
+------------------------------------------------------------------ */
+.field-input,
+.field-select,
+.chat-input,
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="email"],
+textarea {
+  background: var(--surface-1);
+  border: 1px solid var(--phosphor);
+  border-radius: 0;
+  color: var(--phosphor);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  caret-color: var(--phosphor);
+  text-shadow: 0 0 5px rgba(51, 255, 102, 0.55);
+  box-shadow: inset 0 0 12px rgba(51, 255, 102, 0.08);
+  transition: box-shadow 80ms steps(1, end),
+              border-color 80ms steps(1, end);
+}
+.field-input::placeholder,
+.chat-input::placeholder,
+textarea::placeholder {
+  color: var(--phosphor-deep);
+  text-shadow: none;
+  font-style: normal;        /* Bloom set placeholder italic — not here */
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.field-input:focus,
+.field-select:focus,
+.chat-input:focus,
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+input[type="email"]:focus,
+textarea:focus {
+  border-color: var(--phosphor);
+  box-shadow:
+    inset 0 0 0 1px var(--surface-2),
+    0 0 0 1px var(--phosphor),
+    0 0 16px rgba(51, 255, 102, 0.55);
+}
+
+/* Field labels — leading "/ " stripped (shell's Bloom convention) and
+   replaced with terminal-style "> " in mono uppercase. */
+.field-label,
+.color-section-label {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: var(--phosphor);
+  text-shadow: 0 0 4px rgba(51, 255, 102, 0.55);
+}
+.field-label::before,
+.color-section-label::before {
+  content: "> ";
+  color: var(--phosphor);
+  opacity: 0.85;
+}
+
+/* The field-select arrow caret — switch from grey triangle to a mono
+   "▼" rendered via background-image. Cleaner on the dark canvas. */
+.field-select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--phosphor) 50%),
+    linear-gradient(135deg, var(--phosphor) 50%, transparent 50%);
+}
+
+/* Field error — magenta is reserved for actual failure states */
+.field-error {
+  color: var(--phosphor-magenta);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  text-shadow: 0 0 6px rgba(255, 59, 139, 0.55);
+}
+.field-error::before {
+  content: "!! ";
+  color: var(--phosphor-magenta);
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------
+   Chat orb / chat input
+   The orb is a floating blinking-cursor pill, not a frosted glass
+   capsule. We square the corners, switch to a phosphor border, and
+   add a hard blink on the input caret.
+------------------------------------------------------------------ */
+.chat-orb {
+  border-radius: 0;
+  background: rgba(15, 20, 14, 0.90);
+  border: 1px solid var(--phosphor);
+  box-shadow:
+    0 0 14px rgba(51, 255, 102, 0.40),
+    inset 0 0 18px rgba(51, 255, 102, 0.08);
+  filter: drop-shadow(0 0 10px rgba(51, 255, 102, 0.40));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.chat-orb[data-state="collapsed"] {
+  width: 52px;
+  border-radius: 0;
+}
+.chat-orb[data-state="expanded"] {
+  border-radius: 0;
+  background: rgba(15, 20, 14, 0.92);
+  border: 1px solid var(--phosphor);
+  padding-left: 18px;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow:
+    0 0 18px rgba(51, 255, 102, 0.55),
+    inset 0 0 22px rgba(51, 255, 102, 0.10);
+}
+.chat-orb .chat-input {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--phosphor);
+  text-shadow: 0 0 6px rgba(51, 255, 102, 0.55);
+  caret-color: var(--phosphor);
+}
+.chat-orb .chat-input::placeholder {
+  color: var(--phosphor-deep);
+  font-family: var(--font-mono);
+  font-style: normal;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+}
+
+/* The blink cursor — added as an after-element on the expanded orb
+   when the input is focused. 1s steps(2) gives the hard on/off cadence
+   real terminals had (no fade, no ease). */
+.chat-orb[data-state="expanded"]::before {
+  content: "$>";
+  color: var(--phosphor-amber);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.10em;
+  margin-right: 10px;
+  text-shadow: 0 0 6px rgba(255, 176, 0, 0.65);
+  align-self: center;
+}
+.chat-orb[data-state="expanded"]:focus-within::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 58px;
+  display: block;
+  width: 8px;
+  height: 16px;
+  background: var(--phosphor);
+  margin: 0;
+  transform: translateY(-50%);
+  box-shadow: 0 0 6px rgba(51, 255, 102, 0.75);
+  animation: crt-blink 1s steps(2) infinite;
+  pointer-events: none;
+}
+@keyframes crt-blink {
+  0%, 49%   { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Hold the cursor lit; the blink is decorative, not informational */
+  .chat-orb[data-state="expanded"]:focus-within::after {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* Send button — square, fills the right edge */
+.chat-orb .chat-send {
+  width: 42px;
+  height: 42px;
+  border-radius: 0;
+  background: var(--phosphor);
+  color: var(--canvas);
+  border: 0;
+  box-shadow: 0 0 14px rgba(51, 255, 102, 0.55);
+  margin: 5px;
+}
+.chat-orb[data-state="collapsed"] .chat-send {
+  width: 52px;
+  height: 52px;
+  margin: 0;
+  border-radius: 0;
+}
+.chat-orb .chat-send:hover { filter: brightness(1.15); }
+
+/* "Speaking" halo — keep the breath but in phosphor green, square. */
+.chat-orb.speaking {
+  filter:
+    drop-shadow(0 0 14px rgba(51, 255, 102, 0.65))
+    drop-shadow(0 0 36px rgba(51, 255, 102, 0.40));
+}
+
+/* ------------------------------------------------------------------
+   Tiles — square cards with phosphor border + emissive glow.
+   The shell's tile-thumb has a presence-color gradient background;
+   we replace it with the surface fill and let the glow handle "lift".
+   ASCII corner markers (┌ ┐ └ ┘) decorate non-1x1 tiles to read as
+   ASCII frames without breaking the underlying box layout.
+------------------------------------------------------------------ */
+.tile-thumb {
+  background: var(--surface-1);
+  border: 1px solid var(--phosphor);
+  border-radius: 0;
+  box-shadow:
+    0 0 12px rgba(51, 255, 102, 0.28),
+    inset 0 0 22px rgba(51, 255, 102, 0.08);
+  transition: box-shadow 80ms steps(1, end),
+              border-color 80ms steps(1, end),
+              transform 80ms steps(1, end);
+  color: var(--phosphor);
+}
+.tile:hover .tile-thumb {
+  border-color: var(--phosphor);
+  transform: none;
+  box-shadow:
+    0 0 22px rgba(51, 255, 102, 0.65),
+    inset 0 0 30px rgba(51, 255, 102, 0.18);
+}
+.tile:active .tile-thumb {
+  transform: none;
+  box-shadow:
+    0 0 32px rgba(51, 255, 102, 0.95),
+    inset 0 0 30px rgba(51, 255, 102, 0.24);
+}
+
+/* ASCII corner markers on richer tiles. Decorative — no overflow,
+   no layout impact. We use Plex Mono box-drawing glyphs at 14px. */
+.tile:not([data-size="1x1"]) .tile-thumb::before {
+  content: "┌─┐";
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  right: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.20em;
+  color: var(--phosphor);
+  opacity: 0.55;
+  text-shadow: 0 0 4px rgba(51, 255, 102, 0.45);
+  pointer-events: none;
+  z-index: 2;
+}
+/* The bottom darkening overlay reads better as transparent here — the
+   tile already has a dark surface and the name sits in green. */
+.tile:not([data-size="1x1"]) .tile-thumb::after {
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.40));
+}
+
+.tile-name {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  color: var(--phosphor);
+  text-shadow: 0 0 6px rgba(51, 255, 102, 0.55);
+}
+.tile:not([data-size="1x1"]) .tile-name {
+  text-shadow: 0 0 6px rgba(51, 255, 102, 0.55), 0 1px 6px rgba(0, 0, 0, 0.65);
+}
+
+.tile-glyph-fallback { color: var(--phosphor); opacity: 0.85; }
+.tile:not([data-size="1x1"]) .tile-thumb:has(> .tile-glyph-fallback) {
+  background:
+    radial-gradient(120% 80% at 85% 15%,
+      rgba(51, 255, 102, 0.10),
+      rgba(51, 255, 102, 0) 60%),
+    var(--surface-1);
+}
+
+/* Delete affordance — square magenta box with no rounded corner */
+.tile-delete {
+  border-radius: 0;
+  background: var(--canvas);
+  border: 1px solid var(--phosphor-magenta);
+  color: var(--phosphor-magenta);
+  text-shadow: 0 0 5px rgba(255, 59, 139, 0.65);
+  box-shadow: 0 0 8px rgba(255, 59, 139, 0.40);
+}
+.tile-delete:hover {
+  background: var(--phosphor-magenta);
+  color: var(--canvas);
+  text-shadow: none;
+}
+
+/* ------------------------------------------------------------------
+   Modal — square frame, phosphor border, hard-cut entrance.
+------------------------------------------------------------------ */
+.modal-frame {
+  background: var(--surface-1);
+  border: 1px solid var(--phosphor);
+  border-radius: 0;
+  box-shadow:
+    0 0 28px rgba(51, 255, 102, 0.40),
+    inset 0 0 36px rgba(51, 255, 102, 0.06);
+}
+.modal-backdrop {
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: none;          /* phosphor terminals don't blur */
+  -webkit-backdrop-filter: none;
+}
+.modal-title {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--phosphor);
+  text-shadow: 0 0 5px rgba(51, 255, 102, 0.60);
+}
+.modal-title::before {
+  content: "// ";
+  color: var(--phosphor-amber);
+  opacity: 0.85;
+}
+.modal-header {
+  border-bottom: 1px solid var(--hairline);
+}
+
+/* ------------------------------------------------------------------
+   Provider cards — square rows with phosphor borders. Connected state
+   gets a brighter glow and an "on-air" green-amber border accent.
+------------------------------------------------------------------ */
+.provider-card {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: 0;
+  box-shadow: inset 0 0 14px rgba(51, 255, 102, 0.04);
+}
+.provider-card:hover {
+  background: var(--surface-2);
+  border-color: var(--phosphor);
+  box-shadow:
+    0 0 14px rgba(51, 255, 102, 0.30),
+    inset 0 0 18px rgba(51, 255, 102, 0.06);
+}
+.provider-card.expanded,
+.provider-card.connected {
+  background: var(--surface-2);
+  border-color: var(--phosphor);
+  box-shadow:
+    0 0 18px rgba(51, 255, 102, 0.45),
+    inset 0 0 22px rgba(51, 255, 102, 0.10);
+}
+.provider-head:hover { background: rgba(51, 255, 102, 0.04); }
+.provider-name {
+  font-family: var(--font-mono);
+  font-style: normal;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  color: var(--phosphor);
+  text-shadow: 0 0 5px rgba(51, 255, 102, 0.55);
+}
+.provider-status {
+  font-family: var(--font-mono);
+  color: var(--phosphor-dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.provider-status::before {
+  content: "$ ";
+  color: var(--phosphor-amber);
+  opacity: 0.85;
+}
+.provider-card.connected .provider-status::before {
+  content: "● ";
+  color: var(--phosphor);
+  opacity: 1;
+}
+.provider-mark { color: var(--phosphor); }
+.status-dot {
+  border-radius: 0;
+  width: 8px;
+  height: 8px;
+  background: var(--phosphor-deep);
+  box-shadow: none;
+}
+.provider-card.connected .status-dot {
+  background: var(--phosphor);
+  box-shadow: 0 0 8px rgba(51, 255, 102, 0.85);
+}
+.default-pill {
+  border-radius: 0;
+  background: var(--phosphor);
+  color: var(--canvas);
+  border: 1px solid var(--phosphor);
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-shadow: none;
+}
+.provider-chevron { color: var(--phosphor); }
+
+/* Drawer hint copy + presets */
+.drawer-hint {
+  font-family: var(--font-mono);
+  color: var(--phosphor-dim);
+  letter-spacing: 0.04em;
+}
+.drawer-hint::before {
+  content: "// ";
+  color: var(--phosphor-amber);
+  opacity: 0.75;
+}
+.preset-chip {
+  background: var(--surface-1);
+  border: 1px solid var(--phosphor);
+  border-radius: 0;
+  color: var(--phosphor);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  text-shadow: 0 0 4px rgba(51, 255, 102, 0.50);
+}
+.preset-chip:hover {
+  background: var(--phosphor);
+  color: var(--canvas);
+  border-color: var(--phosphor);
+  text-shadow: none;
+}
+.signup-link {
+  color: var(--phosphor-amber);
+  border-bottom-color: var(--phosphor-amber);
+  font-family: var(--font-mono);
+  text-shadow: 0 0 4px rgba(255, 176, 0, 0.55);
+}
+.signup-link:hover {
+  color: var(--phosphor-amber);
+  border-bottom-color: var(--phosphor-amber);
+  text-shadow: 0 0 8px rgba(255, 176, 0, 0.85);
+}
+
+/* ------------------------------------------------------------------
+   Theme picker + presence picker — same square + glow treatment.
+------------------------------------------------------------------ */
+.theme-card,
+.presence-card {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: 0;
+  box-shadow: inset 0 0 16px rgba(51, 255, 102, 0.04);
+  transition: box-shadow 80ms steps(1, end),
+              border-color 80ms steps(1, end),
+              background 80ms steps(1, end);
+}
+.theme-card::before,
+.presence-card::before {
+  background: none;            /* kill Bloom's top-light rim */
+}
+.theme-card:hover,
+.presence-card:hover {
+  background: var(--surface-2);
+  border-color: var(--phosphor);
+  transform: none;
+  box-shadow:
+    0 0 16px rgba(51, 255, 102, 0.40),
+    inset 0 0 22px rgba(51, 255, 102, 0.08);
+}
+.theme-card.selected,
+.presence-card.selected {
+  background: var(--surface-2);
+  border-color: var(--phosphor);
+  transform: none;
+  box-shadow:
+    0 0 22px rgba(51, 255, 102, 0.65),
+    inset 0 0 28px rgba(51, 255, 102, 0.12);
+}
+.theme-card.selected::after,
+.presence-card.selected::after {
+  display: none;               /* the glow is the selection cue */
+}
+.theme-swatches {
+  border-radius: 0;
+  border: 1px solid var(--phosphor);
+  box-shadow: 0 0 10px rgba(51, 255, 102, 0.30);
+}
+.theme-label,
+.presence-card-label {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--phosphor);
+  text-shadow: 0 0 5px rgba(51, 255, 102, 0.55);
+}
+.theme-tagline,
+.presence-card-sub {
+  font-family: var(--font-mono);
+  color: var(--phosphor-dim);
+  letter-spacing: 0.06em;
+}
+
+/* Presence canvas wrap — keep the round canvas (it's where the avatar
+   draws its head) but switch the rim to phosphor green and remove
+   the radial wash so the canvas stays on the same flat surface. */
+.presence-canvas-wrap {
+  border-color: var(--phosphor);
+  background: var(--surface-1);
+  box-shadow: 0 0 12px rgba(51, 255, 102, 0.30);
+}
+.presence-card:hover .presence-canvas-wrap,
+.presence-card.selected .presence-canvas-wrap {
+  border-color: var(--phosphor);
+  box-shadow:
+    0 0 0 2px var(--canvas),
+    0 0 14px rgba(51, 255, 102, 0.65);
+}
+
+/* ------------------------------------------------------------------
+   Color swatches — square instead of round; phosphor ring on selected.
+------------------------------------------------------------------ */
+.color-swatch {
+  border-radius: 0;
+  border: 1px solid var(--phosphor);
+  box-shadow: 0 0 6px rgba(51, 255, 102, 0.30);
+  transition: box-shadow 80ms steps(1, end);
+}
+.color-swatch:hover {
+  transform: none;
+  border-color: var(--phosphor);
+  box-shadow: 0 0 14px rgba(51, 255, 102, 0.65);
+}
+.color-swatch.selected {
+  border-color: var(--phosphor);
+  box-shadow:
+    0 0 0 2px var(--canvas),
+    0 0 0 3px var(--phosphor),
+    0 0 14px rgba(51, 255, 102, 0.65);
+}
+.color-swatch::after {
+  border-radius: 0;
+}
+
+/* ------------------------------------------------------------------
+   Onboarding chips — square 1px frames; selected fills phosphor.
+------------------------------------------------------------------ */
+.chip {
+  border-radius: 0;
+  background: var(--surface-1);
+  border: 1px solid var(--phosphor);
+  color: var(--phosphor);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-shadow: 0 0 4px rgba(51, 255, 102, 0.50);
+  transition: background 60ms steps(1, end),
+              color 60ms steps(1, end);
+}
+.chip:hover {
+  background: rgba(51, 255, 102, 0.12);
+  color: var(--phosphor);
+  border-color: var(--phosphor);
+}
+.chip.selected {
+  background: var(--phosphor);
+  color: var(--canvas);
+  border-color: var(--phosphor);
+  text-shadow: none;
+}
+
+/* ------------------------------------------------------------------
+   Pane hero ring — the 72px dot/circle on most onboarding panes.
+   Keep it circular (the shell hard-codes border-radius:50% on the
+   structural element, and we let it; the ring is iconic), but switch
+   the colour and add a phosphor halo so the dot reads as a CRT pixel.
+------------------------------------------------------------------ */
+.pane-hero {
+  border-color: var(--phosphor);
+  box-shadow:
+    0 0 14px rgba(51, 255, 102, 0.50),
+    inset 0 0 12px rgba(51, 255, 102, 0.10);
+}
+.pane-hero::after {
+  background: var(--phosphor);
+  box-shadow: 0 0 8px rgba(51, 255, 102, 0.85);
+}
+.pane-hero-mark {
+  filter: drop-shadow(0 0 16px rgba(51, 255, 102, 0.55));
+}
+
+/* The progress bar at the top of onboarding — make it a glowing line */
+.onboarding-progress {
+  background: var(--phosphor);
+  box-shadow: 0 0 10px rgba(51, 255, 102, 0.85);
+}
+
+/* ------------------------------------------------------------------
+   Avatar — the canvas paints its own face. We adjust the ring + halo.
+------------------------------------------------------------------ */
+.avatar {
+  border-color: var(--phosphor);
+  box-shadow: 0 0 12px rgba(51, 255, 102, 0.40);
+  background: radial-gradient(circle at 50% 60%,
+    rgba(51, 255, 102, 0.08),
+    rgba(0, 0, 0, 0) 70%);
+}
+.avatar:hover {
+  border-color: var(--phosphor);
+  box-shadow:
+    0 0 0 3px var(--canvas),
+    0 0 0 4px var(--phosphor),
+    0 0 18px rgba(51, 255, 102, 0.65);
+}
+
+/* ------------------------------------------------------------------
+   Bubbles — even though the chat-log is hidden by default in the
+   shell, we style them so any debug surface that exposes them looks
+   correct. Square borders, mono, no rounded tails.
+------------------------------------------------------------------ */
+.bubble {
+  border-radius: 0;
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+  text-shadow: 0 0 4px rgba(51, 255, 102, 0.45);
+}
+.bubble.user {
+  background: transparent;
+  color: var(--phosphor);
+  border: 1px solid var(--phosphor);
+  border-bottom-right-radius: 0;
+}
+.bubble.user::before {
+  content: "> ";
+  color: var(--phosphor-amber);
+  opacity: 0.85;
+}
+.bubble.ai {
+  background: var(--surface-1);
+  color: var(--phosphor-dim);
+  border: 1px solid var(--phosphor-deep);
+  border-bottom-left-radius: 0;
+}
+.bubble.system {
+  background: transparent;
+  border: 1px dashed var(--hairline);
+  color: var(--phosphor-amber);
+  text-shadow: 0 0 4px rgba(255, 176, 0, 0.45);
+}
+
+/* ------------------------------------------------------------------
+   Selection — phosphor wash. The shell already wires this to the
+   --avatar-color-rgb token, but we restate it to ensure the alpha is
+   high enough to read against pure phosphor text.
+------------------------------------------------------------------ */
+::selection {
+  background: rgba(51, 255, 102, 0.55);
+  color: var(--canvas);
+}
+
+/* ------------------------------------------------------------------
+   Text-link — the ghost-button in onboarding ("Skip", "Sign in").
+------------------------------------------------------------------ */
+.text-link {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--phosphor-dim);
+  text-shadow: 0 0 4px rgba(31, 166, 62, 0.45);
+}
+.text-link:hover {
+  color: var(--phosphor);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-shadow: 0 0 6px rgba(51, 255, 102, 0.65);
+}
+
+/* ------------------------------------------------------------------
+   Splash logo — hold the entrance, but cut the opacity transition to
+   match the rest of the theme's snap motion vocabulary.
+------------------------------------------------------------------ */
+.splash-logo {
+  filter: drop-shadow(0 0 24px rgba(51, 255, 102, 0.55));
+}
+
+/* Icon button (top-right of home chrome) */
+.icon-button {
+  border-radius: 0;
+  background: transparent;
+  border: 1px solid var(--hairline);
+  color: var(--phosphor-dim);
+}
+.icon-button:hover {
+  background: var(--surface-1);
+  color: var(--phosphor);
+  border-color: var(--phosphor);
+  box-shadow: 0 0 10px rgba(51, 255, 102, 0.45);
+}

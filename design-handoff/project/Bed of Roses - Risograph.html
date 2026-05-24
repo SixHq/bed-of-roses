@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bed of Roses — Risograph Print Shop UI Kit</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,400;9..144,600;9..144,700;9..144,800;9..144,900&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Risograph Print Shop — fluoro pink + federal blue + sun yellow on cream paper.
+     Halftone fills, intentional misregistration, paper grain, no pure black. */
+  :root{
+    --paper:#F4ECD8;
+    --paper-2:#FAF3E0;
+    --ink:#1A1F3D;     /* federal blue inks read as deep ink */
+    --ink-soft:#3F4880;
+    --pink:#FF48B0;
+    --blue:#3145C2;
+    --yellow:#FFE15B;
+    --teal:#2BAA8E;
+    --red:#E53A22;
+    --hair:rgba(26,31,61,.32);
+    --sans:"Space Grotesk",-apple-system,system-ui,sans-serif;
+    --serif:"Fraunces",Georgia,serif;
+    --mono:"JetBrains Mono",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans)}
+  /* Paper grain */
+  body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(26,31,61,.08) 1px, transparent 1px),
+      radial-gradient(circle at 13px 7px, rgba(26,31,61,.05) 1px, transparent 1px);
+    background-size:5px 5px, 17px 17px; mix-blend-mode:multiply}
+
+  .r-h1{font-family:var(--serif);font-weight:900;font-size:104px;line-height:.92;letter-spacing:-.03em;font-variation-settings:"SOFT" 30, "opsz" 144}
+  .r-h2{font-family:var(--serif);font-weight:800;font-size:42px;line-height:1.02;letter-spacing:-.02em}
+  .r-h3{font-family:var(--sans);font-weight:700;font-size:22px;letter-spacing:-.01em;text-transform:uppercase}
+  .r-display{font-family:var(--serif);font-style:italic;font-weight:500;font-size:18px;line-height:1.45;color:var(--ink-soft)}
+  .r-body{font-family:var(--sans);font-weight:400;font-size:14px;line-height:1.55;color:var(--ink-soft)}
+  .r-mono{font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--ink-soft)}
+  .r-eyebrow{font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--pink)}
+  .r-tag{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft)}
+
+  /* Misregistered ink — element + offset duplicate behind */
+  .miso{position:relative;display:inline-block}
+  .miso::before{content:attr(data-text);position:absolute;left:2px;top:2px;color:var(--pink);mix-blend-mode:multiply;z-index:-1}
+  .miso::after{content:attr(data-text);position:absolute;left:-2px;top:-1px;color:var(--blue);mix-blend-mode:multiply;z-index:-1}
+
+  /* Halftone fill — used as ::after overlays */
+  .ht{position:relative}
+  .ht::after{content:'';position:absolute;inset:0;pointer-events:none;
+    background-image:radial-gradient(circle, currentColor 20%, transparent 22%);
+    background-size:6px 6px;opacity:.18;mix-blend-mode:multiply}
+  .ht-loose::after{background-size:8px 8px;opacity:.22}
+  .ht-tight::after{background-size:4px 4px;opacity:.28}
+
+  /* Buttons — chunky, off-print */
+  .r-btn{display:inline-flex;align-items:center;gap:8px;height:46px;padding:0 22px;
+    font-family:var(--sans);font-weight:700;font-size:14px;letter-spacing:.02em;text-transform:uppercase;
+    border:2px solid var(--ink);border-radius:6px;cursor:pointer;background:var(--paper-2);color:var(--ink);
+    box-shadow:3px 3px 0 var(--pink);transition:transform .1s, box-shadow .1s}
+  .r-btn:hover{transform:translate(-1px,-1px);box-shadow:5px 5px 0 var(--pink)}
+  .r-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--pink)}
+  .r-btn-pink{background:var(--pink);color:var(--paper);box-shadow:3px 3px 0 var(--blue)}
+  .r-btn-pink:hover{box-shadow:5px 5px 0 var(--blue)}
+  .r-btn-blue{background:var(--blue);color:var(--paper);box-shadow:3px 3px 0 var(--yellow)}
+  .r-btn-blue:hover{box-shadow:5px 5px 0 var(--yellow)}
+  .r-btn-yellow{background:var(--yellow);color:var(--ink);box-shadow:3px 3px 0 var(--pink)}
+  .r-btn-yellow:hover{box-shadow:5px 5px 0 var(--pink)}
+  .r-btn-ghost{background:transparent;border-color:var(--ink-soft);color:var(--ink-soft);box-shadow:none}
+  .r-btn-ghost:hover{box-shadow:3px 3px 0 var(--ink-soft);transform:translate(-1px,-1px)}
+
+  .r-input{height:46px;padding:0 14px;width:100%;border:2px solid var(--ink);border-radius:6px;
+    background:var(--paper-2);font-family:var(--sans);font-size:14px;color:var(--ink);outline:none;
+    box-shadow:inset 2px 2px 0 rgba(255,72,176,.12)}
+  .r-input::placeholder{color:var(--ink-soft);font-style:italic}
+  .r-input-focus{box-shadow:3px 3px 0 var(--pink), inset 2px 2px 0 rgba(255,72,176,.18)}
+
+  .r-chip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 14px;border:2px solid var(--ink);border-radius:999px;
+    background:var(--paper-2);font-family:var(--sans);font-weight:600;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);cursor:pointer}
+  .r-chip-pink{background:var(--pink);color:var(--paper)}
+  .r-chip-blue{background:var(--blue);color:var(--paper)}
+  .r-chip-yellow{background:var(--yellow)}
+
+  .r-bubble{padding:14px 16px;border:2px solid var(--ink);border-radius:14px;font-family:var(--sans);font-size:14px;line-height:1.5;max-width:78%;background:var(--paper-2);box-shadow:3px 3px 0 var(--pink)}
+  .r-bubble-user{align-self:flex-end;background:var(--blue);color:var(--paper);box-shadow:3px 3px 0 var(--yellow)}
+  .r-bubble-ai{align-self:flex-start}
+
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .col{display:flex;flex-direction:column;gap:12px}
+  .stage{position:relative;height:100%;overflow:hidden}
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="brutalist/design-canvas.jsx"></script>
+</head>
+<body>
+<div id="root" style="position:relative;z-index:1"></div>
+<script type="text/babel" src="riso/kit.jsx"></script>
+</body>
+</html>

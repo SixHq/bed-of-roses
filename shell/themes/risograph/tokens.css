@@ -1,0 +1,123 @@
+/* Theme: Risograph — two-or-three spot inks on warm cream paper.
+   Zine, gallery poster, slightly-off-register print shop edition.
+
+   Hallmarks:
+     • Three spot inks on cream stock — fluoro pink, federal blue, sun yellow
+     • Deep navy ink (#1A1F3D) STANDS IN FOR BLACK — Riso never prints true black
+     • Halftone fills (radial-gradient dots) live in extras.css and on tiles
+     • 1–2px misregister: every elevated surface drops a 2px ink-shadow in a
+       SECONDARY spot ink so the page reads as multi-pull printing
+     • Italic Fraunces display (editorial flourish) over Space Grotesk body,
+       JetBrains Mono micro labels — matches the design HTML at
+       design-handoff/project/Bed of Roses - Risograph.html
+
+   The structural shell (shell/style.css) reads from these variables. The
+   companion extras.css adds the misregister offsets, italic display, and
+   halftone overlays that go beyond simple tokens. */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,400;0,9..144,600;0,9..144,700;0,9..144,800;0,9..144,900;1,9..144,500;1,9..144,600;1,9..144,700;1,9..144,800;1,9..144,900&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+  /* Surfaces — warm cream paper as the canvas; lighter cream sheets for
+     elevated cards (matches design-handoff `--paper`/`--paper-2`). */
+  --canvas:    #F4ECD8;
+  --surface-1: #FAF3E0;   /* main paper sheet — cards, modals, fields */
+  --surface-2: #F8EFD3;   /* one shade darker for layered chips/tiles */
+  --surface-3: #EFE3C2;   /* deepest paper — selected/hover backdrops */
+  --bloom:     #FF48B0;   /* fluoro pink — the theme's primary accent */
+
+  /* Spot inks — exposed for extras.css and any LLM-generated widget that
+     wants the riso recipe. Hex values are LITERAL Risograph drum colors. */
+  --ink-pink:   #FF48B0;  /* fluoro pink — primary spot */
+  --ink-blue:   #3145C2;  /* federal blue — secondary spot, misregister */
+  --ink-yellow: #FFE15B;  /* sun yellow — third spot, selection / highlight */
+  --ink-teal:   #2BAA8E;  /* fourth drum — used sparingly (bubbles/chips) */
+  --ink-red:    #E53A22;  /* alert / error spot */
+
+  /* Ink — DEEP NAVY, never #000. Every label, stroke, and "black" element
+     uses this. Riso doesn't print true black; deep blue ink fakes it warmly. */
+  --ink:       #1A1F3D;
+  --ink-2:     #3F4880;   /* secondary ink — softer body text */
+  --ink-3:     rgba(26, 31, 61, 0.55);
+  --ink-4:     rgba(26, 31, 61, 0.32);
+
+  /* Hairlines — low-opacity deep navy. Matches design HTML `--hair`. */
+  --hairline:        rgba(26, 31, 61, 0.32);
+  --hairline-strong: rgba(26, 31, 61, 0.55);
+  --hairline-soft:   rgba(26, 31, 61, 0.16);
+
+  /* Labels — deep navy on cream */
+  --label:    #1A1F3D;
+  --label-2:  rgba(26, 31, 61, 0.72);
+  --label-3:  rgba(26, 31, 61, 0.48);
+  --label-4:  rgba(26, 31, 61, 0.28);
+
+  /* Translucent fills — keyed to ink so over-cream fills tint warm */
+  --fill-1: rgba(26, 31, 61, 0.10);
+  --fill-2: rgba(26, 31, 61, 0.06);
+  --fill-3: rgba(26, 31, 61, 0.04);
+
+  /* Default presence — fluoro pink. Design HTML opens with the pink-blue
+     stamp; pink reads as the "primary" pull on the press. */
+  --avatar-color-rgb: 255, 72, 176;
+  --wallpaper: transparent;
+
+  /* Atmosphere — flat cream with two faint blob washes (multi-radial,
+     low opacity). The wallpaper layer in extras.css adds the paper grain. */
+  --atmosphere:
+    radial-gradient(ellipse 60% 40% at 85% 0%,   rgba(255, 72, 176, 0.10), transparent 60%),
+    radial-gradient(ellipse 55% 40% at 0% 100%,  rgba(255, 225, 91, 0.14), transparent 65%),
+    radial-gradient(ellipse 50% 50% at 50% 50%,  rgba(49, 69, 194, 0.04), transparent 70%),
+    var(--canvas);
+
+  /* Halos — REPLACED with off-register hard shadows in the SECONDARY ink.
+     This is the riso recipe: every elevated surface drops a 2–4px shadow in
+     a contrasting spot ink so the page reads as a multi-pull print.
+     - soft   : the field-input misregister (3px pink)
+     - medium : default tile / card misregister (4px pink)
+     - strong : modal misregister (6px pink + 8px blue undertone)
+     - deep   : hero card (8px pink + 10px blue) */
+  --halo-soft:    3px 3px 0 0 rgba(255, 72, 176, 0.55);
+  --halo-medium:  4px 4px 0 0 rgba(255, 72, 176, 0.65);
+  --halo-strong:  6px 6px 0 0 rgba(255, 72, 176, 0.70), 9px 9px 0 0 rgba(49, 69, 194, 0.30);
+  --shadow-deep:  8px 8px 0 0 rgba(255, 72, 176, 0.65), 12px 12px 0 0 rgba(49, 69, 194, 0.35);
+
+  /* Spacing — keep 4px base shared with the rest of the OS */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-7: 32px; --s-8: 40px;
+  --s-9: 56px; --s-10: 72px; --s-11: 96px;
+
+  /* Radii — modest. Riso plates aren't crisp; a 14px radius reads softer than
+     digital-clean while still framing the card. Matches design HTML `r-bubble`. */
+  --r-input:  10px;
+  --r-button: 8px;       /* design HTML `.r-btn` uses 6px; bumped 2px for the OS */
+  --r-bar:    14px;
+  --r-tile:   14px;
+  --r-modal:  16px;
+
+  /* Type — Fraunces italic display, Space Grotesk body, JetBrains Mono micro.
+     ABC Diatype isn't on Google Fonts; Space Grotesk is the closest neutral
+     grotesque available there and matches the design HTML's actual `--sans`. */
+  --font-display: "Fraunces", "Editorial New", Georgia, serif;
+  --font-system:  "Space Grotesk", "ABC Diatype", -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", "IBM Plex Mono", ui-monospace, Menlo, monospace;
+
+  /* Type scale — design HTML pulls the display large (104–140px) but the
+     OS shell reuses these for greeting / titles. Keep close to default. */
+  --t-hero:     64px;
+  --t-display:  42px;     /* matches `.r-h2` */
+  --t-title-1:  28px;
+  --t-title-2:  22px;
+  --t-headline: 17px;
+  --t-body:     14px;
+  --t-subhead:  13px;
+  --t-caption:  11px;
+  --t-micro:    10px;
+
+  /* Motion — slightly snappier than Bloom; the riso "thunk" of buttons. */
+  --ease-standard: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-snap:     cubic-bezier(0.20, 0.00, 0.00, 1);
+  --d-micro:  140ms;
+  --d-pane:   320ms;
+  --d-layout: 540ms;
+}

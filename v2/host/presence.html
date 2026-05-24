@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Bed of Roses Presence</title>
+  <link rel="stylesheet" href="./presence.css">
+</head>
+<body>
+  <main class="presence" data-mode="collapsed" data-orb-state="idle" data-anchor="bottom-right">
+    <section class="bubble thought hidden compact" id="thought" aria-live="polite" aria-label="Bed of Roses activity">
+      <header class="bubble-head">
+        <div class="mode" id="thought-mode"><em>Thinking</em></div>
+        <span class="meta" id="thought-meta">0:00</span>
+        <div class="actions">
+          <button class="head-btn" id="minimize-task" type="button" title="Minimize">-</button>
+          <button class="head-btn" id="stop-task" type="button" title="Stop">■</button>
+          <button class="head-btn" id="close-thought" type="button" title="Close">×</button>
+        </div>
+      </header>
+      <div class="bubble-body" id="thought-body"></div>
+      <footer class="bubble-foot hidden" id="thought-foot"></footer>
+      <span class="bubble-tail" aria-hidden="true"></span>
+      <span class="bubble-resize-zone resize-n" data-bubble-resize="n" aria-hidden="true"></span>
+      <span class="bubble-resize-zone resize-e" data-bubble-resize="e" aria-hidden="true"></span>
+      <span class="bubble-resize-zone resize-s" data-bubble-resize="s" aria-hidden="true"></span>
+      <span class="bubble-resize-zone resize-w" data-bubble-resize="w" aria-hidden="true"></span>
+      <span class="bubble-resize-zone resize-nw resize-corner" data-bubble-resize="nw" aria-hidden="true"></span>
+      <span class="bubble-resize-zone resize-ne resize-corner" data-bubble-resize="ne" aria-hidden="true"></span>
+      <span class="bubble-resize-zone resize-sw resize-corner" data-bubble-resize="sw" aria-hidden="true"></span>
+      <span class="bubble-resize-zone resize-se resize-corner" data-bubble-resize="se" aria-hidden="true"></span>
+    </section>
+
+    <section class="task-chip hidden" id="task-chip" aria-label="Minimized Bed of Roses task">
+      <span class="mini" aria-hidden="true"></span>
+      <span class="name" id="task-chip-name">Task</span>
+      <span class="pct" id="task-chip-pct">running</span>
+    </section>
+
+    <section class="surface-drawer hidden" id="surface-drawer">
+      <header>
+        <span class="card-title">Surfaces</span>
+        <button class="head-btn" id="setup" type="button" title="Open setup">⚙</button>
+      </header>
+      <div class="surface-list" id="surface-list"></div>
+    </section>
+
+    <form class="composer" id="composer" autocomplete="off">
+      <button class="orb-control" id="orb" type="button" aria-label="Open Bed of Roses">
+        <span class="orb-wrap" id="orb-wrap" aria-hidden="true">
+          <span class="orb-aura idle"></span>
+          <span class="orb-ring-spin"></span>
+          <span class="orb-ring"></span>
+          <span class="orb">
+            <span class="orb-glint"></span>
+            <span class="orb-face"><span></span><span></span></span>
+          </span>
+          <span class="orb-badge hidden" id="orb-badge">1</span>
+          <span class="zzz">z</span>
+        </span>
+        <span class="hover-hint">⌥ space · ask</span>
+      </button>
+
+      <div class="prompt-stack">
+        <div class="chip-rail hidden" id="chip-rail"></div>
+        <div class="prompt-shell">
+          <button class="iconbtn" id="attach" type="button" title="Attach">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+              <path d="M8 3v10M3 8h10"></path>
+            </svg>
+          </button>
+          <span class="prompt-sigil" aria-hidden="true">$&gt;</span>
+          <textarea class="prompt-input" id="prompt" rows="1" placeholder="Ask, or describe what you need..." autocomplete="off"></textarea>
+          <button class="iconbtn" id="voice" type="button" title="Voice">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.26" stroke-linecap="round">
+              <rect x="6" y="2" width="4" height="8" rx="2"></rect>
+              <path d="M3 8a5 5 0 0 0 10 0M8 13v2"></path>
+            </svg>
+          </button>
+          <button class="send" id="send" type="submit" title="Send" aria-label="Send">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 8h10M9 4l4 4-4 4"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </form>
+  </main>
+  <script src="./presence.js"></script>
+</body>
+</html>

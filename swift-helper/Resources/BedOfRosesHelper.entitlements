@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTD/PropertyLists-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Sandboxing is off: the helper must read arbitrary widget HTML from
+       os-data/widgets/* outside any Apple container, and set the desktop
+       wallpaper which sandboxed apps can't do. Same posture as Electron. -->
+  <key>com.apple.security.app-sandbox</key>
+  <false/>
+  <!-- WebKit JIT for WKWebView. -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <!-- We do not load unsigned dylibs at runtime. -->
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <false/>
+  <key>com.apple.security.network.client</key>
+  <true/>
+  <key>com.apple.security.network.server</key>
+  <true/>
+</dict>
+</plist>

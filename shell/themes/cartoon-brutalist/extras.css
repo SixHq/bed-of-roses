@@ -1,0 +1,716 @@
+/* Cartoon Brutalist — component-level overrides.
+   The shell's structural CSS uses thin hairlines and soft halos. Cartoon
+   Brutalist needs THICK 3px ink strokes and HARD offset shadows on every
+   visible surface. This file overrides the shell defaults selectively.
+
+   Anything that isn't redefined here keeps the shell's structure. */
+
+/* Headlines: italic-by-default in Bloom, ALL CAPS upright in Brutalist. */
+.headline,
+.subheadline,
+.modal-title,
+.tile-name,
+.greeting,
+.wordmark span {
+  font-style: normal;
+  letter-spacing: 0;
+}
+
+.headline {
+  text-transform: uppercase;
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+  line-height: 0.92;
+}
+
+/* The wordmark gets a Brutalist sticker-stamp look */
+.wordmark span {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+
+/* Buttons: thick stroke + offset shadow + uppercase + hover-thunk */
+.btn {
+  border: 3px solid var(--ink);
+  box-shadow: 6px 6px 0 0 var(--ink);
+  border-radius: var(--r-button);
+  font-family: var(--font-system);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  transition: transform var(--d-micro) var(--ease-snap), box-shadow var(--d-micro) var(--ease-snap);
+}
+.btn:hover:not(:disabled) {
+  transform: translate(-2px, -2px);
+  box-shadow: 8px 8px 0 0 var(--ink);
+}
+.btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 0 var(--ink);
+}
+.btn-primary { background: var(--ink); color: var(--canvas); }
+.btn-secondary { background: var(--surface-1); color: var(--ink); }
+.btn:disabled, .btn[disabled] {
+  background: var(--surface-1);
+  color: rgba(10, 10, 10, 0.30);
+  border-color: rgba(10, 10, 10, 0.30);
+  box-shadow: 2px 2px 0 0 rgba(10, 10, 10, 0.30);
+  cursor: not-allowed;
+}
+
+/* Inputs */
+.field-input,
+.chat-input,
+input[type="text"],
+input[type="password"],
+input[type="number"],
+textarea {
+  background: var(--surface-1);
+  border: 3px solid var(--ink);
+  box-shadow: 4px 4px 0 0 var(--ink);
+  border-radius: var(--r-input);
+  font-family: var(--font-system);
+  font-weight: 600;
+  color: var(--ink);
+}
+.field-input:focus,
+.chat-input:focus,
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+textarea:focus {
+  outline: 0;
+  background: #FFF1F8;
+  box-shadow: 6px 6px 0 0 var(--pop-pink), 6px 6px 0 3px var(--ink);
+}
+.field-input::placeholder,
+.chat-input::placeholder,
+textarea::placeholder {
+  color: rgba(10, 10, 10, 0.35);
+  font-style: italic;
+}
+.field-label {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* Tiles — every widget on the desktop gets the offset-shadow card frame */
+.tile-thumb {
+  background: var(--surface-1);
+  border: 3px solid var(--ink);
+  border-radius: var(--r-tile);
+  box-shadow: 6px 6px 0 0 var(--ink);
+  transition: transform var(--d-micro) var(--ease-snap), box-shadow var(--d-micro) var(--ease-snap);
+}
+.tile:hover .tile-thumb {
+  transform: translate(-2px, -2px);
+  box-shadow: 9px 9px 0 0 var(--ink);
+  border-color: var(--ink);
+}
+.tile:active .tile-thumb {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 0 var(--ink);
+}
+.tile-name {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  color: var(--ink);
+  text-shadow: none;
+  letter-spacing: -0.005em;
+}
+.tile:not([data-size="1x1"]) .tile-thumb::after {
+  /* Bloom darkens the bottom of the tile for legibility — Brutalist doesn't
+     need it because text sits on a paper card, not over a busy thumbnail. */
+  background: linear-gradient(180deg, transparent, rgba(10, 10, 10, 0.18));
+}
+
+/* Modal frame */
+.modal-frame {
+  background: var(--surface-1);
+  border: 3px solid var(--ink);
+  border-radius: var(--r-modal);
+  box-shadow: 10px 10px 0 0 var(--ink);
+}
+
+/* Provider cards (connect pane) */
+.provider-card {
+  background: var(--surface-1);
+  border: 3px solid var(--ink);
+  border-radius: 18px;
+  box-shadow: 6px 6px 0 0 var(--ink);
+}
+.provider-card:hover {
+  background: var(--surface-2);
+  transform: translate(-2px, -2px);
+  box-shadow: 9px 9px 0 0 var(--ink);
+}
+.provider-card.selected {
+  background: var(--pop-yellow);
+  border-color: var(--ink);
+}
+
+/* Presence + theme picker cards */
+.presence-card,
+.theme-card {
+  background: var(--surface-1);
+  border: 3px solid var(--ink);
+  box-shadow: 6px 6px 0 0 var(--ink);
+  border-radius: 18px;
+  transition: transform var(--d-micro) var(--ease-snap), box-shadow var(--d-micro) var(--ease-snap), background var(--d-micro) var(--ease-snap);
+}
+.presence-card:hover,
+.theme-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 9px 9px 0 0 var(--ink);
+  background: var(--surface-2);
+}
+.presence-card.selected,
+.theme-card.selected {
+  background: var(--pop-yellow);
+  border-color: var(--ink);
+  transform: translate(-1px, -1px);
+}
+.presence-card.selected::after,
+.theme-card.selected::after {
+  display: none; /* the offset shadow is the selection cue */
+}
+.theme-swatches {
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+}
+.presence-card-label,
+.theme-label {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0;
+  color: var(--ink);
+}
+.presence-card-sub,
+.theme-tagline {
+  font-family: var(--font-system);
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--label-2);
+}
+
+/* Color picker swatches — give them ink rings */
+.color-swatch {
+  border: 3px solid var(--ink);
+  box-shadow: 4px 4px 0 0 var(--ink);
+}
+.color-swatch.selected {
+  transform: translate(-1px, -1px);
+  box-shadow: 6px 6px 0 0 var(--ink);
+}
+
+/* Onboarding + presence — match the Cartoon Brutalist kit's Presence faces. */
+html[data-theme="cartoon-brutalist"] .onboarding .pane-content {
+  background:
+    radial-gradient(var(--ink) 1px, transparent 1.4px) 0 0 / 18px 18px,
+    var(--surface-1);
+  border: 3px solid var(--ink);
+  border-radius: 22px;
+  box-shadow: 10px 10px 0 var(--ink);
+  padding: 32px;
+}
+
+html[data-theme="cartoon-brutalist"] .onboarding .presence-content {
+  max-width: 760px;
+  align-items: flex-start;
+  text-align: left;
+  gap: 20px;
+}
+
+html[data-theme="cartoon-brutalist"] .pane[data-pane="presence"] .subheadline {
+  max-width: 500px;
+}
+
+html[data-theme="cartoon-brutalist"] .pane[data-pane="presence"] .presence-grid {
+  gap: 30px;
+}
+
+html[data-theme="cartoon-brutalist"] .pane[data-pane="presence"] .presence-card {
+  min-height: 154px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+  gap: 10px;
+}
+
+html[data-theme="cartoon-brutalist"] .pane[data-pane="presence"] .presence-card:hover,
+html[data-theme="cartoon-brutalist"] .pane[data-pane="presence"] .presence-card.selected {
+  background: transparent;
+  transform: translate(-2px, -2px);
+  box-shadow: none;
+}
+
+html[data-theme="cartoon-brutalist"] .pane[data-pane="presence"] .presence-canvas-wrap {
+  width: 120px;
+  height: 120px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-theme="cartoon-brutalist"] .pane[data-pane="presence"] .presence-face {
+  display: block;
+  color: var(--ink);
+  background: var(--presence-face);
+  border: 3px solid var(--ink);
+  box-shadow: 7px 7px 0 var(--ink);
+}
+
+html[data-theme="cartoon-brutalist"] .pane[data-pane="presence"] .presence-orb,
+html[data-theme="cartoon-brutalist"] .pane[data-pane="presence"] .presence-block,
+html[data-theme="cartoon-brutalist"] .pane[data-pane="presence"] .presence-stamp,
+html[data-theme="cartoon-brutalist"] .pane[data-pane="presence"] .presence-pixel-face {
+  display: none;
+}
+
+html[data-theme="cartoon-brutalist"] .pane[data-pane="presence"] .presence-card.selected .presence-face {
+  box-shadow: 10px 10px 0 var(--ink);
+  outline: 4px solid var(--pop-pink);
+  outline-offset: 4px;
+}
+
+html[data-theme="cartoon-brutalist"] .pane[data-pane="presence"] .presence-card-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+  text-transform: uppercase;
+  background: var(--surface-1);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 5px 8px;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+html[data-theme="cartoon-brutalist"] .pane[data-pane="presence"] .presence-card-sub {
+  color: var(--ink-2);
+  font-family: var(--font-system);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+html[data-theme="cartoon-brutalist"] .pane[data-pane="presence"] .color-section {
+  display: none;
+}
+
+/* Chat orb — the floating draggable send button */
+.chat-orb {
+  background: var(--ink);
+  border: 3px solid var(--ink);
+  box-shadow: 6px 6px 0 0 var(--ink);
+  border-radius: 99px;
+}
+.chat-orb[data-state="expanded"] {
+  background: var(--surface-1);
+  box-shadow: 6px 6px 0 0 var(--ink);
+}
+.chat-orb .chat-input {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: var(--ink);
+}
+.chat-orb .chat-input:focus {
+  background: transparent;
+  box-shadow: none;
+}
+.chat-send {
+  background: var(--ink);
+  color: var(--canvas);
+  border: 0;
+}
+.chat-orb[data-state="collapsed"] .chat-send {
+  color: var(--canvas);
+}
+.chat-orb[data-state="expanded"] .chat-send {
+  background: var(--pop-pink);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+}
+html[data-theme="cartoon-brutalist"] .chat-send .chat-presence {
+  inset: 5px;
+}
+html[data-theme="cartoon-brutalist"] .chat-send .presence-face {
+  display: block;
+  color: var(--ink);
+  background: var(--presence-face);
+  border: 2px solid var(--ink);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+html[data-theme="cartoon-brutalist"] .chat-send .presence-orb,
+html[data-theme="cartoon-brutalist"] .chat-send .presence-block,
+html[data-theme="cartoon-brutalist"] .chat-send .presence-stamp,
+html[data-theme="cartoon-brutalist"] .chat-send .presence-pixel-face {
+  display: none;
+}
+
+/* HUD corner labels — switch to mono caps with ink on cream */
+.hud-label,
+.hud-meta {
+  font-family: var(--font-mono);
+  color: var(--ink-2);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.hud-tick { color: var(--pop-pink); }
+
+/* Greeting headline */
+.greeting {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+/* Wallpaper: Cartoon Brutalist's wallpaper layer is a halftone dot field
+   over cream — gives the whole desktop a printed-paper feel without making
+   the foreground hard to read. */
+.wallpaper {
+  background:
+    radial-gradient(var(--ink) 1.2px, transparent 1.4px) 0 0 / 16px 16px,
+    var(--canvas);
+  opacity: 0.5;
+}
+
+/* Built-in apps — translated from the Cartoon Brutalist standalone kit:
+   br-card / br-btn / br-input geometry, sticker labels, dots, hard ink shadow. */
+html[data-theme="cartoon-brutalist"] #system-modal .modal-backdrop {
+  background: rgba(255, 244, 220, 0.74);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .system-frame {
+  background: var(--surface-1);
+  color: var(--ink);
+  border: 3px solid var(--ink);
+  border-radius: 22px;
+  box-shadow: 12px 12px 0 var(--ink);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .modal-header {
+  background: var(--pop-yellow);
+  border-bottom: 3px solid var(--ink);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .modal-title {
+  font-family: var(--font-display);
+  color: var(--ink);
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .modal-actions button,
+html[data-theme="cartoon-brutalist"] #system-modal .files-nav,
+html[data-theme="cartoon-brutalist"] #system-modal .files-action,
+html[data-theme="cartoon-brutalist"] #system-modal .files-place,
+html[data-theme="cartoon-brutalist"] #system-modal .browser-launch .btn,
+html[data-theme="cartoon-brutalist"] #system-modal .browser-actions .btn {
+  background: var(--surface-1);
+  color: var(--ink);
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 4px 4px 0 var(--ink);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .files-action:hover,
+html[data-theme="cartoon-brutalist"] #system-modal .files-nav:hover,
+html[data-theme="cartoon-brutalist"] #system-modal .files-place:hover,
+html[data-theme="cartoon-brutalist"] #system-modal .browser-launch .btn:hover,
+html[data-theme="cartoon-brutalist"] #system-modal .browser-actions .btn:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .files-action:disabled,
+html[data-theme="cartoon-brutalist"] #system-modal .files-nav:disabled {
+  transform: none;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .btn-primary,
+html[data-theme="cartoon-brutalist"] #system-modal .files-place.active {
+  background: var(--pop-pink);
+  color: var(--ink);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .files-app,
+html[data-theme="cartoon-brutalist"] #system-modal .browser-app {
+  background:
+    radial-gradient(var(--ink) 1.1px, transparent 1.4px) 0 0 / 18px 18px,
+    var(--surface-1);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .files-sidebar {
+  background: var(--surface-2);
+  border-right: 3px solid var(--ink);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .system-app-brand {
+  width: max-content;
+  padding: 8px 12px;
+  background: var(--pop-sky);
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 4px 4px 0 var(--ink);
+  transform: rotate(-2deg);
+  text-transform: uppercase;
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .system-app-glyph,
+html[data-theme="cartoon-brutalist"] #system-modal .system-app-glyph::before {
+  background: var(--pop-yellow);
+  border-width: 3px;
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .files-toolbar {
+  background: var(--surface-1);
+  border-bottom: 3px solid var(--ink);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .files-path {
+  color: var(--ink);
+  background: var(--pop-mint);
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  padding: 9px 14px;
+  font-weight: 700;
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .files-list {
+  border-right: 3px solid var(--ink);
+  background: var(--surface-1);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .file-row {
+  color: var(--ink);
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 4px 4px 0 var(--ink);
+  margin-bottom: 12px;
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .file-row:hover,
+html[data-theme="cartoon-brutalist"] #system-modal .file-row.selected {
+  background: var(--pop-yellow);
+  transform: translate(2px, 2px) rotate(-0.5deg);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .file-icon[data-kind],
+html[data-theme="cartoon-brutalist"] #system-modal .file-icon[data-kind]::before,
+html[data-theme="cartoon-brutalist"] #system-modal .file-icon[data-kind]::after,
+html[data-theme="cartoon-brutalist"] #system-modal .files-preview-icon,
+html[data-theme="cartoon-brutalist"] #system-modal .files-preview-icon::before,
+html[data-theme="cartoon-brutalist"] #system-modal .files-preview-large-icon,
+html[data-theme="cartoon-brutalist"] #system-modal .files-preview-large-icon::before,
+html[data-theme="cartoon-brutalist"] #system-modal .files-preview-large-icon::after {
+  border-color: var(--ink);
+  border-width: 3px;
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .file-icon[data-kind="dir"],
+html[data-theme="cartoon-brutalist"] #system-modal .file-icon[data-kind="dir"]::before,
+html[data-theme="cartoon-brutalist"] #system-modal .files-preview-icon,
+html[data-theme="cartoon-brutalist"] #system-modal .files-preview-icon::before,
+html[data-theme="cartoon-brutalist"] #system-modal .files-preview-folder,
+html[data-theme="cartoon-brutalist"] #system-modal .files-preview-folder::before {
+  background: var(--pop-yellow);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .file-icon[data-kind="file"],
+html[data-theme="cartoon-brutalist"] #system-modal .files-preview-file {
+  background: var(--pop-sky);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .file-icon[data-kind="file"]::after,
+html[data-theme="cartoon-brutalist"] #system-modal .files-preview-file::after {
+  background: var(--surface-1);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .file-name {
+  font-weight: 800;
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .file-meta,
+html[data-theme="cartoon-brutalist"] #system-modal .files-preview-kind,
+html[data-theme="cartoon-brutalist"] #system-modal .browser-details span {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .files-preview {
+  background: var(--pop-sky);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .files-preview-card {
+  color: var(--ink);
+  background:
+    repeating-linear-gradient(-45deg, transparent 0 10px, rgba(10, 10, 10, 0.08) 10px 13px),
+    var(--pop-sky);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .files-download-link {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .files-illustration {
+  right: 22px;
+  top: 78px;
+  width: 180px;
+  height: 148px;
+  opacity: 0.18;
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .files-illustration-folder {
+  position: absolute;
+  inset: 28px 12px 8px 18px;
+  background: var(--pop-yellow);
+  border: 4px solid var(--ink);
+  border-radius: 18px;
+  box-shadow: 8px 8px 0 var(--ink);
+  transform: rotate(-4deg);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .files-illustration-folder::before {
+  content: "";
+  position: absolute;
+  left: 16px;
+  top: -28px;
+  width: 70px;
+  height: 28px;
+  background: var(--pop-sky);
+  border: 4px solid var(--ink);
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .files-illustration-card,
+html[data-theme="cartoon-brutalist"] #system-modal .files-illustration-dot {
+  position: absolute;
+  border: 4px solid var(--ink);
+  box-shadow: 5px 5px 0 var(--ink);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .files-illustration-card {
+  right: 0;
+  bottom: 0;
+  width: 56px;
+  height: 70px;
+  background: var(--pop-mint);
+  transform: rotate(7deg);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .files-illustration-dot {
+  right: 24px;
+  top: 8px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--pop-pink);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .browser-url,
+html[data-theme="cartoon-brutalist"] #system-modal .browser-status,
+html[data-theme="cartoon-brutalist"] #system-modal .browser-details div {
+  background: var(--surface-1);
+  border: 3px solid var(--ink);
+  border-radius: 18px;
+  box-shadow: 5px 5px 0 var(--ink);
+  color: var(--ink);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .browser-url {
+  height: 52px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .browser-status.ready {
+  background: var(--pop-mint);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .browser-status.error {
+  background: var(--pop-tomato);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .browser-details div {
+  padding: 12px;
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .browser-details code,
+html[data-theme="cartoon-brutalist"] #system-modal .browser-status strong,
+html[data-theme="cartoon-brutalist"] #system-modal .browser-status span {
+  color: var(--ink);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .browser-illustration {
+  color: var(--ink);
+  opacity: 0.16;
+  transform: rotate(-4deg);
+}
+
+html[data-theme="cartoon-brutalist"] #system-modal .browser-illustration-window,
+html[data-theme="cartoon-brutalist"] #system-modal .browser-illustration-window::before,
+html[data-theme="cartoon-brutalist"] #system-modal .browser-illustration-globe {
+  border-width: 4px;
+  box-shadow: 8px 8px 0 var(--ink);
+}
+
+html[data-theme="cartoon-brutalist"] .thought-bubble {
+  --thought-bg: var(--surface-1);
+  --thought-border: var(--ink);
+  --thought-text: var(--ink);
+  --thought-shadow: 7px 7px 0 var(--ink);
+  padding: 14px 17px 16px;
+  border-width: 4px;
+  border-radius: 22px 22px 8px 22px;
+  font-family: var(--font-system);
+  transform: rotate(-1deg);
+}
+
+html[data-theme="cartoon-brutalist"] .thought-bubble::before {
+  content: "";
+  position: absolute;
+  right: 56px;
+  top: -13px;
+  width: 42px;
+  height: 20px;
+  border: 4px solid var(--ink);
+  border-radius: 999px;
+  background: var(--pop-yellow);
+  transform: rotate(-8deg);
+}
+
+html[data-theme="cartoon-brutalist"] .thought-bubble::after {
+  right: 30px;
+  bottom: -11px;
+  width: 18px;
+  height: 18px;
+  border-right-width: 4px;
+  border-bottom-width: 4px;
+}

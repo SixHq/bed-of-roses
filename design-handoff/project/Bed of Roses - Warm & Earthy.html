@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Bed of Roses — Warm &amp; Earthy UI Kit</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    /* ───────────── Warm & Earthy tokens ─────────────
+       Sun-bleached paper, walnut ink, terracotta + olive +
+       clay accents. Hairlines, soft shadows, gentle rounding.
+       Reads like a well-loved field journal. */
+    :root{
+      --sand:#EDE2CD;        /* page */
+      --paper:#FAF3E3;       /* card */
+      --paper-warm:#F5E9D0;  /* lifted */
+      --ink:#2A1F14;         /* walnut */
+      --ink-2:rgba(42,31,20,.72);
+      --ink-3:rgba(42,31,20,.50);
+      --ink-4:rgba(42,31,20,.30);
+
+      --terra:#C8553D;       /* terracotta */
+      --rust:#A65A3A;
+      --mustard:#D4A24C;
+      --honey:#E8B86F;
+      --olive:#7A8450;
+      --sage:#9CAF88;
+      --clay:#B47148;
+      --plum:#6B3F4A;
+      --moss:#5D6B3A;
+
+      --hair:rgba(42,31,20,.16);
+      --hair-soft:rgba(42,31,20,.08);
+      --hair-strong:rgba(42,31,20,.28);
+
+      --shadow-soft:0 1px 0 rgba(42,31,20,.04), 0 8px 24px rgba(82,55,28,.10);
+      --shadow-lift:0 2px 0 rgba(42,31,20,.05), 0 18px 40px rgba(82,55,28,.14);
+      --shadow-inset:inset 0 1px 0 rgba(255,250,235,.6), inset 0 0 0 1px rgba(42,31,20,.06);
+
+      --serif:"Newsreader",Georgia,serif;
+      --sans:"Plus Jakarta Sans",system-ui,sans-serif;
+      --mono:"JetBrains Mono",ui-monospace,monospace;
+    }
+
+    html,body{margin:0;background:var(--sand);color:var(--ink);font-family:var(--sans);
+      background-image:
+        radial-gradient(circle at 12% 18%, rgba(196,113,72,.06), transparent 40%),
+        radial-gradient(circle at 88% 80%, rgba(122,132,80,.06), transparent 45%),
+        radial-gradient(rgba(42,31,20,.04) 1px, transparent 1.2px);
+      background-size:auto, auto, 4px 4px;
+    }
+    *{box-sizing:border-box}
+
+    /* Type */
+    .e-h1{font-family:var(--serif);font-weight:500;font-size:84px;line-height:.96;letter-spacing:-.022em;color:var(--ink)}
+    .e-h1 em{font-style:italic;font-weight:400;color:var(--terra)}
+    .e-h2{font-family:var(--serif);font-weight:500;font-size:42px;line-height:1;letter-spacing:-.018em;color:var(--ink)}
+    .e-h2 em{font-style:italic;font-weight:400}
+    .e-h3{font-family:var(--sans);font-weight:600;font-size:22px;line-height:1.2;letter-spacing:-.012em;color:var(--ink)}
+    .e-display{font-family:var(--serif);font-style:italic;font-weight:400;font-size:24px;line-height:1.25;letter-spacing:-.01em;color:var(--ink-2)}
+    .e-body{font-family:var(--sans);font-weight:400;font-size:15px;line-height:1.55;color:var(--ink-2)}
+    .e-eyebrow{font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--terra)}
+    .e-tag{font-family:var(--mono);font-weight:500;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+
+    /* Cards */
+    .e-card{background:var(--paper);border:1px solid var(--hair);border-radius:18px;box-shadow:var(--shadow-soft)}
+    .e-card-warm{background:var(--paper-warm);border:1px solid var(--hair);border-radius:18px;box-shadow:var(--shadow-soft)}
+
+    /* Buttons */
+    .e-btn{display:inline-flex;align-items:center;gap:10px;height:48px;padding:0 22px;
+      font-family:var(--sans);font-weight:600;font-size:15px;letter-spacing:-.005em;
+      border:1px solid var(--hair-strong);border-radius:99px;cursor:pointer;
+      box-shadow:var(--shadow-soft);transition:transform .15s, box-shadow .15s;background:var(--paper)}
+    .e-btn:hover{transform:translateY(-1px);box-shadow:var(--shadow-lift)}
+    .e-btn-pri{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+    .e-btn-terra{background:var(--terra);color:var(--paper);border-color:rgba(42,31,20,.2)}
+    .e-btn-mustard{background:var(--mustard);color:var(--ink);border-color:rgba(42,31,20,.18)}
+    .e-btn-olive{background:var(--olive);color:var(--paper);border-color:rgba(42,31,20,.2)}
+    .e-btn-ghost{background:transparent;color:var(--ink-2);border-color:transparent;box-shadow:none;font-weight:500}
+    .e-btn-ghost:hover{color:var(--ink);box-shadow:none;transform:none}
+    .e-btn .e-arrow{width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center}
+
+    /* Field */
+    .e-field{display:flex;flex-direction:column;gap:6px}
+    .e-field label{font-family:var(--serif);font-style:italic;font-size:15px;color:var(--ink-2);font-weight:400}
+    .e-input{display:flex;align-items:center;gap:10px;height:50px;padding:0 18px;background:rgba(255,250,235,.6);
+      border:1px solid var(--hair);border-radius:14px;
+      font-family:var(--sans);font-size:15px;color:var(--ink);outline:0;width:100%;
+      box-shadow:var(--shadow-inset)}
+    .e-input::placeholder{color:var(--ink-3);font-style:italic;font-family:var(--serif);font-size:16px}
+    .e-input-focus{border-color:var(--terra);box-shadow:var(--shadow-inset),0 0 0 3px rgba(200,85,61,.15)}
+
+    /* Chip */
+    .e-chip{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 14px;
+      border:1px solid var(--hair);border-radius:99px;background:rgba(255,250,235,.5);
+      font-family:var(--sans);font-weight:500;font-size:13px;color:var(--ink-2);cursor:pointer}
+    .e-chip-on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+    .e-chip-terra{background:var(--terra);color:var(--paper);border-color:transparent}
+    .e-chip-italic{font-family:var(--serif);font-style:italic;font-size:15px;font-weight:400}
+
+    /* Bubble */
+    .e-bubble{padding:12px 16px;border-radius:18px;font-family:var(--sans);font-size:15px;line-height:1.5;font-weight:400;max-width:78%;border:1px solid var(--hair)}
+    .e-bubble-user{background:var(--ink);color:var(--paper);align-self:flex-end;border-bottom-right-radius:6px;border-color:var(--ink)}
+    .e-bubble-ai{background:var(--paper);color:var(--ink);align-self:flex-start;border-bottom-left-radius:6px}
+    .e-bubble-name{font-family:var(--serif);font-style:italic;color:var(--terra);font-size:14px;display:block;margin-bottom:2px}
+
+    /* Tile */
+    .e-tile{position:relative;display:flex;flex-direction:column;justify-content:space-between;
+      padding:18px;border-radius:20px;border:1px solid var(--hair);box-shadow:var(--shadow-soft);overflow:hidden}
+    .e-tile-title{font-family:var(--serif);font-weight:500;font-size:22px;line-height:1.05;letter-spacing:-.012em}
+    .e-tile-meta{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;opacity:.7}
+
+    /* Avatar — soft glowing disc */
+    .e-avatar{position:relative;width:128px;height:128px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+      background:radial-gradient(circle at 50% 40%, var(--c1), var(--c2));border:1px solid var(--hair);box-shadow:var(--shadow-lift), inset 0 -10px 20px rgba(42,31,20,.08)}
+    .e-avatar::before{content:'';position:absolute;inset:-14px;border-radius:50%;border:1px dashed var(--hair-strong);opacity:.5}
+
+    /* Helpers */
+    .row{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+    .col{display:flex;flex-direction:column;gap:14px}
+  </style>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script type="text/babel" src="earthy/design-canvas.jsx"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" src="earthy/kit.jsx"></script>
+</body>
+</html>

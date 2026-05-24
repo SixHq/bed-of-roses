@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bed of Roses — App Icons & Widget Thumbnails (All Themes)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;700&family=Geist+Mono:wght@500&family=Archivo+Black&family=Bricolage+Grotesque:wght@700;800&family=Space+Grotesk:wght@500;700&family=Space+Mono:wght@700&family=Newsreader:ital,wght@0,600;1,600&family=Plus+Jakarta+Sans:wght@500;700&family=Inter+Tight:wght@500;800&family=JetBrains+Mono:wght@500;700&family=Sora:wght@600;800&family=Fraunces:ital,wght@0,800;1,800;1,900&family=DM+Mono:wght@500&family=VT323&family=IBM+Plex+Mono:wght@500;700&family=DM+Serif+Display:ital@0;1&family=Chakra+Petch:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;font-family:"Geist",-apple-system,system-ui,sans-serif;background:#0E0B14;color:#F5F1FF;padding:36px;line-height:1.55}
+  h1{font-family:"Instrument Serif",serif;font-style:italic;font-weight:400;font-size:56px;line-height:1.02;letter-spacing:-.022em;margin:0 0 6px}
+  .sub{color:rgba(238,232,250,.62);max-width:720px;font-size:15px}
+  h2{font-family:"Instrument Serif",serif;font-weight:400;font-style:italic;font-size:32px;margin:56px 0 8px;letter-spacing:-.018em}
+  h2 .tag{font-family:"Geist Mono",monospace;font-style:normal;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:rgba(196,168,240,.85);margin-left:14px;vertical-align:6px}
+  h3{font-family:"Geist Mono",monospace;font-weight:500;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:rgba(238,232,250,.55);margin:22px 0 12px}
+  .row{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+  .col{display:flex;flex-direction:column;gap:8px;align-items:center}
+  .lbl{font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:rgba(238,232,250,.55);text-align:center}
+  .grid-icons{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:14px}
+  .grid-thumbs{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+  .icon{width:64px;height:64px;display:block}
+  .thumb{height:140px;border-radius:18px;position:relative;overflow:hidden;padding:14px;display:flex;flex-direction:column;justify-content:space-between}
+  .frame{padding:18px;border-radius:20px;background:rgba(255,255,255,.03);border:1px solid rgba(220,210,255,.12);margin-top:10px}
+  .frame.bloom{background:#15131D;border-color:rgba(220,210,255,.14)}
+  .frame.brutal{background:#FFF4DC;color:#0A0A0A;border-color:#0A0A0A;border-width:3px}
+  .frame.earthy{background:#EDE2CD;color:#2A1F14;border-color:rgba(42,31,20,.18)}
+  .frame.neo{background:#F4F2ED;color:#0A0A0A;border-color:#0A0A0A}
+  .frame.y2k{background:linear-gradient(180deg,#BFE7FF,#0066FF);color:#fff;border-color:rgba(255,255,255,.5)}
+  .frame.riso{background:#F4ECD8;color:#1A1F3D;border-color:rgba(26,31,61,.32)}
+  .frame.crt{background:#0B0F0A;color:#33FF66;border-color:#33FF66}
+  .frame.liquid{background:radial-gradient(circle at 25% 25%, #FF7AB6 0%, #C13BB5 30%, #1E5BC7 70%, #06090F 100%);color:#fff;border-color:rgba(255,255,255,.45)}
+  .frame.memphis{background:#FAF1DC;color:#1A1A2E;border-color:#1A1A2E;border-width:2.5px}
+  .frame.solar{background:#F1E8D0;color:#1F2A1A;border-color:rgba(31,42,26,.2)}
+  .frame.cyber{background:#0A0612;color:#EDE5FF;border-color:rgba(0,229,255,.3)}
+  .meta{font-family:"Geist Mono",monospace;font-size:9px;letter-spacing:.16em;text-transform:uppercase;opacity:.65}
+  .meta-light{color:rgba(238,232,250,.7)}
+  .num{font-family:"Instrument Serif",serif;font-style:italic;font-size:48px;line-height:1;font-weight:400}
+  /* helpers per theme */
+  .b-title{font-family:"Geist Mono",monospace;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:rgba(196,168,240,.85)}
+  .br-title{font-family:"Archivo Black",sans-serif;font-size:18px;line-height:1;text-transform:uppercase}
+  .br-meta{font-family:"Space Mono",monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+  .e-title{font-family:"Newsreader",serif;font-style:italic;font-weight:600;font-size:22px;line-height:1.05}
+  .e-meta{font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:.16em;text-transform:uppercase}
+  .n-title{font-family:"Inter Tight",sans-serif;font-weight:800;font-size:18px;line-height:1;letter-spacing:-.02em;text-transform:uppercase}
+  .n-meta{font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:.18em;text-transform:uppercase}
+  .y-title{font-family:"Sora",sans-serif;font-weight:800;font-size:30px;line-height:1;letter-spacing:-.02em}
+  .y-meta{font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:.1em}
+  .r-title{font-family:"Fraunces",serif;font-style:italic;font-weight:800;font-size:24px;line-height:1.05}
+  .r-meta{font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase}
+  .crt-title{font-family:"VT323",monospace;font-size:30px;line-height:1;text-shadow:0 0 6px rgba(51,255,102,.6)}
+  .crt-meta{font-family:"IBM Plex Mono",monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:rgba(51,255,102,.65)}
+  .lg-title{font-family:"Instrument Serif",serif;font-style:italic;font-size:28px;line-height:1.02}
+  .lg-meta{font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.7)}
+  .m-title{font-family:"Fraunces",serif;font-style:italic;font-weight:900;font-size:22px;line-height:1.05}
+  .m-meta{font-family:"DM Mono",monospace;font-size:9px;letter-spacing:.16em;text-transform:uppercase}
+  .s-title{font-family:"DM Serif Display",serif;font-style:italic;font-size:24px;line-height:1.05}
+  .s-meta{font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:rgba(31,42,26,.7)}
+  .c-title{font-family:"Chakra Petch",sans-serif;font-weight:700;font-size:20px;line-height:1;letter-spacing:.04em;text-transform:uppercase;text-shadow:0 0 10px rgba(0,229,255,.55)}
+  .c-meta{font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:rgba(0,229,255,.7)}
+</style>
+</head>
+<body>
+
+<h1>App icons &amp; widget thumbnails — every theme</h1>
+<p class="sub">Companion to <code>UX_GUIDELINES.md</code>. Each theme below shows the seven canonical app icons (productivity / communication / media / system / creative / information / companion) at 64 × 64, followed by the four canonical widget thumbnails (weather / flight / calendar / notes) at 220 × 140. The silhouettes are the same across themes — only the plate, decoration, and surface change.</p>
+
+<!-- ─────────── BLOOM ─────────── -->
+<h2>Bloom <span class="tag">aubergine · italic serif · lilac aura</span></h2>
+
+<h3>App icons</h3>
+<div class="frame bloom">
+  <div class="grid-icons">
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><defs><radialGradient id="bp" cx="30%" cy="25%"><stop offset="0%" stop-color="#fff"/><stop offset="40%" stop-color="#C4A8F0"/><stop offset="100%" stop-color="#311747"/></radialGradient></defs><rect x="2" y="2" width="60" height="60" rx="14" fill="url(#bp)"/><path d="M18 18 H42 L46 22 V46 H18 Z M38 18 V24 H44" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg><span class="lbl">Notes</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="14" fill="url(#bp)"/><circle cx="26" cy="32" r="12" fill="none" stroke="#fff" stroke-width="2"/><circle cx="38" cy="32" r="12" fill="none" stroke="#8FE5C5" stroke-width="2"/></svg><span class="lbl">Chat</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="14" fill="url(#bp)"/><circle cx="32" cy="32" r="14" fill="none" stroke="#fff" stroke-width="2"/><path d="M28 24 L44 32 L28 40 Z" fill="#fff"/></svg><span class="lbl">Media</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="14" fill="url(#bp)"/><g fill="none" stroke="#fff" stroke-width="2"><circle cx="32" cy="32" r="6"/><path d="M32 14v6M32 44v6M14 32h6M44 32h6M19 19l4 4M41 41l4 4M19 45l4-4M41 23l4-4"/></g></svg><span class="lbl">System</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="14" fill="url(#bp)"/><path d="M20 44 L40 24 L46 30 L26 50 L16 52 Z" fill="#8FE5C5" stroke="#fff" stroke-width="1.5"/></svg><span class="lbl">Creative</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="14" fill="url(#bp)"/><circle cx="32" cy="30" r="10" fill="#FFD58A"/><path d="M22 44 Q 32 38 42 44" stroke="#fff" stroke-width="2" fill="none"/></svg><span class="lbl">Info</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="14" fill="url(#bp)"/><text x="32" y="44" font-family="Instrument Serif" font-style="italic" font-size="34" fill="#fff" text-anchor="middle">R</text></svg><span class="lbl">Companion</span></div>
+  </div>
+</div>
+
+<h3>Widget thumbnails</h3>
+<div class="frame bloom">
+  <div class="grid-thumbs">
+    <div class="thumb" style="background:#221F2D;border:1px solid rgba(220,210,255,.14)"><span class="b-title">weather · lagos</span><div><span class="num">18°</span> <span style="color:rgba(238,232,250,.6);font-size:13px">partly cloudy</span></div></div>
+    <div class="thumb" style="background:#221F2D;border:1px solid rgba(196,168,240,.4);box-shadow:0 0 32px rgba(196,168,240,.18) inset"><span class="b-title">↗ flight · BA76</span><div><div style="font-family:Instrument Serif;font-style:italic;font-size:22px">LOS → LHR</div><span class="b-title">22:40 · gate B17</span></div></div>
+    <div class="thumb" style="background:#221F2D;border:1px solid rgba(220,210,255,.14)"><span class="b-title">today</span><div style="font-family:Instrument Serif;font-style:italic;font-size:20px;line-height:1.2">Three things,<br>simply.</div></div>
+    <div class="thumb" style="background:#221F2D;border:1px solid rgba(220,210,255,.14);background-image:radial-gradient(ellipse 60% 60% at 0% 100%,rgba(244,158,186,.18),transparent 60%)"><span class="b-title">notes</span><div style="font-family:Instrument Serif;font-style:italic;font-size:16px;line-height:1.3">"a bed of roses begins as a single thought."</div></div>
+  </div>
+</div>
+
+<!-- ─────────── CARTOON BRUTALIST ─────────── -->
+<h2>Cartoon Brutalist <span class="tag">thick strokes · hard shadows · sticker energy</span></h2>
+
+<h3>App icons</h3>
+<div class="frame brutal">
+  <div class="grid-icons">
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="14" fill="#FFD93D" stroke="#0A0A0A" stroke-width="3"/><path d="M18 18 H42 L46 22 V46 H18 Z M38 18 V24 H44" fill="none" stroke="#0A0A0A" stroke-width="3" stroke-linejoin="round"/></svg><span class="lbl" style="color:#0A0A0A">NOTES</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="14" fill="#FF4FA3" stroke="#0A0A0A" stroke-width="3"/><circle cx="26" cy="32" r="11" fill="#FFF4DC" stroke="#0A0A0A" stroke-width="3"/><circle cx="38" cy="32" r="11" fill="#FFD93D" stroke="#0A0A0A" stroke-width="3"/></svg><span class="lbl" style="color:#0A0A0A">CHAT</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="14" fill="#6BCEFF" stroke="#0A0A0A" stroke-width="3"/><circle cx="32" cy="32" r="14" fill="none" stroke="#0A0A0A" stroke-width="3"/><polygon points="28,24 44,32 28,40" fill="#0A0A0A"/></svg><span class="lbl" style="color:#0A0A0A">MEDIA</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="14" fill="#5FE3A1" stroke="#0A0A0A" stroke-width="3"/><g fill="none" stroke="#0A0A0A" stroke-width="3" stroke-linecap="round"><circle cx="32" cy="32" r="6"/><path d="M32 14v6M32 44v6M14 32h6M44 32h6"/></g></svg><span class="lbl" style="color:#0A0A0A">SYSTEM</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="14" fill="#9B5DE5" stroke="#0A0A0A" stroke-width="3"/><path d="M18 46 L42 22 L48 28 L24 52 L14 54 Z" fill="#FFD93D" stroke="#0A0A0A" stroke-width="3" stroke-linejoin="round"/></svg><span class="lbl" style="color:#0A0A0A">CREATIVE</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="14" fill="#FFD93D" stroke="#0A0A0A" stroke-width="3"/><circle cx="32" cy="28" r="10" fill="#FF4FA3" stroke="#0A0A0A" stroke-width="3"/><path d="M22 46 Q 32 38 42 46" stroke="#0A0A0A" stroke-width="3" fill="none"/></svg><span class="lbl" style="color:#0A0A0A">INFO</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="14" fill="#FF4FA3" stroke="#0A0A0A" stroke-width="3"/><circle cx="26" cy="30" r="4" fill="#0A0A0A"/><circle cx="40" cy="30" r="4" fill="#0A0A0A"/></svg><span class="lbl" style="color:#0A0A0A">COMPANION</span></div>
+  </div>
+</div>
+
+<h3>Widget thumbnails</h3>
+<div class="frame brutal">
+  <div class="grid-thumbs">
+    <div class="thumb" style="background:#6BCEFF;border:3px solid #0A0A0A;box-shadow:4px 4px 0 #0A0A0A"><span class="br-meta">WEATHER · LAGOS</span><div><span class="br-title" style="font-size:32px">18°</span> <span class="br-meta" style="opacity:.7">CLOUDY</span></div></div>
+    <div class="thumb" style="background:#FFD93D;border:3px solid #0A0A0A;box-shadow:4px 4px 0 #0A0A0A"><span class="br-meta">↗ FLIGHT · BA76</span><div><div class="br-title" style="font-size:18px">LAGOS → LONDON</div></div></div>
+    <div class="thumb" style="background:#5FE3A1;border:3px solid #0A0A0A;box-shadow:4px 4px 0 #0A0A0A"><span class="br-meta">TODAY</span><div class="br-title">3 THINGS,<br>SIMPLY.</div></div>
+    <div class="thumb" style="background:#FF4FA3;border:3px solid #0A0A0A;box-shadow:4px 4px 0 #0A0A0A"><span class="br-meta">NOTES</span><div class="br-title" style="font-size:15px;line-height:1.1">A BED OF ROSES BEGINS AS A SINGLE THOUGHT.</div></div>
+  </div>
+</div>
+
+<!-- ─────────── WARM & EARTHY ─────────── -->
+<h2>Warm &amp; Earthy <span class="tag">sun-bleached paper · walnut ink</span></h2>
+
+<h3>App icons</h3>
+<div class="frame earthy">
+  <div class="grid-icons">
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="14" fill="#FAF3E3" stroke="rgba(42,31,20,.2)" stroke-width="1"/><path d="M18 16 H42 L46 20 V48 H18 Z M38 16 V22 H44" fill="none" stroke="#C8553D" stroke-width="2" stroke-linejoin="round"/></svg><span class="lbl" style="color:#2A1F14">Notes</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="14" fill="#F5E9D0" stroke="rgba(42,31,20,.2)" stroke-width="1"/><circle cx="26" cy="32" r="11" fill="none" stroke="#7A8450" stroke-width="2"/><circle cx="38" cy="32" r="11" fill="none" stroke="#C8553D" stroke-width="2"/></svg><span class="lbl" style="color:#2A1F14">Chat</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="14" fill="#FAF3E3" stroke="rgba(42,31,20,.2)" stroke-width="1"/><circle cx="32" cy="32" r="14" fill="none" stroke="#2A1F14" stroke-width="2"/><polygon points="28,24 44,32 28,40" fill="#D4A24C"/></svg><span class="lbl" style="color:#2A1F14">Media</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="14" fill="#F5E9D0" stroke="rgba(42,31,20,.2)" stroke-width="1"/><g fill="none" stroke="#2A1F14" stroke-width="2" stroke-linecap="round"><circle cx="32" cy="32" r="6"/><path d="M32 14v6M32 44v6M14 32h6M44 32h6"/></g></svg><span class="lbl" style="color:#2A1F14">System</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="14" fill="#FAF3E3" stroke="rgba(42,31,20,.2)" stroke-width="1"/><path d="M18 46 L42 22 L48 28 L24 52 L14 54 Z" fill="#D4A24C" stroke="#2A1F14" stroke-width="1.5"/></svg><span class="lbl" style="color:#2A1F14">Creative</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="14" fill="#F2D58A" stroke="rgba(42,31,20,.2)" stroke-width="1"/><circle cx="32" cy="28" r="10" fill="#C8553D"/><path d="M22 46 Q 32 40 42 46" stroke="#2A1F14" stroke-width="2" fill="none"/></svg><span class="lbl" style="color:#2A1F14">Info</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="14" fill="#C8553D" stroke="rgba(42,31,20,.2)" stroke-width="1"/><text x="32" y="44" font-family="Newsreader" font-style="italic" font-weight="600" font-size="32" fill="#FAF3E3" text-anchor="middle">R</text></svg><span class="lbl" style="color:#2A1F14">Companion</span></div>
+  </div>
+</div>
+
+<h3>Widget thumbnails</h3>
+<div class="frame earthy">
+  <div class="grid-thumbs">
+    <div class="thumb" style="background:#F5E9D0;border:1px solid rgba(42,31,20,.18);box-shadow:0 8px 24px rgba(82,55,28,.10)"><span class="e-meta" style="color:rgba(42,31,20,.6)">weather · lagos</span><div><span class="e-title" style="font-size:34px">26°</span> <span class="e-title" style="font-size:14px;color:#C8553D">golden hour</span></div></div>
+    <div class="thumb" style="background:#C8553D;color:#FAF3E3;border:1px solid rgba(42,31,20,.2)"><span class="e-meta" style="color:rgba(250,243,227,.7)">↗ flight · BA76</span><div><div class="e-title" style="color:#FAF3E3">Lagos → London</div><span class="e-meta" style="color:rgba(250,243,227,.7)">22:40 · gate B17</span></div></div>
+    <div class="thumb" style="background:#7A8450;color:#FAF3E3"><span class="e-meta" style="color:rgba(250,243,227,.7)">today</span><div class="e-title" style="color:#FAF3E3">Three small things,<br>gently.</div></div>
+    <div class="thumb" style="background:#D4A24C"><span class="e-meta">notes</span><div class="e-title" style="font-size:17px">"a bed of roses begins as a single thought."</div></div>
+  </div>
+</div>
+
+<!-- ─────────── NEO BRUTALIST ─────────── -->
+<h2>Neo Brutalist <span class="tag">hairlines · sharp corners · single hot accent</span></h2>
+
+<h3>App icons</h3>
+<div class="frame neo">
+  <div class="grid-icons">
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" fill="#FFFFFF" stroke="#0A0A0A"/><path d="M18 18 H42 L46 22 V48 H18 Z M38 18 V24 H44" fill="none" stroke="#0A0A0A" stroke-width="1.5"/></svg><span class="lbl" style="color:#0A0A0A">NOTES</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" fill="#FFFFFF" stroke="#0A0A0A"/><circle cx="26" cy="32" r="11" fill="none" stroke="#0A0A0A" stroke-width="1.5"/><circle cx="38" cy="32" r="11" fill="none" stroke="#FF3B00" stroke-width="1.5"/></svg><span class="lbl" style="color:#0A0A0A">CHAT</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" fill="#FFFFFF" stroke="#0A0A0A"/><circle cx="32" cy="32" r="14" fill="none" stroke="#0A0A0A" stroke-width="1.5"/><polygon points="28,24 44,32 28,40" fill="#FF3B00"/></svg><span class="lbl" style="color:#0A0A0A">MEDIA</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" fill="#F4F2ED" stroke="#0A0A0A"/><g fill="none" stroke="#0A0A0A" stroke-width="1.5"><circle cx="32" cy="32" r="6"/><path d="M32 14v6M32 44v6M14 32h6M44 32h6"/></g></svg><span class="lbl" style="color:#0A0A0A">SYSTEM</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" fill="#FFFFFF" stroke="#0A0A0A"/><path d="M18 46 L42 22 L48 28 L24 52 L14 54 Z" fill="#FF3B00" stroke="#0A0A0A" stroke-width="1.5"/></svg><span class="lbl" style="color:#0A0A0A">CREATIVE</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" fill="#FFFFFF" stroke="#0A0A0A"/><circle cx="32" cy="28" r="10" fill="none" stroke="#0A0A0A" stroke-width="1.5"/><path d="M22 46 Q 32 38 42 46" stroke="#0A0A0A" stroke-width="1.5" fill="none"/></svg><span class="lbl" style="color:#0A0A0A">INFO</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" fill="#0A0A0A"/><rect x="8" y="8" width="48" height="48" fill="none" stroke="#FF3B00"/><text x="32" y="44" font-family="Inter Tight" font-weight="800" font-size="28" fill="#F4F2ED" text-anchor="middle">R.</text></svg><span class="lbl" style="color:#0A0A0A">COMPANION</span></div>
+  </div>
+</div>
+
+<h3>Widget thumbnails</h3>
+<div class="frame neo">
+  <div class="grid-thumbs">
+    <div class="thumb" style="background:#FFFFFF;border:1px solid #0A0A0A;border-radius:0"><span class="n-meta">/WEATHER/LAGOS</span><div><span class="n-title" style="font-size:32px">18°</span> <span class="n-meta" style="opacity:.6">CLOUDY</span></div></div>
+    <div class="thumb" style="background:#0A0A0A;color:#F4F2ED;border-radius:0"><span class="n-meta" style="color:rgba(244,242,237,.6)">/FLIGHT/BA76</span><div><div class="n-title">LAGOS → LONDON</div><span class="n-meta" style="color:#FF3B00">ON TIME</span></div></div>
+    <div class="thumb" style="background:#FF3B00;color:#F4F2ED;border-radius:0"><span class="n-meta" style="color:rgba(244,242,237,.8)">/TODAY</span><div class="n-title">3 ITEMS · 1 OVERDUE</div></div>
+    <div class="thumb" style="background:#FFFFFF;border:1px solid #0A0A0A;border-radius:0"><span class="n-meta">/NOTES</span><div class="n-title" style="font-size:13px">A BED OF ROSES BEGINS AS A SINGLE THOUGHT.</div></div>
+  </div>
+</div>
+
+<!-- ─────────── Y2K ─────────── -->
+<h2>Y2K / Frutiger Aero <span class="tag">gel orbs · sky gradients · droplets</span></h2>
+
+<h3>App icons</h3>
+<div class="frame y2k">
+  <div class="grid-icons">
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><defs><radialGradient id="yorb" cx="32%" cy="28%"><stop offset="0%" stop-color="#fff"/><stop offset="22%" stop-color="#9ED6FF"/><stop offset="55%" stop-color="#3BA8FF"/><stop offset="100%" stop-color="#003FA8"/></radialGradient></defs><circle cx="32" cy="32" r="28" fill="url(#yorb)"/><path d="M18 18 H40 L44 22 V46 H18 Z" fill="none" stroke="#fff" stroke-width="2"/></svg><span class="lbl">Notes</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="url(#yorb)"/><circle cx="26" cy="32" r="10" fill="rgba(255,255,255,.7)"/><circle cx="38" cy="32" r="10" fill="rgba(168,224,99,.85)"/></svg><span class="lbl">Chat</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><defs><radialGradient id="ylime" cx="32%" cy="28%"><stop offset="0%" stop-color="#fff"/><stop offset="40%" stop-color="#D6FF9D"/><stop offset="100%" stop-color="#3FA017"/></radialGradient></defs><circle cx="32" cy="32" r="28" fill="url(#ylime)"/><polygon points="26,22 46,32 26,42" fill="#fff"/></svg><span class="lbl">Media</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="url(#yorb)"/><g fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="32" cy="32" r="6"/><path d="M32 14v6M32 44v6M14 32h6M44 32h6"/></g></svg><span class="lbl">System</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="url(#ylime)"/><path d="M18 46 L42 22 L48 28 L24 52 L14 54 Z" fill="#fff" stroke="#0A2A4D" stroke-width="1.5"/></svg><span class="lbl">Creative</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><defs><radialGradient id="ysun" cx="32%" cy="28%"><stop offset="0%" stop-color="#fff"/><stop offset="40%" stop-color="#FFE15B"/><stop offset="100%" stop-color="#C97000"/></radialGradient></defs><circle cx="32" cy="32" r="28" fill="url(#ysun)"/></svg><span class="lbl">Info</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="url(#yorb)"/><text x="32" y="44" font-family="Sora" font-weight="800" font-size="28" fill="#fff" text-anchor="middle">R</text></svg><span class="lbl">Companion</span></div>
+  </div>
+</div>
+
+<h3>Widget thumbnails</h3>
+<div class="frame y2k">
+  <div class="grid-thumbs">
+    <div class="thumb" style="background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(255,255,255,.55));color:#0A2A4D;border:1px solid rgba(255,255,255,.85)"><span class="y-meta">LAGOS</span><div><span class="y-title">18°</span> <span class="y-meta" style="color:#0066FF">PARTLY CLOUDY</span></div></div>
+    <div class="thumb" style="background:linear-gradient(180deg,#7FC8FF,#0066FF);color:#fff;border:1px solid rgba(255,255,255,.6)"><span class="y-meta" style="color:rgba(255,255,255,.85)">↗ BA76 · ON TIME</span><div class="y-title">LAGOS → LONDON</div></div>
+    <div class="thumb" style="background:linear-gradient(180deg,#D6FF9D,#5FC92F);color:#15330A"><span class="y-meta">TODAY</span><div class="y-title" style="font-size:18px">3 ITEMS · 1 OVERDUE</div></div>
+    <div class="thumb" style="background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(255,255,255,.55));color:#0A2A4D"><span class="y-meta">NOTES</span><div style="font-family:Inter;font-size:14px;font-style:italic">a bed of roses begins as a single thought.</div></div>
+  </div>
+</div>
+
+<!-- ─────────── RISOGRAPH ─────────── -->
+<h2>Risograph <span class="tag">three spot inks · misregistration · halftones</span></h2>
+
+<h3>App icons</h3>
+<div class="frame riso">
+  <div class="grid-icons">
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="10" fill="#FFE15B" stroke="#1A1F3D" stroke-width="2"/><rect x="6" y="6" width="58" height="58" rx="10" fill="#FF48B0" stroke="#1A1F3D" stroke-width="2" style="mix-blend-mode:multiply" opacity=".55"/><path d="M18 18 H42 L46 22 V46 H18 Z" fill="none" stroke="#1A1F3D" stroke-width="2"/></svg><span class="lbl" style="color:#1A1F3D">Notes</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="10" fill="#3145C2" stroke="#1A1F3D" stroke-width="2"/><circle cx="26" cy="32" r="11" fill="#FF48B0" style="mix-blend-mode:multiply" opacity=".85"/><circle cx="38" cy="32" r="11" fill="#FFE15B" style="mix-blend-mode:multiply" opacity=".85"/></svg><span class="lbl" style="color:#1A1F3D">Chat</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="10" fill="#FFE15B" stroke="#1A1F3D" stroke-width="2"/><circle cx="32" cy="32" r="14" fill="none" stroke="#1A1F3D" stroke-width="2"/><polygon points="28,24 44,32 28,40" fill="#FF48B0"/></svg><span class="lbl" style="color:#1A1F3D">Media</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="10" fill="#FAF3E0" stroke="#1A1F3D" stroke-width="2"/><g fill="none" stroke="#1A1F3D" stroke-width="2"><circle cx="32" cy="32" r="6"/><path d="M32 14v6M32 44v6M14 32h6M44 32h6"/></g></svg><span class="lbl" style="color:#1A1F3D">System</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="10" fill="#FF48B0" stroke="#1A1F3D" stroke-width="2"/><path d="M18 46 L42 22 L48 28 L24 52 L14 54 Z" fill="#FFE15B" stroke="#1A1F3D" stroke-width="1.5"/></svg><span class="lbl" style="color:#1A1F3D">Creative</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="10" fill="#FFE15B" stroke="#1A1F3D" stroke-width="2"/><circle cx="32" cy="28" r="10" fill="#FF48B0" style="mix-blend-mode:multiply"/><path d="M22 46 Q 32 38 42 46" stroke="#1A1F3D" stroke-width="2" fill="none"/></svg><span class="lbl" style="color:#1A1F3D">Info</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="10" fill="#FF48B0" stroke="#1A1F3D" stroke-width="2"/><text x="32" y="46" font-family="Fraunces" font-style="italic" font-weight="900" font-size="36" fill="#FFE15B" text-anchor="middle">R</text></svg><span class="lbl" style="color:#1A1F3D">Companion</span></div>
+  </div>
+</div>
+
+<h3>Widget thumbnails</h3>
+<div class="frame riso">
+  <div class="grid-thumbs">
+    <div class="thumb" style="background:#FAF3E0;border:2px solid #1A1F3D;box-shadow:4px 4px 0 #FF48B0"><span class="r-meta">weather · lagos</span><div><span class="r-title" style="font-size:34px">18°</span> <span class="r-meta" style="color:#FF48B0">cloudy</span></div></div>
+    <div class="thumb" style="background:#3145C2;color:#FAF3E0;border:2px solid #1A1F3D;box-shadow:4px 4px 0 #FFE15B"><span class="r-meta" style="color:rgba(250,243,224,.85)">↗ ba76 · on time</span><div class="r-title" style="color:#FAF3E0">Lagos → London</div></div>
+    <div class="thumb" style="background:#FFE15B;border:2px solid #1A1F3D;box-shadow:4px 4px 0 #3145C2"><span class="r-meta">today</span><div class="r-title">Buy roses ✿<br>· call mom</div></div>
+    <div class="thumb" style="background:#FF48B0;color:#FAF3E0;border:2px solid #1A1F3D;box-shadow:4px 4px 0 #3145C2"><span class="r-meta" style="color:rgba(250,243,224,.85)">notes</span><div class="r-title" style="color:#FAF3E0;font-size:17px">"a bed of roses begins as a single thought."</div></div>
+  </div>
+</div>
+
+<!-- ─────────── PIXEL CRT ─────────── -->
+<h2>Pixel CRT <span class="tag">phosphor green · scanlines · VT323</span></h2>
+
+<h3>App icons</h3>
+<div class="frame crt">
+  <div class="grid-icons">
+    <div class="col"><svg class="icon" viewBox="0 0 16 16" shape-rendering="crispEdges" style="filter:drop-shadow(0 0 6px #33FF66)"><rect width="16" height="16" fill="#0B0F0A"/><rect x="1" y="1" width="14" height="14" fill="none" stroke="#33FF66"/><rect x="4" y="4" width="8" height="1" fill="#33FF66"/><rect x="4" y="6" width="8" height="1" fill="#33FF66"/><rect x="4" y="8" width="6" height="1" fill="#33FF66"/></svg><span class="lbl" style="color:#33FF66">NOTES</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 16 16" shape-rendering="crispEdges" style="filter:drop-shadow(0 0 6px #33FF66)"><rect width="16" height="16" fill="#0B0F0A"/><rect x="2" y="3" width="8" height="6" fill="none" stroke="#33FF66"/><rect x="6" y="7" width="8" height="6" fill="none" stroke="#33FF66"/></svg><span class="lbl" style="color:#33FF66">CHAT</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 16 16" shape-rendering="crispEdges" style="filter:drop-shadow(0 0 6px #33FF66)"><rect width="16" height="16" fill="#0B0F0A"/><rect x="5" y="4" width="1" height="8" fill="#33FF66"/><rect x="6" y="5" width="1" height="6" fill="#33FF66"/><rect x="7" y="6" width="1" height="4" fill="#33FF66"/><rect x="8" y="7" width="1" height="2" fill="#33FF66"/></svg><span class="lbl" style="color:#33FF66">MEDIA</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 16 16" shape-rendering="crispEdges" style="filter:drop-shadow(0 0 6px #FFB000)"><rect width="16" height="16" fill="#0B0F0A"/><rect x="7" y="2" width="2" height="2" fill="#FFB000"/><rect x="7" y="12" width="2" height="2" fill="#FFB000"/><rect x="2" y="7" width="2" height="2" fill="#FFB000"/><rect x="12" y="7" width="2" height="2" fill="#FFB000"/><rect x="6" y="6" width="4" height="4" fill="none" stroke="#FFB000"/></svg><span class="lbl" style="color:#33FF66">SYSTEM</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 16 16" shape-rendering="crispEdges" style="filter:drop-shadow(0 0 6px #33FF66)"><rect width="16" height="16" fill="#0B0F0A"/><rect x="3" y="11" width="2" height="2" fill="#33FF66"/><rect x="5" y="9" width="2" height="2" fill="#33FF66"/><rect x="7" y="7" width="2" height="2" fill="#33FF66"/><rect x="9" y="5" width="2" height="2" fill="#33FF66"/><rect x="11" y="3" width="2" height="2" fill="#FFB000"/></svg><span class="lbl" style="color:#33FF66">CREATIVE</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 16 16" shape-rendering="crispEdges" style="filter:drop-shadow(0 0 6px #FFB000)"><rect width="16" height="16" fill="#0B0F0A"/><rect x="6" y="4" width="4" height="4" fill="#FFB000"/><rect x="5" y="5" width="6" height="2" fill="#FFB000"/><rect x="7" y="3" width="2" height="6" fill="#FFB000"/></svg><span class="lbl" style="color:#33FF66">INFO</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 16 16" shape-rendering="crispEdges" style="filter:drop-shadow(0 0 6px #FF3B8B)"><rect width="16" height="16" fill="#0B0F0A"/><rect x="4" y="2" width="8" height="1" fill="#FF3B8B"/><rect x="3" y="3" width="10" height="2" fill="#FF3B8B"/><rect x="3" y="5" width="10" height="1" fill="#FF3B8B"/><rect x="5" y="8" width="2" height="2" fill="#33FF66"/><rect x="9" y="8" width="2" height="2" fill="#33FF66"/></svg><span class="lbl" style="color:#33FF66">COMPANION</span></div>
+  </div>
+</div>
+
+<h3>Widget thumbnails</h3>
+<div class="frame crt">
+  <div class="grid-thumbs">
+    <div class="thumb" style="background:#070A06;border:1px solid #33FF66;box-shadow:0 0 12px rgba(51,255,102,.25)"><span class="crt-meta">/WEATHER/LAGOS</span><div><span class="crt-title">18°</span> <span class="crt-meta">CLOUDY</span></div></div>
+    <div class="thumb" style="background:#070A06;border:1px solid #FFB000;color:#FFB000;box-shadow:0 0 12px rgba(255,176,0,.3)"><span class="crt-meta" style="color:rgba(255,176,0,.7)">/FLIGHT/BA76</span><div class="crt-title" style="color:#FFB000;font-size:22px">LAGOS → LONDON</div></div>
+    <div class="thumb" style="background:#070A06;border:1px solid #FF3B8B;color:#FF3B8B;box-shadow:0 0 12px rgba(255,59,139,.3)"><span class="crt-meta" style="color:rgba(255,59,139,.7)">/TODAY</span><div class="crt-title" style="color:#FF3B8B">3 ITEMS · 1 OVERDUE</div></div>
+    <div class="thumb" style="background:#070A06;border:1px solid #33FF66"><span class="crt-meta">/NOTES</span><div style="font-family:'IBM Plex Mono';font-size:11px;color:#1FA63E">▸ a bed of roses begins<br>  as a single thought.</div></div>
+  </div>
+</div>
+
+<!-- ─────────── LIQUID GLASS ─────────── -->
+<h2>Liquid Glass <span class="tag">frosted refraction · italic serif · saturated backdrops</span></h2>
+
+<h3>App icons</h3>
+<div class="frame liquid">
+  <div class="grid-icons">
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><defs><linearGradient id="lgls" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(255,255,255,.6)"/><stop offset="100%" stop-color="rgba(255,255,255,.18)"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="18" fill="url(#lgls)" stroke="rgba(255,255,255,.7)"/><path d="M18 18 H42 L46 22 V46 H18 Z" fill="none" stroke="#fff" stroke-width="1.6"/></svg><span class="lbl" style="color:#fff">Notes</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="18" fill="url(#lgls)" stroke="rgba(255,255,255,.7)"/><circle cx="26" cy="32" r="11" fill="rgba(255,180,140,.6)" stroke="#fff" stroke-width="1.4"/><circle cx="38" cy="32" r="11" fill="rgba(120,170,255,.6)" stroke="#fff" stroke-width="1.4"/></svg><span class="lbl" style="color:#fff">Chat</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="18" fill="url(#lgls)" stroke="rgba(255,255,255,.7)"/><circle cx="32" cy="32" r="14" fill="rgba(120,170,255,.5)" stroke="#fff" stroke-width="1.6"/><polygon points="28,24 44,32 28,40" fill="#fff"/></svg><span class="lbl" style="color:#fff">Media</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="18" fill="url(#lgls)" stroke="rgba(255,255,255,.7)"/><g fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><circle cx="32" cy="32" r="6"/><path d="M32 14v6M32 44v6M14 32h6M44 32h6"/></g></svg><span class="lbl" style="color:#fff">System</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="18" fill="url(#lgls)" stroke="rgba(255,255,255,.7)"/><path d="M18 46 L42 22 L48 28 L24 52 L14 54 Z" fill="rgba(255,180,140,.7)" stroke="#fff" stroke-width="1.4"/></svg><span class="lbl" style="color:#fff">Creative</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="18" fill="url(#lgls)" stroke="rgba(255,255,255,.7)"/><circle cx="32" cy="30" r="10" fill="rgba(255,213,138,.85)"/><path d="M22 46 Q 32 38 42 46" stroke="#fff" stroke-width="1.6" fill="none"/></svg><span class="lbl" style="color:#fff">Info</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="url(#lgls)" stroke="rgba(255,255,255,.7)"/><text x="32" y="44" font-family="Instrument Serif" font-style="italic" font-size="32" fill="#fff" text-anchor="middle">R</text></svg><span class="lbl" style="color:#fff">Companion</span></div>
+  </div>
+</div>
+
+<h3>Widget thumbnails</h3>
+<div class="frame liquid">
+  <div class="grid-thumbs">
+    <div class="thumb" style="background:linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.08));border:1px solid rgba(255,255,255,.45);backdrop-filter:blur(8px)"><span class="lg-meta">lagos</span><div><span class="lg-title" style="font-size:34px">18°</span> <span class="lg-meta">partly cloudy</span></div></div>
+    <div class="thumb" style="background:linear-gradient(180deg, rgba(120,170,255,.4), rgba(120,170,255,.12));border:1px solid rgba(255,255,255,.45)"><span class="lg-meta">↗ ba76 · on time</span><div class="lg-title">Lagos → London</div></div>
+    <div class="thumb" style="background:linear-gradient(180deg, rgba(255,180,140,.4), rgba(255,180,140,.12));border:1px solid rgba(255,255,255,.45)"><span class="lg-meta">today</span><div class="lg-title">Three small things, gently.</div></div>
+    <div class="thumb" style="background:linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.08));border:1px solid rgba(255,255,255,.45)"><span class="lg-meta">notes</span><div class="lg-title" style="font-size:17px">"a bed of roses begins as a single thought."</div></div>
+  </div>
+</div>
+
+<!-- ─────────── MEMPHIS ─────────── -->
+<h2>Memphis <span class="tag">squiggles · terrazzo · asymmetric radius</span></h2>
+
+<h3>App icons</h3>
+<div class="frame memphis">
+  <div class="grid-icons">
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="20" ry="4" fill="#FFE15B" stroke="#1A1A2E" stroke-width="2.5"/><path d="M18 18 H42 L46 22 V46 H18 Z" fill="none" stroke="#1A1A2E" stroke-width="2.5"/></svg><span class="lbl" style="color:#1A1A2E">Notes</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="20" ry="4" fill="#FF4FA3" stroke="#1A1A2E" stroke-width="2.5"/><circle cx="26" cy="32" r="11" fill="#FAF1DC" stroke="#1A1A2E" stroke-width="2.5"/><circle cx="38" cy="32" r="11" fill="#5FE3A1" stroke="#1A1A2E" stroke-width="2.5"/></svg><span class="lbl" style="color:#1A1A2E">Chat</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="20" ry="4" fill="#3DB7FF" stroke="#1A1A2E" stroke-width="2.5"/><circle cx="32" cy="32" r="14" fill="none" stroke="#1A1A2E" stroke-width="2.5"/><polygon points="28,24 44,32 28,40" fill="#1A1A2E"/></svg><span class="lbl" style="color:#1A1A2E">Media</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="20" ry="4" fill="#5FE3A1" stroke="#1A1A2E" stroke-width="2.5"/><g fill="none" stroke="#1A1A2E" stroke-width="2.5"><circle cx="32" cy="32" r="6"/><path d="M32 14v6M32 44v6M14 32h6M44 32h6"/></g></svg><span class="lbl" style="color:#1A1A2E">System</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="20" ry="4" fill="#9B5DE5" stroke="#1A1A2E" stroke-width="2.5"/><path d="M18 46 L42 22 L48 28 L24 52 L14 54 Z" fill="#FFE15B" stroke="#1A1A2E" stroke-width="2"/></svg><span class="lbl" style="color:#1A1A2E">Creative</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="20" ry="4" fill="#FFE15B" stroke="#1A1A2E" stroke-width="2.5"/><circle cx="32" cy="28" r="10" fill="#FF4FA3" stroke="#1A1A2E" stroke-width="2.5"/><path d="M22 46 Q 32 38 42 46" stroke="#1A1A2E" stroke-width="2.5" fill="none"/></svg><span class="lbl" style="color:#1A1A2E">Info</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="20" ry="4" fill="#FF4FA3" stroke="#1A1A2E" stroke-width="2.5"/><polygon points="32,12 38,22 26,22" fill="#FFE15B" stroke="#1A1A2E" stroke-width="2"/><circle cx="32" cy="36" r="14" fill="#FAF1DC" stroke="#1A1A2E" stroke-width="2.5"/></svg><span class="lbl" style="color:#1A1A2E">Companion</span></div>
+  </div>
+</div>
+
+<h3>Widget thumbnails</h3>
+<div class="frame memphis">
+  <div class="grid-thumbs">
+    <div class="thumb" style="background:#FFE15B;border:2.5px solid #1A1A2E;border-radius:20px 4px 20px 4px"><span class="m-meta">weather · lagos</span><div><span class="m-title" style="font-size:36px">18°</span> <span class="m-meta">cloudy</span></div></div>
+    <div class="thumb" style="background:#FF4FA3;border:2.5px solid #1A1A2E;border-radius:20px 4px 20px 4px"><span class="m-meta">↗ ba76 · on time</span><div class="m-title">Lagos → London</div></div>
+    <div class="thumb" style="background:#5FE3A1;border:2.5px solid #1A1A2E;border-radius:20px 4px 20px 4px"><span class="m-meta">today</span><div class="m-title">Buy roses ✿<br>· call mom</div></div>
+    <div class="thumb" style="background:#9B5DE5;color:#fff;border:2.5px solid #1A1A2E;border-radius:20px 4px 20px 4px"><span class="m-meta" style="color:rgba(255,255,255,.85)">notes</span><div class="m-title" style="font-size:17px">"a bed of roses begins as a single thought."</div></div>
+  </div>
+</div>
+
+<!-- ─────────── SOLARPUNK ─────────── -->
+<h2>Solarpunk <span class="tag">moss · terracotta · beeswax · botanical line</span></h2>
+
+<h3>App icons</h3>
+<div class="frame solar">
+  <div class="grid-icons">
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="16" fill="#F2D58A" stroke="rgba(31,42,26,.2)"/><path d="M18 18 H42 L46 22 V46 H18 Z" fill="none" stroke="#3F5D3A" stroke-width="2"/></svg><span class="lbl" style="color:#1F2A1A">Notes</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="16" fill="#F4B5A0" stroke="rgba(31,42,26,.2)"/><circle cx="26" cy="32" r="11" fill="none" stroke="#3F5D3A" stroke-width="2"/><circle cx="38" cy="32" r="11" fill="none" stroke="#C66B4A" stroke-width="2"/></svg><span class="lbl" style="color:#1F2A1A">Chat</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="16" fill="#7AAB6E" stroke="rgba(31,42,26,.2)"/><circle cx="32" cy="32" r="14" fill="none" stroke="#1F2A1A" stroke-width="2"/><polygon points="28,24 44,32 28,40" fill="#F2D58A"/></svg><span class="lbl" style="color:#1F2A1A">Media</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="16" fill="#FAF1DB" stroke="rgba(31,42,26,.2)"/><g fill="none" stroke="#3F5D3A" stroke-width="2"><circle cx="32" cy="32" r="6"/><path d="M32 14v6M32 44v6M14 32h6M44 32h6"/></g></svg><span class="lbl" style="color:#1F2A1A">System</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="16" fill="#F1E8D0" stroke="rgba(31,42,26,.2)"/><path d="M32 12 Q 50 30 32 52 Q 14 30 32 12 Z" fill="#7AAB6E" stroke="#1F2A1A" stroke-width="1.5"/><line x1="32" y1="14" x2="32" y2="50" stroke="#1F2A1A" stroke-width="1"/></svg><span class="lbl" style="color:#1F2A1A">Creative</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="16" fill="#F2D58A" stroke="rgba(31,42,26,.2)"/><circle cx="32" cy="28" r="10" fill="#C66B4A"/><g stroke="#1F2A1A" stroke-width="1.5" fill="none"><line x1="32" y1="6" x2="32" y2="12"/><line x1="32" y1="44" x2="32" y2="50"/><line x1="6" y1="28" x2="12" y2="28"/><line x1="52" y1="28" x2="58" y2="28"/></g></svg><span class="lbl" style="color:#1F2A1A">Info</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="16" fill="#C66B4A" stroke="rgba(31,42,26,.2)"/><circle cx="32" cy="28" r="10" fill="#F4B5A0"/><circle cx="32" cy="28" r="5" fill="#8B3F22"/><path d="M32 38 Q 32 48 24 52" stroke="#3F5D3A" stroke-width="2" fill="none"/></svg><span class="lbl" style="color:#1F2A1A">Companion</span></div>
+  </div>
+</div>
+
+<h3>Widget thumbnails</h3>
+<div class="frame solar">
+  <div class="grid-thumbs">
+    <div class="thumb" style="background:#F2D58A;border:1px solid rgba(31,42,26,.2);box-shadow:0 8px 24px rgba(31,42,26,.1)"><span class="s-meta">weather · lagos</span><div><span class="s-title" style="font-size:36px">26°</span> <span class="s-title" style="font-size:14px;color:#C66B4A">golden hour</span></div></div>
+    <div class="thumb" style="background:#3F5D3A;color:#F1E8D0;border:1px solid rgba(31,42,26,.2)"><span class="s-meta" style="color:rgba(241,232,208,.7)">↗ ba76 · on time</span><div class="s-title" style="color:#F1E8D0">Lagos → London</div></div>
+    <div class="thumb" style="background:#F4B5A0;border:1px solid rgba(31,42,26,.2)"><span class="s-meta">today</span><div class="s-title">Water basil ·<br>call mom · breathe</div></div>
+    <div class="thumb" style="background:#C66B4A;color:#F1E8D0;border:1px solid rgba(31,42,26,.2)"><span class="s-meta" style="color:rgba(241,232,208,.7)">notes</span><div class="s-title" style="color:#F1E8D0;font-size:17px">"the garden is the slow argument."</div></div>
+  </div>
+</div>
+
+<!-- ─────────── CYBERPUNK ─────────── -->
+<h2>Cyberpunk <span class="tag">clip-corner chrome · neon outline · hex grid</span></h2>
+
+<h3>App icons</h3>
+<div class="frame cyber">
+  <div class="grid-icons">
+    <div class="col"><svg class="icon" viewBox="0 0 64 64" style="filter:drop-shadow(0 0 8px rgba(0,229,255,.5))"><polygon points="10,2 62,2 62,54 54,62 2,62 2,10" fill="#13091F" stroke="#00E5FF" stroke-width="1.4"/><path d="M18 18 H42 L46 22 V46 H18 Z" fill="none" stroke="#00E5FF" stroke-width="1.5"/></svg><span class="lbl" style="color:#00E5FF">NOTES</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64" style="filter:drop-shadow(0 0 8px rgba(255,45,156,.5))"><polygon points="10,2 62,2 62,54 54,62 2,62 2,10" fill="#13091F" stroke="#FF2D9C" stroke-width="1.4"/><circle cx="26" cy="32" r="11" fill="none" stroke="#FF2D9C" stroke-width="1.4"/><circle cx="38" cy="32" r="11" fill="none" stroke="#00E5FF" stroke-width="1.4"/></svg><span class="lbl" style="color:#FF2D9C">CHAT</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64" style="filter:drop-shadow(0 0 8px rgba(0,229,255,.5))"><polygon points="10,2 62,2 62,54 54,62 2,62 2,10" fill="#13091F" stroke="#00E5FF" stroke-width="1.4"/><circle cx="32" cy="32" r="14" fill="none" stroke="#00E5FF" stroke-width="1.4"/><polygon points="28,24 44,32 28,40" fill="#00E5FF"/></svg><span class="lbl" style="color:#00E5FF">MEDIA</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64" style="filter:drop-shadow(0 0 8px rgba(168,255,62,.5))"><polygon points="10,2 62,2 62,54 54,62 2,62 2,10" fill="#13091F" stroke="#A8FF3E" stroke-width="1.4"/><g fill="none" stroke="#A8FF3E" stroke-width="1.5"><circle cx="32" cy="32" r="6"/><path d="M32 14v6M32 44v6M14 32h6M44 32h6"/></g></svg><span class="lbl" style="color:#A8FF3E">SYSTEM</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64" style="filter:drop-shadow(0 0 8px rgba(255,45,156,.5))"><polygon points="10,2 62,2 62,54 54,62 2,62 2,10" fill="#13091F" stroke="#FF2D9C" stroke-width="1.4"/><path d="M18 46 L42 22 L48 28 L24 52 L14 54 Z" fill="#FF2D9C"/></svg><span class="lbl" style="color:#FF2D9C">CREATIVE</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64" style="filter:drop-shadow(0 0 8px rgba(168,255,62,.5))"><polygon points="10,2 62,2 62,54 54,62 2,62 2,10" fill="#13091F" stroke="#A8FF3E" stroke-width="1.4"/><circle cx="32" cy="28" r="10" fill="#A8FF3E"/><path d="M22 46 Q 32 38 42 46" stroke="#A8FF3E" stroke-width="1.5" fill="none"/></svg><span class="lbl" style="color:#A8FF3E">INFO</span></div>
+    <div class="col"><svg class="icon" viewBox="0 0 64 64" style="filter:drop-shadow(0 0 12px rgba(255,45,156,.6))"><polygon points="10,2 62,2 62,54 54,62 2,62 2,10" fill="#13091F" stroke="#FF2D9C" stroke-width="1.4"/><polygon points="32,14 50,32 32,50 14,32" fill="#FF2D9C" opacity=".85"/><circle cx="32" cy="32" r="4" fill="#A8FF3E"/></svg><span class="lbl" style="color:#FF2D9C">COMPANION</span></div>
+  </div>
+</div>
+
+<h3>Widget thumbnails</h3>
+<div class="frame cyber">
+  <div class="grid-thumbs">
+    <div class="thumb" style="background:#13091F;border:1px solid #00E5FF;clip-path:polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);box-shadow:0 0 18px rgba(0,229,255,.35)"><span class="c-meta">NEO-LAGOS</span><div><span class="c-title" style="font-size:32px">26°</span> <span class="c-meta">RAIN</span></div></div>
+    <div class="thumb" style="background:#13091F;border:1px solid #FF2D9C;clip-path:polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);box-shadow:0 0 18px rgba(255,45,156,.35)"><span class="c-meta" style="color:#FF2D9C">BA76 // ON TIME</span><div class="c-title" style="color:#FF2D9C">LAGOS → LONDON</div></div>
+    <div class="thumb" style="background:#13091F;border:1px solid #A8FF3E;clip-path:polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);box-shadow:0 0 18px rgba(168,255,62,.35)"><span class="c-meta" style="color:#A8FF3E">TODO</span><div class="c-title" style="color:#A8FF3E;font-size:16px">3 ITEMS · 1 OVERDUE</div></div>
+    <div class="thumb" style="background:#13091F;border:1px solid #00E5FF;clip-path:polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)"><span class="c-meta">NOTES</span><div style="font-family:'JetBrains Mono';font-size:11px;color:#00E5FF;text-shadow:0 0 6px rgba(0,229,255,.5)">▸ a bed of roses begins<br>  as a single thought.</div></div>
+  </div>
+</div>
+
+<div style="margin-top:60px;padding-top:24px;border-top:1px solid rgba(220,210,255,.18);color:rgba(238,232,250,.45);font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase">
+  // companion to UX_GUIDELINES.md · revised may 2026
+</div>
+
+</body>
+</html>

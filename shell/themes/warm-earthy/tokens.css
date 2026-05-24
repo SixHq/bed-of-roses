@@ -1,0 +1,145 @@
+/* Theme: Warm & Earthy — sun-bleached paper, walnut ink, terracotta + olive.
+   Reads like a well-loved field journal: linen + parchment surfaces, warm
+   shadows (no cool halos), soft hairlines, gentle rounding. Cozy, slow,
+   Studio-Ghibli sunlight through the window.
+
+   Hallmarks:
+     • Parchment canvas with subtle paper-grain noise + warm radial bloom
+     • Walnut ink type, italic Newsreader display, Plus Jakarta body
+     • 1px hairlines tinted with walnut alpha (never grey, never black)
+     • Soft warm-brown shadows on lift — no halos, no neon glow
+     • Terracotta accent for active state; moss/mustard for variety
+
+   The structural shell (shell/style.css) reads from these variables. The
+   companion extras.css adds the component-level treatments — paper grain,
+   warm shadows in place of presence halos, italic placeholder copy, hand-
+   drawn divider rules — that go beyond simple token swaps. */
+
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* Surfaces — sand canvas, parchment cards, warmer parchment for elevation.
+     Bloom's surfaces ascend from near-black to violet; ours ascend from sand
+     into lighter cream so cards read as paper laid on a desk, not panes
+     stacked in space. */
+  --canvas:    #EDE2CD;
+  --surface-1: #FAF3E3;
+  --surface-2: #F5E9D0;
+  --surface-3: #F0DFB8;
+  --bloom:     #C8553D;   /* terracotta — the theme's signature accent */
+
+  /* Walnut ink — every label and stroke is this color or a transparency.
+     The design file resolves to rgba(42,31,20,*); we keep it in walnut so
+     nothing reads digital-cold. */
+  --ink:       #2A1F14;
+  --ink-2:     rgba(42, 31, 20, 0.72);
+  --ink-3:     rgba(42, 31, 20, 0.50);
+  --ink-4:     rgba(42, 31, 20, 0.30);
+
+  /* Hairlines — walnut alpha, not grey. Soft enough that pages read like
+     printed dividers rather than pixel-precise UI rules. */
+  --hairline:        rgba(42, 31, 20, 0.16);
+  --hairline-strong: rgba(42, 31, 20, 0.28);
+  --hairline-soft:   rgba(42, 31, 20, 0.08);
+
+  /* Labels — match the ink ladder. The structural shell uses --label
+     for primary copy, --label-2 for body, --label-3/4 for captions. */
+  --label:    #2A1F14;
+  --label-2:  rgba(42, 31, 20, 0.72);
+  --label-3:  rgba(42, 31, 20, 0.50);
+  --label-4:  rgba(42, 31, 20, 0.30);
+
+  /* Translucent fills — walnut tints over paper. Used by the shell for
+     subtle surface depth without introducing a new hue. */
+  --fill-1: rgba(42, 31, 20, 0.10);
+  --fill-2: rgba(42, 31, 20, 0.06);
+  --fill-3: rgba(42, 31, 20, 0.04);
+
+  /* Earthy palette — the warmth the OS pulls from when it needs an accent.
+     Pick ONE per widget. Saturated but not loud; everything sits inside a
+     warm hue family so nothing ever looks digital. */
+  --terracotta: #C8553D;
+  --rust:       #A65A3A;
+  --mustard:    #D4A24C;
+  --honey:      #E8B86F;
+  --olive:      #7A8450;
+  --sage:       #9CAF88;
+  --clay:       #B47148;
+  --plum:       #6B3F4A;
+  --moss:       #5D6B3A;
+  --linen:      #FAF3E3;
+  --parchment:  #F5E9D0;
+
+  /* Default presence — Terracotta. Reads warm/lived-in, on-brand for this
+     theme. The user can override via the onboarding color picker, but the
+     theme's character should hold even before that choice. */
+  --avatar-color-rgb: 200, 85, 61;
+  --wallpaper: transparent;
+
+  /* Atmosphere — paper grain noise + two soft radial blooms (warm clay top-
+     left, olive bottom-right). The 4px noise dot lands at ~4% alpha so it
+     reads as fibre, not pattern. Mirrors the design HTML's body bg exactly. */
+  --atmosphere:
+    radial-gradient(circle at 12% 18%, rgba(196, 113, 72, 0.06), transparent 40%),
+    radial-gradient(circle at 88% 80%, rgba(122, 132, 80, 0.06), transparent 45%),
+    radial-gradient(rgba(42, 31, 20, 0.04) 1px, transparent 1.2px) 0 0 / 4px 4px,
+    var(--canvas);
+
+  /* Halo system REPLACED with warm soft shadows. The structural shell uses
+     these on lift / hover states; in Bloom they're presence-color glows, but
+     a warm theme cannot read with cool neon halos. We translate them into
+     the soft-shadow system from the design HTML — top-light inset + warm
+     drop shadow — so every "halo" call site renders as paper lifting off
+     the desk instead. */
+  --halo-soft:    0 1px 0 rgba(42, 31, 20, 0.04), 0 8px 24px rgba(82, 55, 28, 0.10);
+  --halo-medium:  0 2px 0 rgba(42, 31, 20, 0.05), 0 14px 32px rgba(82, 55, 28, 0.12);
+  --halo-strong:  0 2px 0 rgba(42, 31, 20, 0.06), 0 18px 40px rgba(82, 55, 28, 0.14);
+  --shadow-deep:  0 24px 56px rgba(82, 55, 28, 0.18);
+
+  /* Spacing — same 4px base as Bloom; structural sizes shouldn't change
+     between themes or layout breaks. */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-7: 32px; --s-8: 40px;
+  --s-9: 56px; --s-10: 72px; --s-11: 96px;
+
+  /* Radii — gentler than Bloom. The design file rounds inputs at 14px and
+     cards at 18–20px, which reads as pinking-shears soft rather than chip-
+     precise. Modal stays generous so sheet corners feel cushioned. */
+  --r-input:  14px;
+  --r-button: 99px;   /* pill buttons — design HTML uses 99px on .e-btn */
+  --r-bar:    18px;
+  --r-tile:   20px;
+  --r-modal:  24px;
+
+  /* Type — Newsreader for display (italic-capable, optical-size flair),
+     Plus Jakarta for body, JetBrains Mono for telemetry / eyebrow labels.
+     Newsreader's italic is the workhorse: it carries headline accents,
+     placeholder text, and field labels in the design HTML. */
+  --font-display: "Newsreader", "Cormorant Garamond", Georgia, serif;
+  --font-system:  "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Type scale — design HTML uses an editorial 84px hero. We pull that down
+     to the shell's 56px slot to avoid clipping in onboarding (the welcome
+     pane caps at viewport width), but extras.css restores the 84px feel
+     on the welcome headline where there's room to breathe. */
+  --t-hero:     56px;
+  --t-display:  44px;
+  --t-title-1:  28px;
+  --t-title-2:  22px;
+  --t-headline: 17px;
+  --t-body:     15px;
+  --t-subhead:  13px;
+  --t-caption:  11px;
+  --t-micro:    10px;
+
+  /* Motion — same easing curves as Bloom (the structural shell relies on
+     them being smooth quartic). Durations slowed slightly: this theme is
+     lived-in, not snappy, and a 240ms micro-fade reads more considered than
+     a 200ms one without making the UI feel sluggish. */
+  --ease-standard: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-snap:     cubic-bezier(0.20, 0.00, 0.00, 1);
+  --d-micro:  240ms;
+  --d-pane:   420ms;
+  --d-layout: 680ms;
+}

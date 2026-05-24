@@ -1,0 +1,41 @@
+{
+  "name": "bed-of-roses",
+  "version": "0.1.0",
+  "description": "Bed of Roses — an ambient AI runtime for macOS with a draggable presence and generated app/widget surfaces.",
+  "type": "module",
+  "main": "v2/host/main.cjs",
+  "private": false,
+  "os": [
+    "darwin"
+  ],
+  "keywords": [
+    "ai",
+    "macos",
+    "desktop",
+    "agent",
+    "widgets"
+  ],
+  "bin": {
+    "bed-of-roses": "./bin/bed-of-roses.cjs",
+    "bor": "./bin/bed-of-roses.cjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "v2": "electron v2/host/main.cjs",
+    "v2:host": "electron v2/host/main.cjs",
+    "v2:cli": "node ./bin/bed-of-roses.cjs",
+    "browser:mcp": "node server/mcp/playwright-service.js",
+    "browser:install": "playwright install chromium",
+    "helper:build:dev": "cd swift-helper && swift build -c release",
+    "helper:clean": "rm -rf swift-helper/.build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@playwright/mcp": "^0.0.75",
+    "electron": "^36.4.0"
+  }
+}

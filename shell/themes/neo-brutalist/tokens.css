@@ -1,0 +1,128 @@
+/* Theme: Neo Brutalist — paper white, ink black, single hot accent.
+   Raw web, file-system honesty, "proper software."
+
+   Hallmarks:
+     • 1px hairlines on every card / button / input — never thick strokes
+     • HARD 90° corners (every --r-* token is 0)
+     • Monochrome by default — the single hot red (#FF3B00) appears ONLY on
+       active states, focus rings, error labels, and key call-to-actions
+     • Inter Tight 700/800 ALL CAPS for display, JetBrains Mono for metadata
+     • No drop shadows, no gradients, no atmosphere wash — just paper + ink
+
+   The structural shell (shell/style.css) reads from these variables. The
+   companion extras.css strips the soft halos / gradients / iridescent rim
+   light that the shell inherits from Bloom and replaces them with the
+   appropriate hairline + ink + hot-accent treatments. Read this file with
+   extras.css open: many tokens here are *neutralised* (e.g. halo set to a
+   1px ink ring, atmosphere flattened) precisely so the shell rules in
+   style.css collapse to a Neo Brutalist treatment without modification. */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+  /* Surfaces — flat paper white. No tint, no warmth. The two surface tiers
+     differ only by 4 hex points; the *separation* between layers is carried
+     by hairlines, never by fill contrast. */
+  --canvas:    #F4F2ED;   /* paper — body background */
+  --surface-1: #FFFFFF;   /* elevated card / input fill */
+  --surface-2: #FFFFFF;   /* hover state — same fill, hairline takes over */
+  --surface-3: #ECEAE5;   /* recessed surface (modal track, drawer base) */
+  --bloom:     #FF3B00;   /* "presence" cue — repurposed as the hot accent */
+
+  /* Ink — every stroke and label is this color or a transparency thereof.
+     Mirrors the design HTML's --ink-2/3/4 scale. */
+  --ink:       #0A0A0A;
+  --ink-2:     rgba(10, 10, 10, 0.72);
+
+  /* Hairlines — hard at 32% for primary borders, soft at 10% for dividers.
+     Strong/standard/soft give the structural shell three weights to choose
+     from; in this theme even "strong" is still 1px (no thicker strokes). */
+  --hairline:        rgba(10, 10, 10, 0.32);
+  --hairline-strong: rgba(10, 10, 10, 1.00);   /* full ink — used on focus */
+  --hairline-soft:   rgba(10, 10, 10, 0.18);
+
+  /* Labels — ink-on-paper. The 4-tier scale matches Bloom's contract so
+     style.css's existing label-2 / label-3 / label-4 references work. */
+  --label:    #0A0A0A;
+  --label-2:  rgba(10, 10, 10, 0.72);
+  --label-3:  rgba(10, 10, 10, 0.48);
+  --label-4:  rgba(10, 10, 10, 0.20);
+
+  /* Translucent fills — tuned for ink-on-paper, not white-on-dark. */
+  --fill-1: rgba(10, 10, 10, 0.10);
+  --fill-2: rgba(10, 10, 10, 0.06);
+  --fill-3: rgba(10, 10, 10, 0.04);
+
+  /* Hot accent — the single permitted color. Used SPARINGLY: focus outlines,
+     error states, .selected state on cards, the primary CTA on hover, the
+     HUD tick. Never as a default avatar color, never on body text, never as
+     a fill behind paragraphs. */
+  --hot:    #FF3B00;
+  --acid:   #D6FF3B;   /* secondary accent — kept available but use is rare */
+
+  /* Default presence color — INK, not the hot red. The structural shell
+     blends rgba(var(--avatar-color-rgb), …) into halos / focus rings;
+     keeping this neutral means the OS reads as monochrome at rest, and the
+     hot red stays reserved for genuine emphasis. */
+  --avatar-color-rgb: 10, 10, 10;
+  --wallpaper: transparent;
+
+  /* Atmosphere — flat paper. The shell sets `body { background: var(--atmosphere) }`,
+     so this token alone is enough to kill the warm-aubergine wash from Bloom. */
+  --atmosphere: var(--canvas);
+
+  /* Halos — REPLACED with 1px ink rings. This theme has zero ambient glow.
+     The shell uses these tokens on focus indicators, the chat orb's outer
+     glow, and selection cues; redefining them as `0 0 0 1px var(--ink)`
+     forces those treatments to read as crisp hairline outlines instead.
+
+     `--shadow-deep` becomes `none` because Neo Brutalist refuses soft
+     drop shadows at every elevation tier. */
+  --halo-soft:   0 0 0 1px var(--ink);
+  --halo-medium: 0 0 0 1px var(--ink);
+  --halo-strong: 0 0 0 1px var(--ink);
+  --shadow-deep: 0 0 0 1px var(--ink);
+
+  /* Spacing — same 4px base as Bloom / Cartoon Brutalist. */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-7: 32px; --s-8: 40px;
+  --s-9: 56px; --s-10: 72px; --s-11: 96px;
+
+  /* Radii — every surface is 90°. We allow a single 2px exception for the
+     small chat orb send-glyph hit target (visual affordance for "this is
+     interactive"); everything load-bearing is 0. */
+  --r-input:  0;
+  --r-button: 0;
+  --r-bar:    0;
+  --r-tile:   0;
+  --r-modal:  0;
+
+  /* Type — Inter Tight (the design source-of-truth, closest Google Fonts
+     match for Inter Display) + JetBrains Mono for all metadata.
+     NO serif. No italic. Display weight is 700/800 only. */
+  --font-display: "Inter Tight", -apple-system, BlinkMacSystemFont, "Helvetica Neue", system-ui, sans-serif;
+  --font-system:  "Inter Tight", -apple-system, BlinkMacSystemFont, "Helvetica Neue", system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Type scale — pulled directly from the design HTML's .n-h1/.n-h2/.n-h3
+     specs (96 / 42 / 24) and tightened slightly at body sizes so the shell's
+     existing 17/15/13/11/10 hierarchy still snaps into a brutalist register. */
+  --t-hero:     96px;
+  --t-display:  42px;
+  --t-title-1:  28px;
+  --t-title-2:  22px;
+  --t-headline: 17px;
+  --t-body:     15px;
+  --t-subhead:  13px;
+  --t-caption:  11px;
+  --t-micro:    10px;
+
+  /* Motion — instant, mechanical. Brutalist UIs don't *waft*, they snap.
+     Match Cartoon Brutalist's snappier durations rather than Bloom's
+     dreamy 600ms layout transitions. */
+  --ease-standard: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-snap:     cubic-bezier(0.20, 0.00, 0.00, 1);
+  --d-micro:  100ms;
+  --d-pane:   280ms;
+  --d-layout: 460ms;
+}

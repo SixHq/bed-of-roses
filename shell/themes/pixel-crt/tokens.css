@@ -1,0 +1,124 @@
+/* Theme: Pixel CRT — 1995 BBS, Severance terminal, comfort of phosphor.
+   Phosphor green on near-black. Monospace everywhere. Scanlines, blink
+   cursor, ASCII frames. Square corners. The phosphor glow IS the theme.
+
+   Hallmarks:
+     • One green (#33FF66) doing the heavy lifting; amber + magenta are
+       reserved channels (caution / error). No decorative color.
+     • IBM Plex Mono is the workhorse — body, labels, micro. VT323 is the
+       display face for hero numerals (the only place we want a true CRT
+       pixel feel; Plex stays legible everywhere else).
+     • All radii = 0. CRT pixels don't have radii.
+     • Halos are emissive, not soft-blurred drop shadows — the text and
+       borders glow as if a phosphor beam just struck them.
+     • Atmosphere is a flat near-black with a tiny green tint (#0B0F0A)
+       so even the background feels phosphor-adjacent.
+
+   The structural shell (shell/style.css) reads from these variables. The
+   companion extras.css applies the scanlines, blink keyframes, ASCII
+   frame markers, and component-level inversions on hover. */
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=VT323&family=Departure+Mono&display=swap');
+
+:root {
+  /* Surfaces — near-black with a microscopic green tint (mirrors the
+     handoff's #0B0F0A). Surface tiers barely lift; on a CRT you don't
+     see paper-stack elevation, you see one panel of glass. */
+  --canvas:    #0B0F0A;
+  --surface-1: #0F140E;
+  --surface-2: #131A11;
+  --surface-3: #182014;
+  --bloom:     #33FF66;
+
+  /* Phosphor channels — keep these named for the LLM extras context */
+  --phosphor:        #33FF66;
+  --phosphor-dim:    #1FA63E;  /* secondary text — stays readable in glow */
+  --phosphor-deep:   #0F4F1B;  /* hairline / placeholder color */
+  --phosphor-amber:  #FFB000;  /* caution / eyebrow / hot-meta */
+  --phosphor-magenta:#FF3B8B;  /* error only — never decorative */
+  --phosphor-cyan:   #00E0FF;  /* "thinking" presence accent */
+
+  /* Hairlines — phosphor green at low alpha. Borders never read neutral
+     grey here; even the divider lines glow faintly. */
+  --hairline:        rgba(51, 255, 102, 0.30);
+  --hairline-strong: rgba(51, 255, 102, 0.55);
+  --hairline-soft:   rgba(51, 255, 102, 0.15);
+
+  /* Labels — phosphor green is the "ink". Tiers fall to phosphor-dim and
+     phosphor-deep so secondary copy still reads green, not grey. */
+  --label:    #33FF66;
+  --label-2:  rgba(51, 255, 102, 0.72);
+  --label-3:  rgba(51, 255, 102, 0.50);
+  --label-4:  rgba(51, 255, 102, 0.30);
+
+  /* Translucent fills — kept inside the green channel so frosted regions
+     pick up phosphor tone instead of going neutral grey */
+  --fill-1: rgba(51, 255, 102, 0.14);
+  --fill-2: rgba(51, 255, 102, 0.08);
+  --fill-3: rgba(51, 255, 102, 0.04);
+
+  /* Default presence — phosphor green. The whole OS is one beam color. */
+  --avatar-color-rgb: 51, 255, 102;
+  --wallpaper: transparent;
+
+  /* Atmosphere — flat near-black. CRT phosphor doesn't bloom across the
+     full screen; the bloom is local to glyphs, not the canvas. The
+     scanline pattern and curvature filter live in extras.css so the
+     atmosphere stays a clean fill that the HUD can read against. */
+  --atmosphere: var(--canvas);
+
+  /* Halos — emissive phosphor glow. The two values that matter are the
+     1px outline (the "edge" of the trace) and the 12-24px bloom (the
+     CRT scatter). We multiply both for stronger states. */
+  --halo-soft:   0 0 12px rgba(51, 255, 102, 0.35),
+                 inset 0 0 18px rgba(51, 255, 102, 0.08);
+  --halo-medium: 0 0 18px rgba(51, 255, 102, 0.50),
+                 inset 0 0 22px rgba(51, 255, 102, 0.10);
+  --halo-strong: 0 0 28px rgba(51, 255, 102, 0.65),
+                 inset 0 0 28px rgba(51, 255, 102, 0.14);
+  --shadow-deep: 0 0 0 1px rgba(51, 255, 102, 0.55),
+                 0 0 28px rgba(51, 255, 102, 0.40);
+
+  /* Spacing — same 4px base. CRT terminals were grid-disciplined. */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-7: 32px; --s-8: 40px;
+  --s-9: 56px; --s-10: 72px; --s-11: 96px;
+
+  /* Radii — ZERO. Every shape is a rectangle. No exceptions; the home
+     avatar ring is round only because that's hard-set in the shell, but
+     every theme-controlled surface (cards, modals, buttons, chips,
+     tiles) is a hard-edged box. */
+  --r-input:  0;
+  --r-button: 0;
+  --r-bar:    0;
+  --r-tile:   0;
+  --r-modal:  0;
+
+  /* Type — IBM Plex Mono is the system AND the body font. VT323 is the
+     display face for hero-scale numerals where a real pixel-bitmap face
+     reads better than Plex's sharp-edged letterforms. Departure Mono is
+     a fallback display option for short stamps and version strings. */
+  --font-display: "VT323", "IBM Plex Mono", "Departure Mono", ui-monospace, monospace;
+  --font-system:  "IBM Plex Mono", "Departure Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-mono:    "IBM Plex Mono", "Departure Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Type scale — body sizes nudged up because mono is wider than a sans
+     and would otherwise read smaller at the same px. Display sizes use
+     VT323 which is comfortable up to ~140px. */
+  --t-hero:     96px;   /* VT323 hero (tightened line-height in extras) */
+  --t-display:  56px;   /* VT323 display */
+  --t-title-1:  28px;
+  --t-title-2:  22px;
+  --t-headline: 18px;
+  --t-body:     14px;
+  --t-subhead:  13px;
+  --t-caption:  12px;
+  --t-micro:    11px;
+
+  /* Motion — terminals don't ease. Snap or be still. */
+  --ease-standard: cubic-bezier(0.20, 0.00, 0.00, 1);
+  --ease-snap:     steps(1, end);    /* hard-cut transitions; no easing */
+  --d-micro:  80ms;
+  --d-pane:   220ms;
+  --d-layout: 360ms;
+}

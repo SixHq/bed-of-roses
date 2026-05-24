@@ -5,6 +5,7 @@
 
 import { iterateSseStream } from './sse-util.js';
 import { toOpenAiContent } from './multimodal.js';
+import { providerMaxOutputTokens } from './limits.js';
 
 const URL = 'https://api.openai.com/v1/chat/completions';
 const IMAGE_URL = 'https://api.openai.com/v1/images/generations';
@@ -29,7 +30,7 @@ export default {
   needsBaseUrl: false,
   keyHint: 'sk-…',
 
-  async *stream({ apiKey, model, system, messages }) {
+  async *stream({ apiKey, model, system, messages, signal }) {
     // Multimodal: each user/assistant message may contain a string or an
     // array of canonical content blocks. The helper translates to OpenAI's
     // {type:'text'|'image_url'} array shape.
@@ -39,7 +40,7 @@ export default {
     }
     const body = {
       model: model || 'gpt-5.4',
-      max_tokens: 12000,
+      max_tokens: providerMaxOutputTokens(),
       stream: true,
       messages: nativeMessages,
     };
@@ -50,6 +51,7 @@ export default {
         authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
+      signal,
     });
     if (!res.ok) {
       const err = await res.text();
@@ -70,7 +72,7 @@ export default {
    * `{ mediaType: 'image/png', data: <base64> }`. The caller is responsible
    * for persisting the bytes (server/tools/images.js handles that).
    */
-  async generateImage({ apiKey, prompt, size = '1024x1024' }) {
+  async generateImage({ apiKey, prompt, size = '1024x1024', signal }) {
     const res = await fetch(IMAGE_URL, {
       method: 'POST',
       headers: {
@@ -83,6 +85,7 @@ export default {
         n: 1,
         size,
       }),
+      signal,
     });
     if (!res.ok) {
       const err = await res.text();

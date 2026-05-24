@@ -1,0 +1,14 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css"><style>
+body{margin:0;padding:30px;display:flex;align-items:center;justify-content:center;gap:46px;min-height:200px;position:relative}
+body::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 50% 60% at 50% 50%,rgba(196,168,240,.18),transparent 65%);pointer-events:none}
+.w{display:flex;flex-direction:column;align-items:center;gap:14px;position:relative}
+.glow{position:relative}
+.glow::before{content:'';position:absolute;inset:-20%;background:radial-gradient(circle,rgba(196,168,240,.35),transparent 65%);filter:blur(12px)}
+.glow img,.glow svg{position:relative}
+.word{font-family:var(--font-display);font-style:italic;font-size:30px;color:var(--label);letter-spacing:-.015em;line-height:1}
+.tag{font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:rgba(196,168,240,.7)}
+.lock{display:flex;flex-direction:column;align-items:center;gap:6px}
+</style></head><body>
+<div class="w"><div class="glow"><img src="../assets/logo-mark.svg" width="92" height="92"></div><span class="tag">mark</span></div>
+<div class="w"><div class="lock"><div class="glow"><img src="../assets/logo-mark.svg" width="56" height="56"></div><span class="word">Bed of Roses</span></div><span class="tag">primary lockup</span></div>
+</body></html>

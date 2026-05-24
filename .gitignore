@@ -1,6 +1,25 @@
 node_modules/
 os-data/
-.bed-of-roses/browser/
+.bed-of-roses/
+.bor/
+.claude/
+.codex/
 .env
 .DS_Store
 *.log
+*.tmp
+# swift build output
+swift-helper/.build/
+# Electron user data
+v2-electron/
+# LLM-generated test artifacts from shortcut/exec testing
+Fibonacci.java
+fibonacci.js
+fibonacci.py
+calculate_distance.py
+ecommerce.db
+ecommerce_backend/
+notes/
+# Compiled Python
+__pycache__/
+*.pyc

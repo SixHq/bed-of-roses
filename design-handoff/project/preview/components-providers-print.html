@@ -1,0 +1,34 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css"><style>
+body{margin:0;padding:24px;display:flex;flex-direction:column;gap:12px;max-width:560px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.card{position:relative;background:rgba(34,31,45,.55);border:1px solid rgba(220,210,255,.14);border-radius:18px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);overflow:hidden;padding:16px 18px;display:flex;align-items:center;gap:14px;break-inside:avoid}
+.card.s{border-color:rgba(196,168,240,.45);background:rgba(50,45,64,.55);box-shadow:0 0 0 1px rgba(196,168,240,.18) inset,0 0 32px rgba(196,168,240,.14)}
+.card::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 60% 100% at 0% 50%,rgba(196,168,240,.12),transparent 60%);pointer-events:none}
+.mark{position:relative;width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,rgba(196,168,240,.18),rgba(143,229,197,.10));border:1px solid rgba(220,210,255,.16);display:flex;align-items:center;justify-content:center;color:var(--label);flex-shrink:0}
+.info{position:relative;flex:1;display:flex;flex-direction:column;gap:3px}
+.n{font-family:var(--font-display);font-style:italic;font-size:20px;color:var(--label);letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
+.tag{font-family:var(--font-mono);font-size:9px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:rgba(196,168,240,.85);background:rgba(196,168,240,.12);border:1px solid rgba(196,168,240,.30);border-radius:99px;padding:2px 8px}
+.st{font-size:13px;color:rgba(238,232,250,.6);font-family:var(--font-system);display:flex;align-items:center;gap:6px}
+.dot{width:6px;height:6px;border-radius:50%;background:#C4A8F0;box-shadow:0 0 8px #C4A8F0}
+.dot.off{background:rgba(238,232,250,.20);box-shadow:none}
+@media print{
+  @page{size:auto;margin:0.5cm}
+  html,body{background:#07060B !important}
+  body{padding:18px}
+}
+</style></head><body>
+<div class="card s">
+  <div class="mark"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/></svg></div>
+  <div class="info"><div class="n">Anthropic <span class="tag">Default</span></div><div class="st"><span class="dot"></span>connected · claude-sonnet-4-5</div></div>
+</div>
+<div class="card">
+  <div class="mark"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></div>
+  <div class="info"><div class="n">OpenAI</div><div class="st"><span class="dot off"></span>tap to connect</div></div>
+</div>
+<script>
+(async()=>{
+  if(document.fonts&&document.fonts.ready)await document.fonts.ready;
+  await new Promise(r=>setTimeout(r,500));
+  window.print();
+})();
+</script>
+</body></html>

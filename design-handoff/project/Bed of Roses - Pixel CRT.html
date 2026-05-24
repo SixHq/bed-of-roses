@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bed of Roses — Pixel CRT Terminal UI Kit</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Pixel CRT / Retro Terminal — phosphor green on black, scanlines, 8-bit chrome */
+  :root{
+    --bg:#0B0F0A;
+    --bg-2:#070A06;
+    --bg-3:#101810;
+    --green:#33FF66;
+    --green-dim:#1FA63E;
+    --green-deep:#0F4F1B;
+    --amber:#FFB000;
+    --magenta:#FF3B8B;
+    --cyan:#00E0FF;
+    --line:rgba(51,255,102,.25);
+    --line-2:rgba(51,255,102,.5);
+    --mono:"IBM Plex Mono",ui-monospace,monospace;
+    --display:"VT323",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--green);font-family:var(--mono);
+    text-shadow:0 0 6px rgba(51,255,102,.55);}
+  /* Scanlines */
+  body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:50;
+    background:repeating-linear-gradient(180deg, rgba(0,0,0,0) 0 2px, rgba(0,0,0,.22) 2px 3px);}
+  /* Phosphor flicker */
+  body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:51;
+    background:radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,.5) 100%);}
+  @keyframes blink { 50% { opacity: 0 } }
+  .blink{animation:blink 1s step-end infinite}
+
+  .p-h1{font-family:var(--display);font-size:148px;line-height:.85;letter-spacing:.02em}
+  .p-h2{font-family:var(--display);font-size:60px;line-height:.95;letter-spacing:.02em}
+  .p-h3{font-family:var(--mono);font-weight:700;font-size:18px;letter-spacing:.06em;text-transform:uppercase}
+  .p-display{font-family:var(--mono);font-size:14px;line-height:1.6;color:var(--green-dim);text-shadow:0 0 4px rgba(31,166,62,.5)}
+  .p-body{font-family:var(--mono);font-size:13px;line-height:1.65;color:var(--green-dim)}
+  .p-mono{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--green-dim)}
+  .p-eyebrow{font-family:var(--mono);font-weight:700;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--amber);text-shadow:0 0 4px rgba(255,176,0,.6)}
+
+  .frame{border:1px solid var(--green);box-shadow:inset 0 0 0 1px var(--bg), 0 0 12px rgba(51,255,102,.35), inset 0 0 24px rgba(51,255,102,.1);background:var(--bg);border-radius:0}
+  .frame-soft{border:1px solid var(--green-deep);background:var(--bg);}
+  .frame-amber{border:1px solid var(--amber);box-shadow:0 0 12px rgba(255,176,0,.35), inset 0 0 24px rgba(255,176,0,.08);color:var(--amber);text-shadow:0 0 6px rgba(255,176,0,.55)}
+
+  /* Buttons */
+  .p-btn{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 18px;
+    font-family:var(--mono);font-weight:700;font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    border:1px solid var(--green);background:var(--bg-3);color:var(--green);cursor:pointer;
+    box-shadow:0 0 0 1px var(--bg) inset, 0 0 10px rgba(51,255,102,.3);
+    text-shadow:0 0 6px rgba(51,255,102,.7)}
+  .p-btn:hover{background:var(--green);color:var(--bg);text-shadow:none;box-shadow:0 0 14px rgba(51,255,102,.7)}
+  .p-btn-pri{background:var(--green);color:var(--bg);text-shadow:none;box-shadow:0 0 14px rgba(51,255,102,.7)}
+  .p-btn-pri:hover{filter:brightness(1.15)}
+  .p-btn-amber{border-color:var(--amber);color:var(--amber);text-shadow:0 0 6px rgba(255,176,0,.7);box-shadow:0 0 10px rgba(255,176,0,.3)}
+  .p-btn-amber:hover{background:var(--amber);color:var(--bg);text-shadow:none}
+  .p-btn-mag{border-color:var(--magenta);color:var(--magenta);text-shadow:0 0 6px rgba(255,59,139,.7);box-shadow:0 0 10px rgba(255,59,139,.3)}
+  .p-btn-mag:hover{background:var(--magenta);color:var(--bg);text-shadow:none}
+  .p-btn-ghost{border-color:transparent;background:transparent;color:var(--green-dim);box-shadow:none}
+  .p-btn-ghost:hover{background:transparent;color:var(--green);text-decoration:underline;text-underline-offset:4px}
+
+  .p-input{height:40px;padding:0 14px;width:100%;border:1px solid var(--green);background:var(--bg-2);color:var(--green);
+    font-family:var(--mono);font-size:14px;outline:none;text-shadow:0 0 6px rgba(51,255,102,.55);box-shadow:inset 0 0 12px rgba(51,255,102,.08)}
+  .p-input::placeholder{color:var(--green-deep)}
+  .p-input-focus{box-shadow:inset 0 0 0 1px var(--bg-3),0 0 0 2px var(--green),0 0 16px rgba(51,255,102,.6)}
+
+  .p-chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border:1px solid var(--green);background:var(--bg-2);color:var(--green);
+    font-family:var(--mono);font-weight:600;font-size:10px;letter-spacing:.14em;text-transform:uppercase;cursor:pointer}
+  .p-chip-on{background:var(--green);color:var(--bg);text-shadow:none}
+  .p-chip-amber{border-color:var(--amber);color:var(--amber)}
+  .p-chip-mag{border-color:var(--magenta);color:var(--magenta)}
+
+  .p-bubble{padding:10px 12px;border:1px solid var(--green-deep);font-family:var(--mono);font-size:13px;line-height:1.55;max-width:78%;background:var(--bg-2);color:var(--green-dim)}
+  .p-bubble-user{align-self:flex-end;color:var(--green);border-color:var(--green);text-shadow:0 0 6px rgba(51,255,102,.55)}
+  .p-bubble-ai{align-self:flex-start}
+
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .col{display:flex;flex-direction:column;gap:12px}
+  .stage{position:relative;height:100%;overflow:hidden;background:var(--bg)}
+  .stage::before{content:'';position:absolute;inset:0;pointer-events:none;
+    background:repeating-linear-gradient(180deg, rgba(0,0,0,0) 0 2px, rgba(0,0,0,.18) 2px 3px);}
+  .stage::after{content:'';position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,.55) 100%);}
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="brutalist/design-canvas.jsx"></script>
+</head>
+<body>
+<template id="__bundler_thumbnail" data-bg-color="#0B0F0A">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#0B0F0A"/>
+    <g fill="#33FF66" font-family="VT323, monospace" font-size="120" style="filter: drop-shadow(0 0 12px #33FF66)">
+      <text x="120" y="360">BED OF</text>
+      <text x="120" y="500">ROSES_</text>
+    </g>
+    <text x="120" y="600" fill="#FFB000" font-family="monospace" font-size="36" style="letter-spacing:.18em">// LOADING.OS</text>
+  </svg>
+</template>
+<div id="root" style="position:relative;z-index:1"></div>
+<script type="text/babel" src="crt/kit.jsx"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css"><style>
+body{margin:0;padding:24px;display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:104px;gap:12px}
+.t{position:relative;background:rgba(34,31,45,.55);border:1px solid rgba(220,210,255,.14);border-radius:22px;overflow:hidden;padding:16px;display:flex;flex-direction:column;justify-content:space-between;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.t::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at var(--gx,30%) var(--gy,0%),rgba(var(--g),.18),transparent 65%);pointer-events:none}
+.t.span{grid-column:span 2}
+.t.h{border-color:rgba(196,168,240,.40);background:rgba(50,45,64,.6);box-shadow:0 0 32px rgba(196,168,240,.14)}
+.n{position:relative;font-family:var(--font-display);font-style:italic;font-size:19px;color:var(--label);letter-spacing:-.01em}
+.m{position:relative;font-family:var(--font-mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:rgba(238,232,250,.4)}
+</style></head><body>
+<div class="t" style="--g:160,203,240"><span class="m">weather · lagos</span><span class="n">18° &amp; cloudy</span></div>
+<div class="t span h" style="--g:196,168,240;--gx:80%"><span class="m">flight · BA76</span><span class="n">Lagos → London · on time</span></div>
+<div class="t" style="--g:143,229,197"><span class="m">today</span><span class="n">three things</span></div>
+<div class="t span" style="--g:244,158,186;--gx:60%"><span class="m">notes</span><span class="n">a bed of roses begins as a single thought…</span></div>
+</body></html>

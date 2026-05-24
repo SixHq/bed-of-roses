@@ -1,0 +1,972 @@
+/* Risograph — component-level overrides.
+
+   The shell's structural CSS uses thin hairlines and soft halos. Risograph
+   needs italic Fraunces display, halftone fills, and a 2–4px misregister
+   shadow in a SECONDARY spot ink on every elevated surface — that off-register
+   bleed IS the theme. This file overrides the shell defaults selectively.
+
+   Riso recipe (used everywhere):
+     • cream paper background (--surface-1)
+     • 2px solid deep-navy ink stroke (NOT pure black)
+     • box-shadow Npx Npx 0 0 var(--ink-pink) — primary misregister pull
+     • on hover, the misregister shadow shifts to var(--ink-blue) (the third pull)
+
+   Anything that isn't redefined here keeps the shell's structure. */
+
+
+/* ============================================================
+   1.  Typography — Fraunces italic display, Grotesk body
+   ============================================================ */
+
+/* Headlines: Bloom uses Instrument Serif italic, Brutalist uses Archivo Black
+   ALL CAPS. Risograph leans editorial: Fraunces with the italic axis
+   engaged, plus Fraunces' SOFT axis dialled up so the letterforms feel
+   hand-pressed, not digital-crisp. The "br-italic" caption pattern from
+   the design HTML is the project's calling card. */
+.headline,
+.modal-title,
+.greeting {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 800;
+  font-variation-settings: "SOFT" 30, "opsz" 144;
+  letter-spacing: -0.02em;
+  line-height: 0.98;
+  color: var(--ink);
+}
+
+.subheadline {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 600;
+  font-variation-settings: "SOFT" 20, "opsz" 96;
+  color: var(--ink-2);
+  letter-spacing: -0.01em;
+}
+
+/* The wordmark gets a Fraunces italic stamp look — matches the kit's
+   "est. 2026 · a soft little os" hand-pulled lockup. */
+.wordmark span {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 800;
+  font-variation-settings: "SOFT" 30;
+  letter-spacing: -0.015em;
+  text-transform: none;
+}
+
+
+/* ============================================================
+   2.  Halftone & misregister utilities
+   ============================================================ */
+
+/* Halftone fill — usable as a class on anything that wants the dotted-ink
+   look. The dot color follows currentColor so it tints with the host
+   element, and the multiply blend matches real riso ink overlap. */
+.riso-halftone {
+  position: relative;
+}
+.riso-halftone::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, currentColor 22%, transparent 24%);
+  background-size: 6px 6px;
+  opacity: 0.18;
+  mix-blend-mode: multiply;
+  border-radius: inherit;
+}
+.riso-halftone-tight::after { background-size: 4px 4px; opacity: 0.26; }
+.riso-halftone-loose::after { background-size: 8px 8px; opacity: 0.22; }
+
+/* Misregister glyph — stamp two off-register copies of an inline element
+   behind itself. Pair with data-text="…" on the host; matches the kit's
+   `.miso` pattern in the design HTML. */
+.riso-miso {
+  position: relative;
+  display: inline-block;
+}
+.riso-miso::before,
+.riso-miso::after {
+  content: attr(data-text);
+  position: absolute;
+  z-index: -1;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+.riso-miso::before { left: 2px;  top: 2px;  color: var(--ink-pink); }
+.riso-miso::after  { left: -2px; top: -1px; color: var(--ink-blue); }
+
+
+/* ============================================================
+   3.  Buttons — cream paper + 2px ink stroke + misregister shadow
+   ============================================================ */
+
+/* The riso recipe: cream paper bg, 2px deep-navy stroke, hard 3px shadow
+   in the SECONDARY ink (pink). Hover bumps the shadow up and shifts it to
+   the THIRD ink (blue) — reads as a fresh second pull on the press. */
+.btn {
+  background: var(--surface-1);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  box-shadow: 3px 3px 0 0 var(--ink-pink);
+  border-radius: var(--r-button);
+  font-family: var(--font-system);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-size: 13px;
+  transition:
+    transform var(--d-micro) var(--ease-snap),
+    box-shadow var(--d-micro) var(--ease-snap),
+    background var(--d-micro) var(--ease-snap);
+}
+.btn:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 0 var(--ink-blue);
+}
+.btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 0 var(--ink-pink);
+}
+
+/* Primary = inked-blue button on cream, pink misregister behind. */
+.btn-primary {
+  background: var(--ink-blue);
+  color: var(--surface-1);
+  border-color: var(--ink);
+  box-shadow: 3px 3px 0 0 var(--ink-yellow);
+}
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 5px 5px 0 0 var(--ink-yellow);
+  background: var(--ink-blue);
+}
+
+/* Secondary = paper button (default look) — already covered by .btn above. */
+.btn-secondary {
+  background: var(--surface-1);
+  color: var(--ink);
+  border-color: var(--ink);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.btn:disabled,
+.btn[disabled] {
+  background: var(--surface-1);
+  color: rgba(26, 31, 61, 0.32);
+  border-color: rgba(26, 31, 61, 0.32);
+  box-shadow: 2px 2px 0 0 rgba(26, 31, 61, 0.20);
+  cursor: not-allowed;
+}
+
+
+/* ============================================================
+   4.  Inputs — cream paper, italic placeholder, soft pink mis-ink
+   ============================================================ */
+
+.field-input,
+.chat-input,
+input[type="text"],
+input[type="password"],
+input[type="number"],
+textarea {
+  background: var(--surface-1);
+  border: 2px solid var(--ink);
+  box-shadow: inset 2px 2px 0 0 rgba(255, 72, 176, 0.12);
+  border-radius: var(--r-input);
+  font-family: var(--font-system);
+  font-weight: 500;
+  color: var(--ink);
+  caret-color: var(--ink-pink);
+}
+.field-input:focus,
+.chat-input:focus,
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+textarea:focus {
+  outline: 0;
+  background: var(--surface-1);
+  /* Outer pink drop + inner pink bleed — reads as the press registering
+     a fresh pink pull right at the focus moment. */
+  box-shadow:
+    3px 3px 0 0 var(--ink-pink),
+    inset 2px 2px 0 0 rgba(255, 72, 176, 0.22);
+  border-color: var(--ink);
+}
+.field-input::placeholder,
+.chat-input::placeholder,
+textarea::placeholder,
+input::placeholder {
+  /* Italic captions are part of the riso voice — the design HTML uses italic
+     placeholders ("ada lovelace…") consistently. */
+  color: var(--ink-3);
+  font-style: italic;
+  font-family: var(--font-display);
+  font-weight: 500;
+}
+
+.field-label {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: lowercase;       /* `name`, `api key` — design uses lowercase mono */
+  color: var(--ink-pink);          /* pink eyebrow — matches `.r-eyebrow` */
+}
+
+
+/* ============================================================
+   5.  Tiles — paper card + halftone overlay + 4px misregister
+   ============================================================ */
+
+.tile-thumb {
+  background: var(--surface-1);
+  border: 2px solid var(--ink);
+  border-radius: var(--r-tile);
+  box-shadow: 4px 4px 0 0 var(--ink-pink);
+  transition:
+    transform var(--d-micro) var(--ease-snap),
+    box-shadow var(--d-micro) var(--ease-snap);
+  /* Allow the halftone overlay (added below) to clip to the rounded corners */
+  overflow: hidden;
+  position: relative;
+}
+
+/* Hover — the misregister shifts color (pink → blue) and grows. Reads as
+   the page being pressed harder against the next drum on the press. */
+.tile:hover .tile-thumb {
+  transform: translate(-1px, -1px);
+  box-shadow: 6px 6px 0 0 var(--ink-blue);
+  border-color: var(--ink);
+}
+.tile:active .tile-thumb {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 0 var(--ink-pink);
+}
+
+/* Subtle halftone wash on the larger tiles — gives every widget a faint
+   dotted ink-shadow without making text unreadable. Skip on 1x1 tiles
+   where the icon already carries the visual weight. */
+.tile:not([data-size="1x1"]) .tile-thumb::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: radial-gradient(circle, var(--ink-pink) 18%, transparent 22%);
+  background-size: 7px 7px;
+  opacity: 0.10;
+  mix-blend-mode: multiply;
+}
+
+/* Bloom darkens the bottom of multi-cell tiles for legibility — Risograph
+   replaces that with a paper bleed using the cream tone, not a black wash. */
+.tile:not([data-size="1x1"]) .tile-thumb::after {
+  background: linear-gradient(180deg, transparent 50%, rgba(244, 236, 216, 0.70));
+}
+
+.tile-name {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 700;
+  font-variation-settings: "SOFT" 30, "opsz" 96;
+  color: var(--ink);
+  text-shadow: none;
+  letter-spacing: -0.01em;
+}
+
+
+/* ============================================================
+   6.  Modal — heavier misregister, two-shadow stack
+   ============================================================ */
+
+.modal-frame {
+  background: var(--surface-1);
+  border: 2px solid var(--ink);
+  border-radius: var(--r-modal);
+  /* Two off-register pulls — pink + blue — for the most elevated surface. */
+  box-shadow:
+    6px 6px 0 0 var(--ink-pink),
+    10px 10px 0 0 rgba(49, 69, 194, 0.45);
+}
+
+
+/* ============================================================
+   7.  Provider / Presence / Theme cards — paper + misregister
+   ============================================================ */
+
+.provider-card {
+  background: var(--surface-1);
+  border: 2px solid var(--ink);
+  border-radius: var(--r-tile);
+  box-shadow: 4px 4px 0 0 var(--ink-pink);
+  transition:
+    transform var(--d-micro) var(--ease-snap),
+    box-shadow var(--d-micro) var(--ease-snap),
+    background var(--d-micro) var(--ease-snap);
+}
+.provider-card:hover {
+  background: var(--surface-2);
+  transform: translate(-1px, -1px);
+  box-shadow: 6px 6px 0 0 var(--ink-blue);
+}
+.provider-card.connected {
+  /* Connected = the second drum has actually printed. Yellow misregister
+     on a pink-tinted card reads as a successful three-pull run. */
+  background: var(--surface-2);
+  border-color: var(--ink);
+  box-shadow: 4px 4px 0 0 var(--ink-yellow);
+}
+.provider-card.expanded {
+  box-shadow: 6px 6px 0 0 var(--ink-pink), 10px 10px 0 0 rgba(49, 69, 194, 0.30);
+}
+
+.presence-card,
+.theme-card {
+  background: var(--surface-1);
+  border: 2px solid var(--ink);
+  box-shadow: 4px 4px 0 0 var(--ink-pink);
+  border-radius: var(--r-tile);
+  transition:
+    transform var(--d-micro) var(--ease-snap),
+    box-shadow var(--d-micro) var(--ease-snap),
+    background var(--d-micro) var(--ease-snap);
+}
+.presence-card:hover,
+.theme-card:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 6px 6px 0 0 var(--ink-blue);
+  background: var(--surface-2);
+}
+.presence-card.selected,
+.theme-card.selected {
+  /* Selected card pulls the yellow drum — sun yellow is the OS's
+     "this is the chosen one" highlight throughout. */
+  background: var(--ink-yellow);
+  border-color: var(--ink);
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 0 var(--ink-pink);
+}
+.presence-card.selected::after,
+.theme-card.selected::after {
+  /* The misregister shadow IS the selection cue — kill any default ring */
+  display: none;
+}
+
+.theme-swatches {
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+}
+.presence-card-label,
+.theme-label {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 800;
+  font-variation-settings: "SOFT" 30, "opsz" 96;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  text-transform: none;
+}
+.presence-card-sub,
+.theme-tagline {
+  font-family: var(--font-system);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-2);
+}
+
+/* Onboarding + presence — match the Risograph kit's off-register stamps. */
+html[data-theme="risograph"] .onboarding .pane-content {
+  background:
+    radial-gradient(rgba(26, 31, 61, 0.13) 0.8px, transparent 1.3px) 0 0 / 12px 12px,
+    var(--surface-1);
+  border: 1px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 7px 7px 0 rgba(255, 72, 176, 0.62), 11px 11px 0 rgba(49, 69, 194, 0.30);
+  padding: 32px;
+}
+
+html[data-theme="risograph"] .onboarding .presence-content {
+  max-width: 760px;
+  align-items: flex-start;
+  text-align: left;
+}
+
+html[data-theme="risograph"] .pane[data-pane="presence"] .presence-grid {
+  gap: 32px;
+}
+
+html[data-theme="risograph"] .pane[data-pane="presence"] .presence-card {
+  min-height: 154px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+  gap: 8px;
+}
+
+html[data-theme="risograph"] .pane[data-pane="presence"] .presence-canvas-wrap {
+  width: 120px;
+  height: 120px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-theme="risograph"] .pane[data-pane="presence"] .presence-stamp {
+  display: block;
+  border-radius: 50%;
+  mix-blend-mode: multiply;
+}
+
+html[data-theme="risograph"] .pane[data-pane="presence"] .presence-stamp span {
+  border-radius: 50%;
+}
+
+html[data-theme="risograph"] .pane[data-pane="presence"] .presence-stamp::after {
+  content: "R";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 900;
+  font-size: 34px;
+  z-index: 2;
+}
+
+html[data-theme="risograph"] .pane[data-pane="presence"] .presence-face,
+html[data-theme="risograph"] .pane[data-pane="presence"] .presence-orb,
+html[data-theme="risograph"] .pane[data-pane="presence"] .presence-block,
+html[data-theme="risograph"] .pane[data-pane="presence"] .presence-pixel-face {
+  display: none;
+}
+
+html[data-theme="risograph"] .pane[data-pane="presence"] .presence-card.selected .presence-stamp {
+  filter: drop-shadow(4px 4px 0 rgba(255, 72, 176, 0.60)) drop-shadow(7px 7px 0 rgba(49, 69, 194, 0.28));
+}
+
+html[data-theme="risograph"] .pane[data-pane="presence"] .presence-card-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+}
+
+html[data-theme="risograph"] .pane[data-pane="presence"] .presence-card-sub {
+  color: var(--ink-2);
+}
+
+html[data-theme="risograph"] .pane[data-pane="presence"] .color-section {
+  display: none;
+}
+
+
+/* ============================================================
+   8.  Color picker swatches — ink rings, pink misregister
+   ============================================================ */
+
+.color-swatch {
+  border: 2px solid var(--ink);
+  box-shadow: 3px 3px 0 0 var(--ink-pink);
+  transition:
+    transform var(--d-micro) var(--ease-snap),
+    box-shadow var(--d-micro) var(--ease-snap);
+}
+.color-swatch:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 0 var(--ink-blue);
+}
+.color-swatch.selected {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 0 var(--ink-yellow);
+}
+
+
+/* ============================================================
+   9.  Chat orb — the floating prompt bar
+   ============================================================ */
+
+.chat-orb {
+  background: var(--surface-1);
+  border: 2px solid var(--ink);
+  box-shadow: 4px 4px 0 0 var(--ink-pink);
+  border-radius: 99px;
+}
+.chat-orb[data-state="collapsed"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  box-shadow: 4px 4px 0 0 var(--ink-pink);
+}
+.chat-orb[data-state="expanded"] {
+  background: var(--surface-1);
+  border-color: var(--ink);
+  border-radius: var(--r-bar);
+  box-shadow: 4px 4px 0 0 var(--ink-pink), 8px 8px 0 0 rgba(49, 69, 194, 0.30);
+}
+.chat-orb .chat-input {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: var(--ink);
+  font-family: var(--font-system);
+  font-weight: 500;
+}
+.chat-orb .chat-input:focus {
+  background: transparent;
+  box-shadow: none;
+}
+.chat-orb .chat-input::placeholder {
+  color: var(--ink-3);
+  font-style: italic;
+  font-family: var(--font-display);
+}
+
+.chat-send {
+  background: var(--ink-blue);
+  color: var(--surface-1);
+  border: 2px solid var(--ink);
+}
+.chat-orb[data-state="collapsed"] .chat-send {
+  background: var(--ink-pink);
+  color: var(--surface-1);
+  border-color: var(--ink);
+}
+.chat-orb[data-state="expanded"] .chat-send {
+  background: var(--ink-yellow);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  box-shadow: 2px 2px 0 0 var(--ink-pink);
+}
+html[data-theme="risograph"] .chat-send .chat-presence {
+  inset: 6px;
+  filter: none;
+}
+html[data-theme="risograph"] .chat-send .presence-stamp {
+  display: block;
+  border-radius: 50%;
+  mix-blend-mode: multiply;
+}
+html[data-theme="risograph"] .chat-send .presence-stamp::after {
+  content: "R";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 900;
+  font-size: 14px;
+  z-index: 2;
+}
+html[data-theme="risograph"] .chat-send .presence-face,
+html[data-theme="risograph"] .chat-send .presence-orb,
+html[data-theme="risograph"] .chat-send .presence-block,
+html[data-theme="risograph"] .chat-send .presence-pixel-face {
+  display: none;
+}
+
+
+/* ============================================================
+   10. HUD labels — italic Fraunces caption + mono fallback
+   ============================================================ */
+
+/* The design HTML mixes mono micro-caps (`r-mono`) with italic captions
+   (`r-display`). HUD labels in the OS are short telemetry strings — keep
+   them mono for legibility, but use the deep ink + pink tick for the
+   on-air feeling. */
+.hud-label,
+.hud-meta {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  font-size: 10px;
+}
+.hud-tick {
+  /* the active-run dot — riso primary pull */
+  color: var(--ink-pink);
+}
+
+
+/* ============================================================
+   11. Wallpaper — paper grain
+   ============================================================ */
+
+/* The riso "paper" feeling is a fine multi-dot grain layered on cream.
+   Two radial-gradient dot fields at different scales (5px + 17px), low
+   opacity, multiply-blended — matches the design HTML's body::before. */
+.wallpaper {
+  background:
+    radial-gradient(circle at 1px 1px,  rgba(26, 31, 61, 0.08) 1px, transparent 1.4px) 0 0 / 5px 5px,
+    radial-gradient(circle at 13px 7px, rgba(26, 31, 61, 0.05) 1px, transparent 1.4px) 0 0 / 17px 17px,
+    var(--canvas);
+  /* Multiply lets the grain settle INTO the page rather than sit on top */
+  background-blend-mode: multiply, multiply, normal;
+  opacity: 1;
+}
+
+
+/* ============================================================
+   12. Selection — sun yellow highlighter
+   ============================================================ */
+
+/* Text selection reads as a yellow-marker swipe across the page — the third
+   spot ink shows up here and on selected presence/theme cards above. */
+::selection {
+  background: var(--ink-yellow);
+  color: var(--ink);
+}
+::-moz-selection {
+  background: var(--ink-yellow);
+  color: var(--ink);
+}
+
+
+/* ============================================================
+   13. Reduced motion — flatten the misregister bounce
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .tile-thumb,
+  .provider-card,
+  .presence-card,
+  .theme-card,
+  .color-swatch {
+    transition: none;
+  }
+  .btn:hover:not(:disabled),
+  .tile:hover .tile-thumb,
+  .provider-card:hover,
+  .presence-card:hover,
+  .theme-card:hover,
+  .color-swatch:hover {
+    transform: none;
+  }
+}
+
+/* Built-in apps — Risograph standalone kit:
+   cream stock, spot inks, halftone fields, off-register shadow pulls. */
+html[data-theme="risograph"] #system-modal .modal-backdrop {
+  background: rgba(244, 236, 216, 0.78);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-theme="risograph"] #system-modal .system-frame {
+  background:
+    radial-gradient(rgba(26, 31, 61, 0.16) 0.8px, transparent 1.2px) 0 0 / 10px 10px,
+    var(--surface-1);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 8px 8px 0 rgba(255, 72, 176, 0.62), 12px 12px 0 rgba(49, 69, 194, 0.32);
+}
+
+html[data-theme="risograph"] #system-modal .modal-header {
+  background: var(--ink-yellow);
+  border-bottom: 1px solid var(--ink);
+  box-shadow: 0 3px 0 rgba(255, 72, 176, 0.45);
+}
+
+html[data-theme="risograph"] #system-modal .modal-title {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+html[data-theme="risograph"] #system-modal .modal-actions button,
+html[data-theme="risograph"] #system-modal .files-nav,
+html[data-theme="risograph"] #system-modal .files-action,
+html[data-theme="risograph"] #system-modal .files-place,
+html[data-theme="risograph"] #system-modal .browser-launch .btn,
+html[data-theme="risograph"] #system-modal .browser-actions .btn {
+  background: var(--surface-1);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+  box-shadow: 3px 3px 0 rgba(255, 72, 176, 0.55);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+html[data-theme="risograph"] #system-modal .files-action:hover,
+html[data-theme="risograph"] #system-modal .files-nav:hover,
+html[data-theme="risograph"] #system-modal .files-place:hover,
+html[data-theme="risograph"] #system-modal .browser-launch .btn:hover,
+html[data-theme="risograph"] #system-modal .browser-actions .btn:hover {
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0 rgba(49, 69, 194, 0.58);
+}
+
+html[data-theme="risograph"] #system-modal .btn-primary,
+html[data-theme="risograph"] #system-modal .files-place.active,
+html[data-theme="risograph"] #system-modal .file-row.selected {
+  background: var(--ink-yellow);
+  color: var(--ink);
+  box-shadow: 3px 3px 0 rgba(49, 69, 194, 0.58);
+}
+
+html[data-theme="risograph"] #system-modal .files-app,
+html[data-theme="risograph"] #system-modal .browser-app {
+  background:
+    radial-gradient(rgba(49, 69, 194, 0.18) 1px, transparent 1.4px) 0 0 / 12px 12px,
+    linear-gradient(135deg, rgba(255, 72, 176, 0.10), transparent 34%),
+    var(--surface-1);
+}
+
+html[data-theme="risograph"] #system-modal .files-sidebar {
+  background: var(--surface-2);
+  border-right: 1px solid var(--ink);
+  box-shadow: 3px 0 0 rgba(49, 69, 194, 0.22);
+}
+
+html[data-theme="risograph"] #system-modal .system-app-brand {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 24px;
+  font-weight: 800;
+  transform: rotate(-1deg);
+}
+
+html[data-theme="risograph"] #system-modal .system-app-glyph,
+html[data-theme="risograph"] #system-modal .system-app-glyph::before,
+html[data-theme="risograph"] #system-modal .files-place-icon,
+html[data-theme="risograph"] #system-modal .files-place-icon::before {
+  background: var(--ink-yellow);
+  border-color: var(--ink);
+  box-shadow: 2px 2px 0 rgba(49, 69, 194, 0.55);
+}
+
+html[data-theme="risograph"] #system-modal .files-toolbar {
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--ink);
+  box-shadow: 0 3px 0 rgba(255, 72, 176, 0.32);
+}
+
+html[data-theme="risograph"] #system-modal .files-path,
+html[data-theme="risograph"] #system-modal .browser-url {
+  background: var(--surface-1);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 3px 3px 0 rgba(49, 69, 194, 0.32);
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+html[data-theme="risograph"] #system-modal .files-list {
+  background: rgba(250, 243, 224, 0.78);
+  border-right: 1px solid var(--ink);
+}
+
+html[data-theme="risograph"] #system-modal .file-row,
+html[data-theme="risograph"] #system-modal .browser-status,
+html[data-theme="risograph"] #system-modal .browser-details div {
+  color: var(--ink);
+  background: var(--surface-1);
+  border: 1px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 4px 4px 0 rgba(255, 72, 176, 0.46), 6px 6px 0 rgba(49, 69, 194, 0.22);
+}
+
+html[data-theme="risograph"] #system-modal .file-row {
+  margin-bottom: 12px;
+}
+
+html[data-theme="risograph"] #system-modal .file-row:hover {
+  transform: rotate(-0.4deg);
+}
+
+html[data-theme="risograph"] #system-modal .file-icon[data-kind],
+html[data-theme="risograph"] #system-modal .file-icon[data-kind]::before,
+html[data-theme="risograph"] #system-modal .file-icon[data-kind]::after,
+html[data-theme="risograph"] #system-modal .files-preview-icon,
+html[data-theme="risograph"] #system-modal .files-preview-icon::before,
+html[data-theme="risograph"] #system-modal .files-preview-large-icon,
+html[data-theme="risograph"] #system-modal .files-preview-large-icon::before,
+html[data-theme="risograph"] #system-modal .files-preview-large-icon::after {
+  border-color: var(--ink);
+}
+
+html[data-theme="risograph"] #system-modal .file-icon[data-kind="dir"],
+html[data-theme="risograph"] #system-modal .file-icon[data-kind="dir"]::before,
+html[data-theme="risograph"] #system-modal .files-preview-icon,
+html[data-theme="risograph"] #system-modal .files-preview-icon::before,
+html[data-theme="risograph"] #system-modal .files-preview-folder,
+html[data-theme="risograph"] #system-modal .files-preview-folder::before {
+  background: var(--ink-yellow);
+  box-shadow: 2px 2px 0 var(--ink-blue);
+}
+
+html[data-theme="risograph"] #system-modal .file-icon[data-kind="file"],
+html[data-theme="risograph"] #system-modal .files-preview-file {
+  background: var(--ink-pink);
+  box-shadow: 2px 2px 0 var(--ink-blue);
+}
+
+html[data-theme="risograph"] #system-modal .file-icon[data-kind="file"]::after,
+html[data-theme="risograph"] #system-modal .files-preview-file::after {
+  background: var(--surface-1);
+}
+
+html[data-theme="risograph"] #system-modal .file-name {
+  font-weight: 700;
+}
+
+html[data-theme="risograph"] #system-modal .file-meta,
+html[data-theme="risograph"] #system-modal .files-preview-kind,
+html[data-theme="risograph"] #system-modal .browser-details span {
+  color: var(--ink-blue);
+  font-weight: 700;
+}
+
+html[data-theme="risograph"] #system-modal .files-preview {
+  background:
+    radial-gradient(var(--ink-pink) 1px, transparent 1.5px) 0 0 / 12px 12px,
+    var(--surface-2);
+}
+
+html[data-theme="risograph"] #system-modal .files-preview-card {
+  color: var(--ink);
+  background: rgba(250, 243, 224, 0.82);
+}
+
+html[data-theme="risograph"] #system-modal .files-download-link {
+  color: var(--ink-blue);
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+html[data-theme="risograph"] #system-modal .files-illustration {
+  right: 24px;
+  top: 76px;
+  width: 220px;
+  height: 170px;
+  opacity: 0.28;
+  mix-blend-mode: multiply;
+}
+
+html[data-theme="risograph"] #system-modal .files-illustration-folder,
+html[data-theme="risograph"] #system-modal .files-illustration-card,
+html[data-theme="risograph"] #system-modal .files-illustration-dot {
+  position: absolute;
+  border: 1px solid var(--ink);
+  box-shadow: 5px 5px 0 rgba(255, 72, 176, 0.62), 8px 8px 0 rgba(49, 69, 194, 0.32);
+}
+
+html[data-theme="risograph"] #system-modal .files-illustration-folder {
+  left: 0;
+  top: 34px;
+  width: 152px;
+  height: 98px;
+  border-radius: 16px;
+  background:
+    radial-gradient(var(--ink-blue) 1px, transparent 1.5px) 0 0 / 10px 10px,
+    var(--ink-yellow);
+}
+
+html[data-theme="risograph"] #system-modal .files-illustration-folder::before {
+  content: "";
+  position: absolute;
+  left: 16px;
+  top: -24px;
+  width: 78px;
+  height: 24px;
+  border: 1px solid var(--ink);
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background: var(--surface-1);
+}
+
+html[data-theme="risograph"] #system-modal .files-illustration-card {
+  right: 8px;
+  bottom: 2px;
+  width: 70px;
+  height: 88px;
+  border-radius: 12px;
+  background: var(--ink-pink);
+}
+
+html[data-theme="risograph"] #system-modal .files-illustration-dot {
+  right: 28px;
+  top: 6px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--ink-blue);
+}
+
+html[data-theme="risograph"] #system-modal .browser-status.ready {
+  background: var(--ink-yellow);
+}
+
+html[data-theme="risograph"] #system-modal .browser-status.error {
+  background: var(--ink-pink);
+}
+
+html[data-theme="risograph"] #system-modal .browser-details div {
+  padding: 12px;
+}
+
+html[data-theme="risograph"] #system-modal .browser-details code,
+html[data-theme="risograph"] #system-modal .browser-status strong,
+html[data-theme="risograph"] #system-modal .browser-status span {
+  color: currentColor;
+}
+
+html[data-theme="risograph"] #system-modal .browser-illustration {
+  color: var(--ink);
+  opacity: 0.22;
+  mix-blend-mode: multiply;
+}
+
+html[data-theme="risograph"] #system-modal .browser-illustration-window,
+html[data-theme="risograph"] #system-modal .browser-illustration-window::before,
+html[data-theme="risograph"] #system-modal .browser-illustration-globe {
+  border-color: var(--ink);
+  background:
+    radial-gradient(var(--ink-blue) 1px, transparent 1.5px) 0 0 / 10px 10px,
+    rgba(255, 225, 91, 0.48);
+  box-shadow: 5px 5px 0 rgba(255, 72, 176, 0.52);
+}
+
+html[data-theme="risograph"] .thought-bubble {
+  --thought-bg:
+    radial-gradient(rgba(49, 69, 194, 0.22) 1px, transparent 1.5px) 0 0 / 9px 9px,
+    var(--surface-1);
+  --thought-border: var(--ink);
+  --thought-text: var(--ink);
+  --thought-shadow: 5px 5px 0 rgba(255, 72, 176, 0.66), 9px 9px 0 rgba(49, 69, 194, 0.28);
+  border-radius: 18px 18px 6px 18px;
+  mix-blend-mode: normal;
+}
+
+html[data-theme="risograph"] .thought-bubble::before {
+  content: "";
+  position: absolute;
+  inset: 5px -5px -5px 5px;
+  z-index: -1;
+  border-radius: inherit;
+  background: rgba(255, 72, 176, 0.20);
+}

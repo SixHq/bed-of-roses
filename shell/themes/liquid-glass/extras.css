@@ -1,0 +1,1112 @@
+/* Liquid Glass — component-level overrides.
+
+   Tokens alone can't deliver this theme. The shell paints surfaces as flat
+   rgba colors; for visionOS we need:
+     1. backdrop-filter blur(40px) saturate(180%) on every elevated surface
+     2. an inner 1px white edge-light along the top of every card (the
+        specular highlight that implies a refracting bevel)
+     3. a saturated chromatic wallpaper that the glass can refract
+     4. tilt-on-hover parallax (the shell's --tilt-x/--tilt-y already
+        works on .provider-card and .presence-card; we extend it here)
+
+   Anything not redefined keeps the shell's structure — we only override
+   what changes visually. */
+
+/* ==================================================================
+   WALLPAPER — saturated chromatic backdrop the glass refracts.
+   The shell's <div class="wallpaper"> sits at z-index:-1 behind everything.
+   We paint the full aurora here so the home screen has the same backdrop
+   the onboarding panes get from --atmosphere on body.
+   ================================================================== */
+.wallpaper {
+  background:
+    radial-gradient(60% 80% at  10%   0%, rgba(193,  59, 181, 0.85), transparent 60%),
+    radial-gradient(60% 80% at 110% 110%, rgba( 30,  91, 199, 0.85), transparent 60%),
+    radial-gradient(50% 50% at  60%  60%, rgba(231, 111,   0, 0.65), transparent 65%),
+    radial-gradient(38% 38% at  85%  10%, rgba( 30, 159, 107, 0.55), transparent 70%),
+    #06090F;
+  opacity: 1;
+}
+
+/* The body's --atmosphere already paints the same gradient on onboarding,
+   but for safety we lift saturation slightly — the glass needs the world
+   behind it to be vibrant, not muted. */
+html, body {
+  background-attachment: fixed;
+}
+
+/* ==================================================================
+   TYPOGRAPHY — restrained weights, tight tracking, italic editorial
+   accents on the wordmark / greeting. Mirrors the source kit's
+   "italic Instrument Serif handles all the romance" rule.
+   ================================================================== */
+.headline,
+.subheadline,
+.greeting,
+.modal-title,
+.tile-name,
+.wordmark span {
+  font-family: var(--font-display);
+  font-weight: 300;          /* SF Pro Display Light reads as the visionOS hero */
+  letter-spacing: -0.025em;
+  text-rendering: optimizeLegibility;
+}
+
+.headline {
+  font-weight: 300;
+  line-height: 0.96;
+  /* The hero pane keeps its 56px size from style.css; we just refine weight
+     + tracking. The overall feel is "Bed of Roses, weightless." */
+}
+
+.subheadline {
+  font-family: var(--font-system);
+  font-weight: 400;
+  color: var(--label-2);
+  letter-spacing: -0.012em;
+}
+
+/* The wordmark in the home chrome — small caps mono, with a violet bullet */
+.wordmark {
+  font-family: var(--font-mono);
+  letter-spacing: 0.18em;
+  color: var(--label-3);
+}
+.wordmark span {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--label);
+}
+
+/* HUD telemetry — SF Mono / JetBrains Mono micro-caps, low opacity */
+.hud-label,
+.hud-meta,
+.field-label,
+.color-section-label {
+  font-family: var(--font-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+.hud-tick { color: rgba(var(--avatar-color-rgb), 0.95); }
+
+/* Greeting (under the avatar on the empty home) — italic editorial line */
+.greeting {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 22px;
+  color: var(--label-2);
+  letter-spacing: -0.012em;
+  line-height: 1.35;
+}
+
+/* ==================================================================
+   GLASS PRIMITIVE — the shared visionOS surface treatment.
+   Used by every elevated component below. We compose four things:
+     • semi-transparent vertical gradient (top brighter, bottom dimmer)
+     • backdrop-filter blur(40px) saturate(180%)
+     • a 1px translucent white border (reads as the bevel edge)
+     • inset top-light highlight + soft outer drop shadow
+   The ::before pseudo-element draws the curved specular sheen across the
+   top 34% of the surface — this is what makes it look like glass and not
+   like a translucent rectangle.
+   ================================================================== */
+
+/* Tile thumbnails — every widget on the desktop becomes a glass pane */
+.tile-thumb {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.08) 100%);
+  backdrop-filter: blur(40px) saturate(1.8);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: var(--r-tile);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),    /* top edge-light */
+    inset 0 -1px 0 rgba(255, 255, 255, 0.18),   /* asymmetric bottom bevel */
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),  /* inner refraction line */
+    0  8px 24px -8px rgba(0, 0, 0, 0.35),
+    0 30px 60px -20px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+.tile-thumb::before {
+  /* The specular sheen — a faint lozenge of brighter glass across the top
+     third of the surface. Curved with 50%/100% border-radius so the
+     highlight has a natural meniscus shape, not a hard band. */
+  content: '';
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 6%;
+  height: 34%;
+  border-radius: 50% / 100%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0));
+  pointer-events: none;
+  z-index: 1;
+}
+/* Make sure tile children sit above the sheen */
+.tile-thumb > * { position: relative; z-index: 2; }
+
+.tile:hover .tile-thumb {
+  /* Lift, brighten the glass, intensify the edge-light. The shell's tilt-x/y
+     are not bound to .tile in style.css, but cursor parallax is preserved
+     elsewhere (provider/presence cards). For the basic tile we use a soft
+     translateY lift instead. */
+  transform: translateY(-3px);
+  border-color: rgba(255, 255, 255, 0.65);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.10),
+    0  8px 24px -8px rgba(0, 0, 0, 0.45),
+    0 38px 72px -20px rgba(0, 0, 0, 0.60);
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.24) 0%,
+    rgba(255, 255, 255, 0.10) 100%);
+}
+.tile:active .tile-thumb {
+  transform: translateY(0) scale(0.99);
+}
+.tile-name {
+  font-family: var(--font-display);
+  font-weight: 500;
+  color: var(--label);
+  letter-spacing: -0.010em;
+  /* The shell already shadows the name on rich tiles; we soften it because
+     glass surfaces don't need a heavy text-shadow. */
+}
+.tile:not([data-size="1x1"]) .tile-name {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+.tile:not([data-size="1x1"]) .tile-thumb::after {
+  /* The shell paints a black gradient at bottom for legibility; on glass
+     we soften it so the wallpaper still bleeds through. */
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.30));
+}
+
+/* ==================================================================
+   BUTTONS — glass pills with specular top-light. Primary gets a vivid
+   white/violet tint so it pops against the aurora.
+   ================================================================== */
+.btn {
+  border-radius: var(--r-button);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.18),
+    rgba(255, 255, 255, 0.06));
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  color: var(--label);
+  font-family: var(--font-system);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.15),
+    0 12px 24px -8px rgba(0, 0, 0, 0.45);
+  transition: filter var(--d-micro) var(--ease-snap),
+              transform var(--d-micro) var(--ease-snap),
+              box-shadow var(--d-micro) var(--ease-snap),
+              background var(--d-micro) var(--ease-snap);
+}
+.btn::before {
+  /* The same curved specular sheen as the cards — gives every button the
+     "this is wet glass" read. Pointer-events:none keeps it click-through. */
+  content: '';
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 6%;
+  height: 38%;
+  border-radius: 50% / 100%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+.btn:hover:not(:disabled) {
+  filter: brightness(1.10);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.20),
+    0 16px 32px -8px rgba(0, 0, 0, 0.50);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
+  filter: brightness(0.98);
+}
+
+/* Primary — vivid violet/cyan tinted glass, white-on-tint. The shell's
+   .btn-primary keyframes (btn-portal-breathe) keep working because we
+   override only the static box-shadow and background. */
+.btn-primary {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.95),
+    rgba(232, 220, 255, 0.78));
+  border-color: rgba(255, 255, 255, 0.70);
+  color: #0E1426;
+  animation: none; /* the breathing aura fights the glass shimmer; drop it */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.30),
+    0 0 0 1px rgba(var(--avatar-color-rgb), 0.30),
+    0 0 28px rgba(var(--avatar-color-rgb), 0.45),
+    0 12px 36px -8px rgba(0, 0, 0, 0.55);
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 1),
+    rgba(232, 220, 255, 0.88));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.40),
+    0 0 0 1.5px rgba(var(--avatar-color-rgb), 0.55),
+    0 0 38px rgba(var(--avatar-color-rgb), 0.55),
+    0 16px 40px -8px rgba(0, 0, 0, 0.55);
+}
+
+.btn-secondary {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.10),
+    rgba(255, 255, 255, 0.04));
+  border-color: rgba(255, 255, 255, 0.25);
+  color: var(--label);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.40),
+    0 8px 18px -8px rgba(0, 0, 0, 0.35);
+}
+.btn-secondary:hover { background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.14),
+    rgba(255, 255, 255, 0.06)); }
+
+.btn:disabled,
+.btn[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: none;
+  transform: none;
+}
+
+/* ==================================================================
+   FIELDS — pill inputs, frosted, with white placeholder.
+   ================================================================== */
+.field-input,
+.field-select,
+input[type="text"],
+input[type="password"],
+input[type="number"],
+textarea {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.22),
+    rgba(255, 255, 255, 0.08));
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid rgba(255, 255, 255, 0.40);
+  border-radius: var(--r-input);
+  color: var(--label);
+  font-family: var(--font-system);
+  font-weight: 400;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.60),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.10);
+}
+.field-input::placeholder,
+input::placeholder,
+textarea::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+}
+.field-input:focus,
+.field-select:focus,
+input:focus,
+textarea:focus {
+  border-color: rgba(255, 255, 255, 0.70);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.70),
+    0 0 0 3px rgba(255, 255, 255, 0.30),
+    0 0 28px rgba(var(--avatar-color-rgb), 0.25);
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.28),
+    rgba(255, 255, 255, 0.10));
+}
+
+.field-label::before { content: '/ '; opacity: 0.6; }
+
+/* The shell's .field-select arrow uses --label-2; we soften it for glass */
+.field-select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(255, 255, 255, 0.78) 50%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.78) 50%, transparent 50%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08));
+  background-position: calc(100% - 18px) 22px, calc(100% - 13px) 22px, 0 0;
+  background-size: 5px 5px, 5px 5px, 100% 100%;
+  background-repeat: no-repeat;
+}
+
+/* ==================================================================
+   PROVIDER CARDS — glass panes with cursor-tilt parallax (the shell
+   already wires --tilt-x / --tilt-y on these; we just preserve the
+   transform chain and add the glass treatment).
+   ================================================================== */
+.provider-card {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.14),
+    rgba(255, 255, 255, 0.06));
+  backdrop-filter: blur(40px) saturate(1.8);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8);
+  border: 1px solid rgba(255, 255, 255, 0.30);
+  border-radius: 22px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.10),
+    0 8px 28px -10px rgba(0, 0, 0, 0.45),
+    0 24px 48px -16px rgba(0, 0, 0, 0.30);
+}
+.provider-card:hover {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.20),
+    rgba(255, 255, 255, 0.08));
+  border-color: rgba(255, 255, 255, 0.50);
+}
+.provider-card.expanded,
+.provider-card.connected {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.22),
+    rgba(255, 255, 255, 0.10));
+  border-color: rgba(255, 255, 255, 0.55);
+}
+
+.provider-name {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-style: normal;            /* shell uses italic; visionOS prefers upright */
+  letter-spacing: -0.015em;
+  color: var(--label);
+}
+.provider-status { color: var(--label-3); }
+.provider-card.connected .provider-status { color: var(--label-2); }
+.status-dot {
+  background: rgba(255, 255, 255, 0.30);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.50);
+}
+.provider-card.connected .status-dot {
+  background: radial-gradient(circle at 30% 25%,
+    #FFFFFF, #B6FFE5 60%, #1E9F6B);
+  box-shadow: 0 0 12px rgba(182, 255, 229, 0.85);
+}
+.default-pill {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.95),
+    rgba(255, 255, 255, 0.70));
+  color: #0E1426;
+  border: 1px solid rgba(255, 255, 255, 0.70);
+  font-family: var(--font-mono);
+  letter-spacing: 0.10em;
+}
+
+/* ==================================================================
+   PRESENCE + THEME CARDS — same visionOS card treatment, with a brighter
+   selected state. The shell handles the cursor tilt via inline CSS vars.
+   ================================================================== */
+.presence-card,
+.theme-card {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.14),
+    rgba(255, 255, 255, 0.06));
+  backdrop-filter: blur(40px) saturate(1.8);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8);
+  border: 1px solid rgba(255, 255, 255, 0.30);
+  border-radius: 22px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.10),
+    0 12px 32px -12px rgba(0, 0, 0, 0.45),
+    0 30px 60px -20px rgba(0, 0, 0, 0.35);
+}
+.presence-card::before,
+.theme-card::before {
+  /* The shell's existing top-light is too faint over glass — replace with
+     the curved specular sheen primitive. */
+  content: '';
+  position: absolute;
+  inset: auto;
+  left: 8%;
+  right: 8%;
+  top: 6%;
+  height: 32%;
+  border-radius: 50% / 100%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0));
+  pointer-events: none;
+  z-index: 1;
+}
+.presence-card > *,
+.theme-card > * { position: relative; z-index: 2; }
+
+.presence-card:hover,
+.theme-card:hover {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.22),
+    rgba(255, 255, 255, 0.08));
+  border-color: rgba(255, 255, 255, 0.55);
+}
+.presence-card.selected,
+.theme-card.selected {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.30),
+    rgba(255, 255, 255, 0.14));
+  border-color: rgba(255, 255, 255, 0.80);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.20),
+    0 0 0 1px rgba(var(--avatar-color-rgb), 0.35),
+    0 0 32px rgba(var(--avatar-color-rgb), 0.30),
+    0 12px 32px -12px rgba(0, 0, 0, 0.45);
+}
+.presence-card.selected::after,
+.theme-card.selected::after { display: none; }
+
+.presence-card-label,
+.theme-label {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.010em;
+  color: var(--label);
+}
+.presence-card-sub,
+.theme-tagline {
+  font-family: var(--font-system);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--label-2);
+}
+
+.theme-swatches {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+/* Color picker swatches — bright glass rings */
+.color-swatch {
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    0 4px 12px -4px rgba(0, 0, 0, 0.45);
+}
+.color-swatch.selected {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 0 0 2px rgba(255, 255, 255, 0.40),
+    0 0 0 4px rgba(var(--avatar-color-rgb), 0.55),
+    0 4px 12px -4px rgba(0, 0, 0, 0.55);
+  border-color: rgba(255, 255, 255, 0.85);
+}
+
+/* Onboarding + presence — match the Liquid Glass kit's frosted presence orbs. */
+html[data-theme="liquid-glass"] .onboarding .pane-content {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.06));
+  border: 1px solid rgba(255, 255, 255, 0.30);
+  border-radius: 28px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.58),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.10),
+    0 28px 70px -24px rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(40px) saturate(1.8);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8);
+  padding: 32px;
+}
+
+html[data-theme="liquid-glass"] .onboarding .presence-content {
+  max-width: 760px;
+  align-items: flex-start;
+  text-align: left;
+}
+
+html[data-theme="liquid-glass"] .pane[data-pane="presence"] .presence-grid {
+  gap: 32px;
+}
+
+html[data-theme="liquid-glass"] .pane[data-pane="presence"] .presence-card {
+  min-height: 154px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  overflow: visible;
+  gap: 8px;
+}
+
+html[data-theme="liquid-glass"] .pane[data-pane="presence"] .presence-card::before,
+html[data-theme="liquid-glass"] .pane[data-pane="presence"] .presence-card::after {
+  display: none;
+}
+
+html[data-theme="liquid-glass"] .pane[data-pane="presence"] .presence-canvas-wrap {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.70),
+    0 22px 46px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(22px) saturate(1.8);
+  -webkit-backdrop-filter: blur(22px) saturate(1.8);
+}
+
+html[data-theme="liquid-glass"] .pane[data-pane="presence"] .presence-orb {
+  display: block;
+  inset: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #fff 0%, var(--presence-liquid-1) 22%, var(--presence-liquid-2) 55%, var(--presence-liquid-3) 100%);
+  box-shadow: inset 0 -10px 26px rgba(0, 0, 0, 0.40);
+}
+
+html[data-theme="liquid-glass"] .pane[data-pane="presence"] .presence-face,
+html[data-theme="liquid-glass"] .pane[data-pane="presence"] .presence-block,
+html[data-theme="liquid-glass"] .pane[data-pane="presence"] .presence-stamp,
+html[data-theme="liquid-glass"] .pane[data-pane="presence"] .presence-pixel-face {
+  display: none;
+}
+
+html[data-theme="liquid-glass"] .pane[data-pane="presence"] .presence-card.selected .presence-canvas-wrap {
+  border-color: rgba(255, 255, 255, 0.82);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 0 0 1px rgba(var(--avatar-color-rgb), 0.30),
+    0 0 34px rgba(var(--avatar-color-rgb), 0.30),
+    0 22px 46px rgba(0, 0, 0, 0.32);
+}
+
+html[data-theme="liquid-glass"] .pane[data-pane="presence"] .presence-card-label,
+html[data-theme="liquid-glass"] .pane[data-pane="presence"] .presence-card-sub {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+html[data-theme="liquid-glass"] .pane[data-pane="presence"] .presence-card-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+html[data-theme="liquid-glass"] .pane[data-pane="presence"] .presence-card-sub {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+html[data-theme="liquid-glass"] .pane[data-pane="presence"] .color-section {
+  display: none;
+}
+
+/* Pill chips (gender / hair selection) */
+.chip {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.18),
+    rgba(255, 255, 255, 0.06));
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.30);
+  color: var(--label-2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+.chip:hover {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.26),
+    rgba(255, 255, 255, 0.10));
+  color: var(--label);
+  border-color: rgba(255, 255, 255, 0.50);
+}
+.chip.selected {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.95),
+    rgba(255, 255, 255, 0.70));
+  color: #0E1426;
+  border-color: rgba(255, 255, 255, 0.80);
+}
+
+/* ==================================================================
+   MODAL — a bigger pane of glass over the aurora.
+   ================================================================== */
+.modal-backdrop {
+  background: rgba(6, 9, 15, 0.45);
+  backdrop-filter: blur(40px) saturate(1.4);
+  -webkit-backdrop-filter: blur(40px) saturate(1.4);
+}
+.modal-frame {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.18),
+    rgba(255, 255, 255, 0.08));
+  backdrop-filter: blur(60px) saturate(1.8);
+  -webkit-backdrop-filter: blur(60px) saturate(1.8);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: var(--r-modal);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.18),
+    0 30px 60px -20px rgba(0, 0, 0, 0.55),
+    0 60px 120px -40px rgba(0, 0, 0, 0.45);
+}
+.modal-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+}
+.modal-title {
+  font-family: var(--font-mono);
+  letter-spacing: 0.18em;
+  color: var(--label-2);
+}
+
+/* ==================================================================
+   CHAT ORB — the floating draggable send button. The shell already
+   defines the expanded/collapsed states; we replace the dark glass
+   look with our white-frost glass.
+   ================================================================== */
+.chat-orb[data-state="expanded"] {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.18),
+    rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(40px) saturate(1.8);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.18),
+    0 0 0 3px rgba(var(--avatar-color-rgb), 0.12),
+    0 12px 40px rgba(0, 0, 0, 0.50);
+}
+.chat-orb .chat-input {
+  color: var(--label);
+}
+.chat-orb .chat-input::placeholder {
+  /* Source kit places the placeholder in the system sans, not the serif —
+     visionOS prefers neutral placeholders. */
+  font-family: var(--font-system);
+  font-style: normal;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 16px;
+}
+.chat-orb .chat-send {
+  background: linear-gradient(135deg,
+    #FFFFFF,
+    rgba(var(--avatar-color-rgb), 1));
+  color: #0E1426;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 0 24px rgba(var(--avatar-color-rgb), 0.55);
+}
+html[data-theme="liquid-glass"] .chat-send .chat-presence {
+  inset: 5px;
+  filter: none;
+}
+html[data-theme="liquid-glass"] .chat-send .presence-orb {
+  display: block;
+  inset: 3px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #fff 0%, var(--presence-liquid-1) 22%, var(--presence-liquid-2) 55%, var(--presence-liquid-3) 100%);
+  box-shadow: inset 0 -5px 14px rgba(0, 0, 0, 0.38);
+}
+html[data-theme="liquid-glass"] .chat-send .presence-face,
+html[data-theme="liquid-glass"] .chat-send .presence-block,
+html[data-theme="liquid-glass"] .chat-send .presence-stamp,
+html[data-theme="liquid-glass"] .chat-send .presence-pixel-face {
+  display: none;
+}
+
+/* ==================================================================
+   AVATAR — frosted dome over the colored core. The shell handles the
+   inner canvas; we just brighten the ring + halo so it reads as glass.
+   ================================================================== */
+.avatar {
+  border: 1.5px solid rgba(255, 255, 255, 0.45);
+  background:
+    radial-gradient(circle at 50% 60%,
+      rgba(var(--avatar-color-rgb), 0.10),
+      rgba(0, 0, 0, 0) 70%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 0 32px rgba(var(--avatar-color-rgb), 0.25);
+}
+.avatar:hover {
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.70),
+    0 0 0 4px rgba(var(--avatar-color-rgb), 0.10),
+    0 0 48px rgba(var(--avatar-color-rgb), 0.40);
+}
+
+/* The empty-state pane-hero ring (onboarding splash) gets the same bevel */
+.pane-hero {
+  border: 1.5px solid rgba(255, 255, 255, 0.40);
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.12),
+    rgba(255, 255, 255, 0.04));
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 0 28px rgba(var(--avatar-color-rgb), 0.25);
+}
+
+/* ==================================================================
+   MISC — preset chips, signup links, drawer borders. The shell wires
+   these with --hairline-* tokens already; we just sweeten the contrast
+   so they read on the brighter aurora.
+   ================================================================== */
+.preset-chip {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.14),
+    rgba(255, 255, 255, 0.04));
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: var(--label-2);
+  font-family: var(--font-system);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.preset-chip:hover {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.22),
+    rgba(255, 255, 255, 0.08));
+  color: var(--label);
+  border-color: rgba(255, 255, 255, 0.50);
+}
+
+.signup-link {
+  color: var(--label-2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.30);
+}
+.signup-link:hover {
+  color: var(--label);
+  border-color: rgba(255, 255, 255, 0.70);
+}
+
+.provider-drawer-content {
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.tile-delete {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.92),
+    rgba(255, 255, 255, 0.65));
+  color: #0E1426;
+  border: 1px solid rgba(255, 255, 255, 0.70);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 4px 10px -2px rgba(0, 0, 0, 0.45);
+}
+.tile-delete:hover {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 1),
+    rgba(255, 255, 255, 0.75));
+  color: #0E1426;
+}
+
+/* ==================================================================
+   REDUCED MOTION — respect the user's preference; the shell already
+   handles transitions, but the parallax tilt on cards can feel busy.
+   ================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .provider-card,
+  .presence-card,
+  .theme-card {
+    transform: none !important;
+  }
+  .tile:hover .tile-thumb {
+    transform: none;
+  }
+}
+
+/* Built-in apps — Liquid Glass standalone kit language:
+   saturated aurora backdrop, frosted panes, top-edge specular highlights. */
+html[data-theme="liquid-glass"] #system-modal .modal-backdrop {
+  background:
+    radial-gradient(circle at 18% 10%, rgba(193, 59, 181, 0.42), transparent 38%),
+    radial-gradient(circle at 88% 92%, rgba(34, 211, 238, 0.32), transparent 42%),
+    rgba(4, 6, 12, 0.58);
+  backdrop-filter: blur(34px) saturate(160%);
+  -webkit-backdrop-filter: blur(34px) saturate(160%);
+}
+
+html[data-theme="liquid-glass"] #system-modal .system-frame {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.19), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 34px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.68),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+    0 30px 80px rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(42px) saturate(185%);
+  -webkit-backdrop-filter: blur(42px) saturate(185%);
+}
+
+html[data-theme="liquid-glass"] #system-modal .system-frame::before {
+  content: "";
+  position: absolute;
+  inset: -18%;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 122, 182, 0.34), transparent 34%),
+    radial-gradient(circle at 82% 26%, rgba(182, 255, 229, 0.24), transparent 32%),
+    radial-gradient(circle at 68% 82%, rgba(231, 111, 0, 0.28), transparent 36%),
+    radial-gradient(circle at 10% 88%, rgba(109, 200, 255, 0.34), transparent 42%);
+  filter: blur(4px);
+  z-index: 0;
+  pointer-events: none;
+}
+
+html[data-theme="liquid-glass"] #system-modal .modal-header,
+html[data-theme="liquid-glass"] #system-modal .system-body {
+  position: relative;
+  z-index: 1;
+}
+
+html[data-theme="liquid-glass"] #system-modal .modal-header {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+html[data-theme="liquid-glass"] #system-modal .modal-title {
+  color: rgba(255, 255, 255, 0.82);
+  font-weight: 500;
+  letter-spacing: 0.12em;
+}
+
+html[data-theme="liquid-glass"] #system-modal .modal-actions button,
+html[data-theme="liquid-glass"] #system-modal .files-nav,
+html[data-theme="liquid-glass"] #system-modal .files-action,
+html[data-theme="liquid-glass"] #system-modal .files-place,
+html[data-theme="liquid-glass"] #system-modal .browser-launch .btn,
+html[data-theme="liquid-glass"] #system-modal .browser-actions .btn {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.88);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 10px 24px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(22px) saturate(170%);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+}
+
+html[data-theme="liquid-glass"] #system-modal .btn-primary,
+html[data-theme="liquid-glass"] #system-modal .files-place.active,
+html[data-theme="liquid-glass"] #system-modal .file-row.selected {
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.34), rgba(34, 211, 238, 0.22));
+  border-color: rgba(255, 255, 255, 0.55);
+}
+
+html[data-theme="liquid-glass"] #system-modal .files-app,
+html[data-theme="liquid-glass"] #system-modal .browser-app {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+html[data-theme="liquid-glass"] #system-modal .files-sidebar {
+  background: rgba(255, 255, 255, 0.08);
+  border-right: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(34px) saturate(180%);
+  -webkit-backdrop-filter: blur(34px) saturate(180%);
+}
+
+html[data-theme="liquid-glass"] #system-modal .system-app-brand {
+  font-family: "Instrument Serif", Georgia, serif;
+  font-style: italic;
+  font-size: 26px;
+  font-weight: 400;
+  color: #fff;
+  text-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+html[data-theme="liquid-glass"] #system-modal .system-app-glyph,
+html[data-theme="liquid-glass"] #system-modal .system-app-glyph::before,
+html[data-theme="liquid-glass"] #system-modal .files-place-icon,
+html[data-theme="liquid-glass"] #system-modal .files-place-icon::before {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.08));
+  border-color: rgba(255, 255, 255, 0.46);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64);
+}
+
+html[data-theme="liquid-glass"] #system-modal .files-toolbar {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(28px) saturate(170%);
+  -webkit-backdrop-filter: blur(28px) saturate(170%);
+}
+
+html[data-theme="liquid-glass"] #system-modal .files-path,
+html[data-theme="liquid-glass"] #system-modal .browser-url {
+  background: rgba(255, 255, 255, 0.13);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(24px) saturate(170%);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+}
+
+html[data-theme="liquid-glass"] #system-modal .files-list {
+  border-right: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+html[data-theme="liquid-glass"] #system-modal .file-row,
+html[data-theme="liquid-glass"] #system-modal .browser-status,
+html[data-theme="liquid-glass"] #system-modal .browser-details div {
+  color: rgba(255, 255, 255, 0.84);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06));
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 22px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.44),
+    0 14px 30px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(22px) saturate(170%);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+}
+
+html[data-theme="liquid-glass"] #system-modal .file-row {
+  margin-bottom: 10px;
+}
+
+html[data-theme="liquid-glass"] #system-modal .file-row:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.48);
+}
+
+html[data-theme="liquid-glass"] #system-modal .file-icon[data-kind],
+html[data-theme="liquid-glass"] #system-modal .file-icon[data-kind]::before,
+html[data-theme="liquid-glass"] #system-modal .file-icon[data-kind]::after,
+html[data-theme="liquid-glass"] #system-modal .files-preview-icon,
+html[data-theme="liquid-glass"] #system-modal .files-preview-icon::before,
+html[data-theme="liquid-glass"] #system-modal .files-preview-large-icon,
+html[data-theme="liquid-glass"] #system-modal .files-preview-large-icon::before,
+html[data-theme="liquid-glass"] #system-modal .files-preview-large-icon::after {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.10));
+  border-color: rgba(255, 255, 255, 0.54);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.66), 0 0 24px rgba(34, 211, 238, 0.14);
+}
+
+html[data-theme="liquid-glass"] #system-modal .file-name,
+html[data-theme="liquid-glass"] #system-modal .files-preview-name,
+html[data-theme="liquid-glass"] #system-modal .browser-status strong {
+  color: #fff;
+}
+
+html[data-theme="liquid-glass"] #system-modal .file-meta,
+html[data-theme="liquid-glass"] #system-modal .files-preview-kind,
+html[data-theme="liquid-glass"] #system-modal .browser-details span,
+html[data-theme="liquid-glass"] #system-modal .browser-details code,
+html[data-theme="liquid-glass"] #system-modal .browser-status span {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+html[data-theme="liquid-glass"] #system-modal .files-preview {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(24px) saturate(170%);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+}
+
+html[data-theme="liquid-glass"] #system-modal .files-preview-card {
+  background:
+    radial-gradient(circle at 70% 28%, rgba(34, 211, 238, 0.22), transparent 36%),
+    radial-gradient(circle at 20% 80%, rgba(255, 122, 182, 0.22), transparent 42%);
+}
+
+html[data-theme="liquid-glass"] #system-modal .files-download-link {
+  color: #fff;
+}
+
+html[data-theme="liquid-glass"] #system-modal .files-illustration {
+  right: 28px;
+  top: 78px;
+  width: 220px;
+  height: 180px;
+  opacity: 0.38;
+  filter: blur(0.1px);
+}
+
+html[data-theme="liquid-glass"] #system-modal .files-illustration-folder,
+html[data-theme="liquid-glass"] #system-modal .files-illustration-card,
+html[data-theme="liquid-glass"] #system-modal .files-illustration-dot {
+  position: absolute;
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.30), rgba(255, 255, 255, 0.08));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 18px 38px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(18px) saturate(180%);
+}
+
+html[data-theme="liquid-glass"] #system-modal .files-illustration-folder {
+  left: 8px;
+  top: 38px;
+  width: 150px;
+  height: 104px;
+  border-radius: 28px;
+}
+
+html[data-theme="liquid-glass"] #system-modal .files-illustration-folder::before {
+  content: "";
+  position: absolute;
+  left: 20px;
+  top: 18px;
+  width: 82px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.26);
+}
+
+html[data-theme="liquid-glass"] #system-modal .files-illustration-card {
+  right: 10px;
+  bottom: 2px;
+  width: 74px;
+  height: 96px;
+  border-radius: 24px;
+}
+
+html[data-theme="liquid-glass"] #system-modal .files-illustration-dot {
+  right: 24px;
+  top: 16px;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, #fff, rgba(109, 200, 255, 0.55) 38%, rgba(167, 139, 250, 0.32));
+}
+
+html[data-theme="liquid-glass"] #system-modal .browser-status.ready {
+  border-color: rgba(182, 255, 229, 0.46);
+}
+
+html[data-theme="liquid-glass"] #system-modal .browser-status.error {
+  border-color: rgba(255, 122, 182, 0.62);
+}
+
+html[data-theme="liquid-glass"] #system-modal .browser-illustration {
+  color: rgba(255, 255, 255, 0.62);
+  opacity: 0.26;
+}
+
+html[data-theme="liquid-glass"] #system-modal .browser-illustration-window,
+html[data-theme="liquid-glass"] #system-modal .browser-illustration-window::before,
+html[data-theme="liquid-glass"] #system-modal .browser-illustration-globe {
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.54), 0 0 44px rgba(34, 211, 238, 0.18);
+  backdrop-filter: blur(16px) saturate(170%);
+}
+
+html[data-theme="liquid-glass"] .thought-bubble {
+  --thought-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.30), rgba(255, 255, 255, 0.10));
+  --thought-border: rgba(255, 255, 255, 0.46);
+  --thought-text: rgba(255, 255, 255, 0.94);
+  --thought-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62), 0 22px 58px rgba(0, 0, 0, 0.32), 0 0 34px rgba(34, 211, 238, 0.16);
+  border-radius: 28px 28px 12px 28px;
+  backdrop-filter: blur(34px) saturate(185%);
+  -webkit-backdrop-filter: blur(34px) saturate(185%);
+}
+
+html[data-theme="liquid-glass"] .thought-bubble::before {
+  content: "";
+  position: absolute;
+  inset: 1px 1px auto;
+  height: 42%;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.38), transparent);
+  pointer-events: none;
+}

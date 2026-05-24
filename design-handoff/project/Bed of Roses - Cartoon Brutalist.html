@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Bed of Roses — Cartoon Brutalist UI Kit</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    /* ───────────── Cartoon Brutalist tokens ─────────────
+       Heavy 3px black strokes, hard offset shadows (no blur),
+       saturated pop palette on a cream sheet. Reads warm/cool both,
+       playful, sticker-energy. */
+    :root{
+      --cream:#FFF4DC;
+      --paper:#FFFAF0;
+      --ink:#0A0A0A;
+      --ink-2:#2A2620;
+      /* Pop accents */
+      --pink:#FF4FA3;
+      --yellow:#FFD93D;
+      --sky:#6BCEFF;
+      --mint:#5FE3A1;
+      --purple:#9B5DE5;
+      --tomato:#FF6B45;
+      --lilac:#C4A8F0;
+      /* Strokes & shadows */
+      --stroke:3px solid var(--ink);
+      --stroke-thin:2px solid var(--ink);
+      --stroke-fat:4px solid var(--ink);
+      --pop-1:4px 4px 0 0 var(--ink);
+      --pop-2:6px 6px 0 0 var(--ink);
+      --pop-3:8px 8px 0 0 var(--ink);
+      --pop-4:10px 10px 0 0 var(--ink);
+      /* Type */
+      --display:"Archivo Black","Bricolage Grotesque",system-ui,sans-serif;
+      --grotesque:"Bricolage Grotesque","Space Grotesk",system-ui,sans-serif;
+      --body:"Space Grotesk",system-ui,sans-serif;
+      --mono:"Space Mono",ui-monospace,monospace;
+    }
+    html,body{margin:0;background:var(--cream);color:var(--ink);font-family:var(--body)}
+    *{box-sizing:border-box}
+
+    /* ───── Reusable kit primitives ───── */
+    .br-h1{font-family:var(--display);font-size:84px;line-height:.92;letter-spacing:-.02em;color:var(--ink);text-transform:uppercase}
+    .br-h2{font-family:var(--display);font-size:48px;line-height:.95;letter-spacing:-.02em;color:var(--ink);text-transform:uppercase}
+    .br-h3{font-family:var(--grotesque);font-weight:800;font-size:32px;line-height:1;letter-spacing:-.02em}
+    .br-display{font-family:var(--grotesque);font-weight:700;font-size:24px;line-height:1.05;letter-spacing:-.015em}
+    .br-body{font-family:var(--body);font-weight:500;font-size:16px;line-height:1.45;color:var(--ink)}
+    .br-tag{font-family:var(--mono);font-weight:700;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink)}
+    .br-eyebrow{font-family:var(--mono);font-weight:700;font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink)}
+
+    /* Card frame: thick stroke + hard shadow, sits on a flat fill */
+    .br-card{background:var(--paper);border:var(--stroke);border-radius:18px;box-shadow:var(--pop-3)}
+    .br-card-sq{background:var(--paper);border:var(--stroke);box-shadow:var(--pop-3)}
+
+    /* Button — primary: ink fill, paper text, +1deg wonk */
+    .br-btn{display:inline-flex;align-items:center;gap:10px;height:54px;padding:0 22px;
+      font-family:var(--grotesque);font-weight:800;font-size:17px;letter-spacing:-.005em;
+      border:var(--stroke);border-radius:14px;cursor:pointer;
+      box-shadow:var(--pop-2);transition:transform .12s ease, box-shadow .12s ease;
+      text-transform:uppercase}
+    .br-btn:hover{transform:translate(-2px,-2px);box-shadow:8px 8px 0 0 var(--ink)}
+    .br-btn:active{transform:translate(2px,2px);box-shadow:2px 2px 0 0 var(--ink)}
+    .br-btn-pri{background:var(--ink);color:var(--cream)}
+    .br-btn-yel{background:var(--yellow);color:var(--ink)}
+    .br-btn-pink{background:var(--pink);color:var(--ink)}
+    .br-btn-sky{background:var(--sky);color:var(--ink)}
+    .br-btn-mint{background:var(--mint);color:var(--ink)}
+    .br-btn-ghost{background:var(--paper);color:var(--ink)}
+    .br-btn-disabled{background:var(--paper);color:rgba(10,10,10,.3);box-shadow:2px 2px 0 0 rgba(10,10,10,.3);border-color:rgba(10,10,10,.3);cursor:not-allowed}
+    .br-btn-disabled:hover{transform:none;box-shadow:2px 2px 0 0 rgba(10,10,10,.3)}
+
+    /* Input field */
+    .br-field{display:flex;flex-direction:column;gap:8px}
+    .br-field label{font-family:var(--mono);font-weight:700;font-size:12px;letter-spacing:.14em;text-transform:uppercase}
+    .br-input{display:flex;align-items:center;gap:10px;height:56px;padding:0 18px;background:var(--paper);
+      border:var(--stroke);border-radius:14px;box-shadow:var(--pop-2);
+      font-family:var(--grotesque);font-weight:600;font-size:18px;color:var(--ink);outline:0;width:100%}
+    .br-input::placeholder{color:rgba(10,10,10,.35);font-style:italic}
+    .br-input-focus{box-shadow:6px 6px 0 0 var(--pink), 6px 6px 0 3px var(--ink);background:#FFF1F8}
+
+    /* Chip */
+    .br-chip{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 16px;
+      border:var(--stroke-thin);border-radius:99px;background:var(--paper);
+      font-family:var(--grotesque);font-weight:700;font-size:14px;letter-spacing:-.005em;
+      box-shadow:3px 3px 0 0 var(--ink);cursor:pointer}
+    .br-chip-on{background:var(--yellow)}
+    .br-chip-pink{background:var(--pink)}
+    .br-chip-mint{background:var(--mint)}
+
+    /* Sticker / badge — used for tags, status, accents */
+    .br-sticker{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;
+      border:var(--stroke-thin);border-radius:99px;background:var(--yellow);
+      font-family:var(--mono);font-weight:700;font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+      box-shadow:2px 2px 0 0 var(--ink);transform:rotate(-2deg)}
+    .br-sticker-pink{background:var(--pink);transform:rotate(2deg)}
+    .br-sticker-sky{background:var(--sky);transform:rotate(-1deg)}
+    .br-sticker-mint{background:var(--mint);transform:rotate(1.5deg)}
+
+    /* Speech bubble (chat) */
+    .br-bubble{position:relative;padding:14px 18px;border:var(--stroke);border-radius:20px;
+      font-family:var(--body);font-size:16px;line-height:1.45;font-weight:500;
+      box-shadow:var(--pop-2);max-width:80%}
+    .br-bubble-user{background:var(--yellow);color:var(--ink);align-self:flex-end;border-bottom-right-radius:6px}
+    .br-bubble-ai{background:var(--paper);color:var(--ink);align-self:flex-start;border-bottom-left-radius:6px}
+    .br-bubble-ai .br-bubble-name{font-family:var(--display);text-transform:uppercase;font-size:13px;letter-spacing:.04em;color:var(--pink);display:block;margin-bottom:4px}
+
+    /* Tile (widget) */
+    .br-tile{position:relative;display:flex;flex-direction:column;justify-content:space-between;
+      padding:18px;border:var(--stroke);border-radius:20px;box-shadow:var(--pop-2);overflow:hidden}
+    .br-tile-title{font-family:var(--display);text-transform:uppercase;font-size:20px;line-height:1;letter-spacing:-.01em}
+    .br-tile-meta{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;opacity:.75}
+
+    /* Avatar / presence ring */
+    .br-avatar{position:relative;width:140px;height:140px;border-radius:50%;background:var(--paper);
+      border:var(--stroke-fat);display:flex;align-items:center;justify-content:center;box-shadow:var(--pop-3)}
+    .br-avatar-eye{display:flex;gap:14px;align-items:center}
+    .br-avatar-eye span{display:block;width:18px;height:18px;border-radius:50%;background:var(--ink)}
+    .br-avatar-rays{position:absolute;inset:-22px;border-radius:50%;pointer-events:none}
+
+    /* Logo wordmark */
+    .br-logo{font-family:var(--display);font-size:42px;line-height:.9;letter-spacing:-.02em;text-transform:uppercase;color:var(--ink)}
+    .br-logo-sub{font-family:var(--mono);font-weight:700;font-size:11px;letter-spacing:.22em;text-transform:uppercase;background:var(--ink);color:var(--cream);padding:4px 10px;border-radius:99px;display:inline-block}
+
+    /* Dotted halftone for backgrounds */
+    .br-dots{background-image:radial-gradient(var(--ink) 1.4px, transparent 1.6px);background-size:14px 14px;background-position:0 0}
+    .br-stripes{background-image:repeating-linear-gradient(45deg, var(--ink) 0 4px, transparent 4px 14px)}
+    .br-grid-cream{background:var(--cream)}
+
+    /* Helpers */
+    .row{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+    .col{display:flex;flex-direction:column;gap:14px}
+    .center{display:flex;align-items:center;justify-content:center}
+  </style>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script type="text/babel" src="brutalist/design-canvas.jsx"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" src="brutalist/kit.jsx"></script>
+</body>
+</html>

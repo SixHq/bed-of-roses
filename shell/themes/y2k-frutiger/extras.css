@@ -1,0 +1,1173 @@
+/* Y2K Frutiger Aero — component-level overrides.
+   The shell's structural CSS uses thin hairlines and soft halos. Aero
+   needs FROSTED GLASS surfaces (backdrop-filter: blur), GEL buttons with
+   a hard 50% gloss break and specular highlight, and SOFT outer drop
+   shadows in cyan/blue. This file overrides the shell defaults
+   selectively. Anything not redefined keeps the shell's structure.
+
+   The design file is the source of truth — values here mirror it. */
+
+/* -------------------------------------------------------------------
+   Wallpaper — Aero NEEDS a saturated sky background under the glass.
+   Without it, backdrop-filter blur reads grey and the whole theme
+   collapses. Multi-stop blue gradient + a soft lime bleed at the
+   horizon (the design file's signature touch).
+------------------------------------------------------------------- */
+.wallpaper {
+  background:
+    /* warm specular highlight upper-right — like a sun in the sky */
+    radial-gradient(ellipse 60% 40% at 85% 8%,
+      rgba(255, 255, 255, 0.85),
+      transparent 60%),
+    /* lime bleed at the horizon — the optimistic spring touch */
+    radial-gradient(ellipse 50% 30% at 18% 95%,
+      rgba(168, 224, 99, 0.42),
+      transparent 65%),
+    /* aqua warmth lower-right — depth + the mid-2000s green/blue tension */
+    radial-gradient(ellipse 60% 40% at 92% 100%,
+      rgba(0, 213, 255, 0.40),
+      transparent 70%),
+    /* main sky gradient — the canvas */
+    linear-gradient(180deg,
+      #E5F4FF 0%,
+      #BFE7FF 30%,
+      #7FC8FF 70%,
+      #3BA8FF 100%);
+  opacity: 1;
+}
+
+/* -------------------------------------------------------------------
+   Headlines + greeting — Sora Display in restrained weights, NO italic.
+   Bloom is editorial-italic; Aero is corporate-optimistic-upright.
+   The negative tracking is what gives Sora its Frutiger-tense feel.
+------------------------------------------------------------------- */
+.headline,
+.subheadline,
+.modal-title,
+.tile-name,
+.greeting,
+.wordmark span,
+.theme-label,
+.presence-card-label {
+  font-style: normal;
+}
+.headline {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.02;
+  color: var(--ink);
+  /* A whisper of text-shadow lifts headlines off the gradient sky —
+     the original Aero treatment used a 1px white edge under big type. */
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+.subheadline {
+  color: var(--label-2);
+  letter-spacing: -0.005em;
+}
+.greeting {
+  font-family: var(--font-system);
+  font-weight: 500;
+  color: var(--ink-2);
+  letter-spacing: -0.005em;
+}
+/* Bouncing-ellipsis loading wink — three dots breathe in sequence after
+   the greeting line. Pure Aero "loading" theatre. Honors prefers-reduced-
+   motion below. */
+.greeting::after {
+  content: '\00B7\00B7\00B7';
+  display: inline-block;
+  margin-left: 6px;
+  letter-spacing: 0.2em;
+  color: var(--sky-3);
+  animation: y2k-ellipsis 1.4s var(--ease-standard) infinite;
+}
+@keyframes y2k-ellipsis {
+  0%, 20%   { opacity: 0.25; transform: translateY(0); }
+  40%       { opacity: 1.00; transform: translateY(-1px); }
+  60%, 100% { opacity: 0.25; transform: translateY(0); }
+}
+
+/* The wordmark gets a Sora 700 sticker-stamp look with negative tracking. */
+.wordmark {
+  color: var(--ink-2);
+}
+.wordmark span {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.08em;     /* mono-spaced wordmark stays loose */
+  text-transform: uppercase;
+}
+
+/* -------------------------------------------------------------------
+   Buttons — GEL. The Aero recipe (per the design file):
+     1. Linear gradient background with a HARD break at 50% (top half
+        bright, bottom half deep) — gives that plastic-snap feel.
+     2. Inset top hairline (white) — the specular highlight.
+     3. Inset bottom shadow — the bottom of the dome.
+     4. Soft outer drop shadow in deep blue.
+     5. ::before pseudo with a softer top-half gloss for the wet shine.
+   Border-radius is pill (999px) on the primary button — the design
+   file's gel buttons are pill-shaped, not rounded-rect.
+------------------------------------------------------------------- */
+.btn {
+  position: relative;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 999px;
+  font-family: var(--font-system);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  overflow: hidden;
+  transition: filter var(--d-micro) var(--ease-snap),
+              box-shadow var(--d-micro) var(--ease-snap),
+              transform var(--d-micro) var(--ease-snap);
+}
+/* Specular gloss — sits over the top half of every gel button. The
+   pointer-events:none keeps clicks reaching the button itself. */
+.btn::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: 3px;
+  height: 42%;
+  border-radius: 999px;
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.85),
+    rgba(255, 255, 255, 0.15));
+  pointer-events: none;
+}
+.btn-primary {
+  /* Hard 50% break — top half bright, bottom half deep electric blue. */
+  background: linear-gradient(180deg,
+    #7FC8FF 0%,
+    #3BA8FF 50%,
+    #0066FF 50.1%,
+    #003FA8 100%);
+  color: #FFFFFF;
+  text-shadow: 0 1px 0 rgba(0, 30, 90, 0.40);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -2px 0 rgba(0, 30, 90, 0.50),
+    0 8px 18px -2px rgba(0, 40, 120, 0.40),
+    0 1px 2px rgba(0, 40, 120, 0.30);
+}
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.06) saturate(1.05);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -2px 0 rgba(0, 30, 90, 0.50),
+    0 12px 28px -2px rgba(0, 102, 255, 0.45),
+    0 0 24px rgba(0, 213, 255, 0.30),
+    0 1px 2px rgba(0, 40, 120, 0.30);
+}
+.btn-primary:active:not(:disabled) {
+  transform: scale(0.985);
+  filter: brightness(0.98);
+}
+.btn-secondary {
+  /* Ghost gel — translucent white with the same gloss recipe. */
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.90) 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    rgba(255, 255, 255, 0.42) 50.1%,
+    rgba(255, 255, 255, 0.65) 100%);
+  color: var(--ink);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.70);
+  border-color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 6px 14px -4px rgba(0, 40, 120, 0.28);
+}
+.btn-secondary:hover:not(:disabled) {
+  filter: brightness(1.04);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    0 8px 20px -4px rgba(0, 102, 255, 0.30),
+    0 0 18px rgba(0, 213, 255, 0.22);
+}
+.btn:disabled,
+.btn[disabled] {
+  filter: saturate(0.4) brightness(1.05);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* -------------------------------------------------------------------
+   Inputs — frosted glass pill. The design file's input has an inset
+   top shadow (suggesting depth into the glass) and a thin white hairline
+   on the bottom edge (the specular reflection). Focus blooms a cyan ring.
+------------------------------------------------------------------- */
+.field-input,
+.field-select,
+.chat-input,
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="email"],
+input[type="url"],
+textarea {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.95),
+    rgba(255, 255, 255, 0.70));
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: var(--r-input);
+  font-family: var(--font-system);
+  font-weight: 500;
+  color: var(--ink);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 40, 120, 0.12),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.60),
+    0 1px 0 rgba(255, 255, 255, 0.60);
+}
+.field-input::placeholder,
+.chat-input::placeholder,
+textarea::placeholder {
+  color: var(--label-3);
+  font-style: normal;        /* override Bloom's italic placeholder */
+}
+.field-input:focus,
+.field-select:focus,
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+input[type="email"]:focus,
+input[type="url"]:focus,
+textarea:focus {
+  outline: 0;
+  border-color: rgba(0, 213, 255, 0.65);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 40, 120, 0.12),
+    0 0 0 3px rgba(0, 213, 255, 0.45),
+    0 0 0 6px rgba(0, 213, 255, 0.18);
+}
+.field-label,
+.color-section-label {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--label-2);
+}
+.field-label::before,
+.color-section-label::before {
+  /* Aero's eyebrow uses // not / — a borrowed code-comment vibe. */
+  content: '// ';
+  color: var(--sky-3);
+  opacity: 0.85;
+}
+
+/* -------------------------------------------------------------------
+   Tiles — frosted glass cards. Top-edge specular hairline (the 1px
+   white inner shadow), backdrop blur, soft outer drop shadow. Hover
+   lifts the tile and brightens its halo (the cyan gel-bloom).
+------------------------------------------------------------------- */
+.tile-thumb {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.78) 0%,
+    rgba(255, 255, 255, 0.36) 50%,
+    rgba(255, 255, 255, 0.42) 50.1%,
+    rgba(255, 255, 255, 0.16) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.70);
+  border-radius: var(--r-tile);
+  backdrop-filter: blur(16px) saturate(1.35);
+  -webkit-backdrop-filter: blur(16px) saturate(1.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.90),
+    inset 0 -10px 24px rgba(0, 102, 255, 0.06),
+    0 14px 32px -10px rgba(0, 40, 120, 0.28),
+    0 2px 4px rgba(0, 40, 120, 0.14);
+  color: var(--ink);
+}
+.tile:hover .tile-thumb {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.95);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -10px 24px rgba(0, 102, 255, 0.10),
+    0 18px 38px -10px rgba(0, 102, 255, 0.40),
+    0 0 28px rgba(0, 213, 255, 0.24),
+    0 2px 4px rgba(0, 40, 120, 0.18);
+}
+.tile:active .tile-thumb {
+  transform: translateY(0);
+  filter: brightness(0.98);
+}
+.tile-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.50);
+}
+/* On rich tiles (the bottom gradient mask is white-on-glass here, not
+   black-on-photo as Bloom assumes). */
+.tile:not([data-size="1x1"]) .tile-thumb::after {
+  background: linear-gradient(180deg,
+    transparent,
+    rgba(255, 255, 255, 0.55));
+}
+.tile:not([data-size="1x1"]) .tile-name {
+  color: var(--ink);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+/* -------------------------------------------------------------------
+   Modal — frosted glass sheet with a deeper drop shadow. Backdrop
+   blur is heavier than tiles so the modal feels "set apart".
+------------------------------------------------------------------- */
+.modal-backdrop {
+  /* Lighten the modal scrim — Aero never went near-black behind sheets;
+     it tinted the world cool blue. */
+  background: rgba(0, 40, 120, 0.32);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+}
+.modal-frame {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.88) 0%,
+    rgba(255, 255, 255, 0.62) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  border-radius: var(--r-modal);
+  backdrop-filter: blur(28px) saturate(1.5);
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 28px 60px -12px rgba(0, 40, 120, 0.45),
+    0 6px 12px rgba(0, 40, 120, 0.20);
+}
+.modal-header {
+  border-bottom: 1px solid rgba(0, 40, 120, 0.10);
+}
+.modal-title {
+  font-family: var(--font-mono);
+  color: var(--ink-2);
+  letter-spacing: 0.14em;
+}
+
+/* -------------------------------------------------------------------
+   Provider cards (connect pane) — frosted glass tiles in a vertical
+   stack. Connected/expanded states warm to a soft sky tint.
+------------------------------------------------------------------- */
+.provider-card {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.78) 0%,
+    rgba(255, 255, 255, 0.46) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  border-radius: 16px;
+  backdrop-filter: blur(16px) saturate(1.35);
+  -webkit-backdrop-filter: blur(16px) saturate(1.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.90),
+    0 10px 24px -8px rgba(0, 40, 120, 0.22);
+}
+.provider-card:hover {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.88) 0%,
+    rgba(207, 232, 255, 0.55) 100%);
+  border-color: rgba(255, 255, 255, 0.95);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    0 14px 32px -8px rgba(0, 102, 255, 0.30),
+    0 0 22px rgba(0, 213, 255, 0.18);
+}
+.provider-card.expanded {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(207, 232, 255, 0.65) 100%);
+  border-color: rgba(0, 213, 255, 0.45);
+}
+.provider-card.connected {
+  border-color: rgba(0, 213, 255, 0.55);
+}
+.provider-name {
+  font-family: var(--font-display);
+  font-style: normal;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.015em;
+}
+.provider-status {
+  font-family: var(--font-mono);
+  color: var(--label-2);
+  letter-spacing: 0.04em;
+}
+.status-dot {
+  background: var(--label-4);
+}
+.provider-card.connected .status-dot {
+  /* Lime gel dot — connected is celebratory in Aero. */
+  background: radial-gradient(circle at 30% 25%,
+    #FFFFFF 0%,
+    #A8E063 55%,
+    #5FC92F 100%);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.65),
+              0 0 8px rgba(95, 201, 47, 0.55);
+}
+.default-pill {
+  font-family: var(--font-mono);
+  background: linear-gradient(180deg, #D6FF9D, #5FC92F);
+  color: #15330A;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  letter-spacing: 0.10em;
+}
+
+/* Drawer divider inside provider cards */
+.provider-drawer-content {
+  border-top-color: rgba(0, 40, 120, 0.12);
+}
+
+/* Preset chips inside provider drawers — glass pills. */
+.preset-chip {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.92),
+    rgba(255, 255, 255, 0.58));
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  color: var(--ink);
+  font-family: var(--font-system);
+  font-weight: 500;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85),
+              0 3px 8px -2px rgba(0, 40, 120, 0.18);
+}
+.preset-chip:hover {
+  background: linear-gradient(180deg, #7FC8FF, #0066FF);
+  color: #FFFFFF;
+  border-color: rgba(255, 255, 255, 0.70);
+  text-shadow: 0 1px 0 rgba(0, 30, 90, 0.30);
+}
+
+/* Signup link inside the drawer — keep the subtle hairline underline. */
+.signup-link {
+  color: var(--sky-3);
+  border-bottom-color: rgba(0, 102, 255, 0.30);
+}
+.signup-link:hover {
+  color: var(--ink);
+  border-bottom-color: var(--sky-3);
+}
+
+/* -------------------------------------------------------------------
+   Presence + theme picker cards — same frosted glass recipe; selection
+   uses a cyan ring + slight lift, not Bloom's flat colour shift.
+------------------------------------------------------------------- */
+.presence-card,
+.theme-card {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.78) 0%,
+    rgba(255, 255, 255, 0.42) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  border-radius: 18px;
+  backdrop-filter: blur(16px) saturate(1.35);
+  -webkit-backdrop-filter: blur(16px) saturate(1.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.90),
+    0 10px 22px -8px rgba(0, 40, 120, 0.22);
+}
+.presence-card:hover,
+.theme-card:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(207, 232, 255, 0.55) 100%);
+  border-color: rgba(255, 255, 255, 0.95);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    0 16px 36px -8px rgba(0, 102, 255, 0.30),
+    0 0 26px rgba(0, 213, 255, 0.20);
+}
+.presence-card.selected,
+.theme-card.selected {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.94) 0%,
+    rgba(190, 228, 255, 0.65) 100%);
+  border-color: rgba(0, 213, 255, 0.65);
+}
+.presence-card.selected::after,
+.theme-card.selected::after {
+  /* Cyan halo ring — replaces Bloom's white inner ring. */
+  border-radius: inherit;
+  box-shadow:
+    0 0 0 2px rgba(0, 213, 255, 0.55),
+    0 0 18px rgba(0, 213, 255, 0.35);
+  inset: -2px;
+}
+.theme-swatches {
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+.presence-card-label,
+.theme-label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.005em;
+}
+.presence-card-sub,
+.theme-tagline {
+  font-family: var(--font-system);
+  color: var(--label-2);
+  letter-spacing: 0;
+}
+
+/* Onboarding + presence — match the Y2K kit's glossy gel presence orbs. */
+html[data-theme="y2k-frutiger"] .onboarding .pane-content {
+  background:
+    radial-gradient(circle at 82% 8%, rgba(255, 255, 255, 0.82), transparent 26%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(202, 233, 255, 0.54));
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  border-radius: 24px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    0 24px 60px rgba(0, 40, 120, 0.28);
+  backdrop-filter: blur(18px) saturate(1.35);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  padding: 32px;
+}
+
+html[data-theme="y2k-frutiger"] .onboarding .presence-content {
+  max-width: 760px;
+  align-items: flex-start;
+  text-align: left;
+}
+
+html[data-theme="y2k-frutiger"] .pane[data-pane="presence"] .presence-grid {
+  gap: 32px;
+}
+
+html[data-theme="y2k-frutiger"] .pane[data-pane="presence"] .presence-card {
+  min-height: 154px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  overflow: visible;
+  gap: 8px;
+}
+
+html[data-theme="y2k-frutiger"] .pane[data-pane="presence"] .presence-card::before,
+html[data-theme="y2k-frutiger"] .pane[data-pane="presence"] .presence-card::after {
+  display: none;
+}
+
+html[data-theme="y2k-frutiger"] .pane[data-pane="presence"] .presence-canvas-wrap {
+  width: 120px;
+  height: 120px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-theme="y2k-frutiger"] .pane[data-pane="presence"] .presence-orb {
+  display: block;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #fff 0%, var(--presence-y2k-1) 22%, var(--presence-y2k-2) 55%, var(--presence-y2k-3) 100%);
+  box-shadow:
+    inset 0 -10px 26px rgba(0, 30, 90, 0.55),
+    0 14px 30px rgba(0, 30, 90, 0.32),
+    0 2px 4px rgba(0, 30, 90, 0.25);
+}
+
+html[data-theme="y2k-frutiger"] .pane[data-pane="presence"] .presence-orb::before {
+  content: "";
+  position: absolute;
+  left: 16%;
+  right: 16%;
+  top: 8%;
+  height: 30%;
+  border-radius: 50%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0));
+}
+
+html[data-theme="y2k-frutiger"] .pane[data-pane="presence"] .presence-face,
+html[data-theme="y2k-frutiger"] .pane[data-pane="presence"] .presence-block,
+html[data-theme="y2k-frutiger"] .pane[data-pane="presence"] .presence-stamp,
+html[data-theme="y2k-frutiger"] .pane[data-pane="presence"] .presence-pixel-face {
+  display: none;
+}
+
+html[data-theme="y2k-frutiger"] .pane[data-pane="presence"] .presence-card.selected .presence-orb {
+  outline: 3px solid rgba(255, 255, 255, 0.95);
+  outline-offset: 6px;
+}
+
+html[data-theme="y2k-frutiger"] .pane[data-pane="presence"] .presence-card-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+html[data-theme="y2k-frutiger"] .pane[data-pane="presence"] .presence-card-sub {
+  color: var(--ink-2);
+}
+
+html[data-theme="y2k-frutiger"] .pane[data-pane="presence"] .color-section {
+  display: none;
+}
+
+/* Color picker swatches — gel-domed circles with a specular highlight. */
+.color-swatch {
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 4px 10px -2px rgba(0, 40, 120, 0.30);
+}
+.color-swatch::before {
+  /* Gloss highlight on top of every swatch — Aero loved a domed dot. */
+  content: '';
+  position: absolute;
+  inset: 4px 6px auto 6px;
+  height: 38%;
+  border-radius: 50%;
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.85),
+    rgba(255, 255, 255, 0));
+  pointer-events: none;
+  z-index: 1;
+}
+.color-swatch.selected {
+  border-color: rgba(0, 213, 255, 0.85);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 0 0 2px var(--canvas),
+    0 0 0 4px rgba(0, 213, 255, 0.75),
+    0 4px 10px -2px rgba(0, 102, 255, 0.45);
+}
+
+/* Pill chips (gender / hair pickers) — gel pills. */
+.chip {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.92),
+    rgba(255, 255, 255, 0.55));
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  color: var(--ink);
+  font-family: var(--font-system);
+  font-weight: 500;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 3px 8px -2px rgba(0, 40, 120, 0.18);
+}
+.chip:hover {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 1),
+    rgba(207, 232, 255, 0.75));
+  color: var(--ink);
+  border-color: rgba(255, 255, 255, 0.95);
+}
+.chip.selected {
+  background: linear-gradient(180deg, #7FC8FF, #0066FF);
+  color: #FFFFFF;
+  border-color: rgba(255, 255, 255, 0.70);
+  text-shadow: 0 1px 0 rgba(0, 30, 90, 0.30);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 4px 12px -2px rgba(0, 102, 255, 0.40);
+}
+
+/* -------------------------------------------------------------------
+   Chat orb — translucent gel pill. Collapsed: solid gel orb with a
+   cyan halo. Expanded: frosted glass pill with backdrop blur. Focus
+   state blooms the cyan halo (TTS-speaking already pulses via shell).
+------------------------------------------------------------------- */
+.chat-orb {
+  /* Cyan gel-bloom halo — replaces the presence-color drop shadow. */
+  filter: drop-shadow(0 6px 18px rgba(0, 102, 255, 0.35))
+          drop-shadow(0 0 12px rgba(0, 213, 255, 0.25));
+}
+.chat-orb[data-state="collapsed"] {
+  /* The collapsed orb IS the send button (Bloom paints the button below). */
+}
+.chat-orb[data-state="expanded"] {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(255, 255, 255, 0.62) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(22px) saturate(1.5);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 0 0 3px rgba(0, 213, 255, 0.18),
+    0 14px 36px -8px rgba(0, 40, 120, 0.40),
+    0 0 24px rgba(0, 213, 255, 0.20);
+}
+.chat-orb .chat-input {
+  color: var(--ink);
+  font-family: var(--font-system);
+}
+.chat-orb .chat-input::placeholder {
+  color: var(--label-3);
+  font-family: var(--font-system);
+  font-style: normal;
+  font-size: 16px;
+}
+.chat-orb .chat-input:focus {
+  background: transparent;
+  box-shadow: none;
+}
+/* Send button — gel orb with the hard 50% break. */
+.chat-orb .chat-send {
+  background: linear-gradient(180deg,
+    #7FC8FF 0%,
+    #3BA8FF 50%,
+    #0066FF 50.1%,
+    #003FA8 100%);
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.70);
+  position: relative;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -2px 0 rgba(0, 30, 90, 0.50),
+    0 6px 14px -2px rgba(0, 40, 120, 0.40);
+}
+.chat-orb .chat-send::before {
+  /* Domed top-half gloss on the send orb. */
+  content: '';
+  position: absolute;
+  inset: 4px 6px auto 6px;
+  height: 42%;
+  border-radius: 50%;
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.85),
+    rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+.chat-orb .chat-send:hover { filter: brightness(1.08) saturate(1.05); }
+html[data-theme="y2k-frutiger"] .chat-send .chat-presence {
+  inset: 6px;
+  filter: none;
+}
+html[data-theme="y2k-frutiger"] .chat-send .presence-orb {
+  display: block;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #fff 0%, var(--presence-y2k-1) 22%, var(--presence-y2k-2) 55%, var(--presence-y2k-3) 100%);
+  box-shadow:
+    inset 0 -5px 13px rgba(0, 30, 90, 0.50),
+    0 3px 6px rgba(0, 30, 90, 0.24);
+}
+html[data-theme="y2k-frutiger"] .chat-send .presence-orb::before {
+  content: "";
+  position: absolute;
+  left: 16%;
+  right: 16%;
+  top: 8%;
+  height: 30%;
+  border-radius: 50%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0));
+}
+html[data-theme="y2k-frutiger"] .chat-send .presence-face,
+html[data-theme="y2k-frutiger"] .chat-send .presence-block,
+html[data-theme="y2k-frutiger"] .chat-send .presence-stamp,
+html[data-theme="y2k-frutiger"] .chat-send .presence-pixel-face {
+  display: none;
+}
+
+/* -------------------------------------------------------------------
+   HUD corner labels — silver/cyan tone, JetBrains Mono. The shell uses
+   the avatar color rgb for HUD; we override to silver-on-sky so the
+   labels read as period telemetry.
+------------------------------------------------------------------- */
+.hud {
+  font-family: var(--font-mono);
+}
+.hud-cell {
+  color: rgba(10, 42, 77, 0.55);
+  letter-spacing: 0.16em;
+}
+.hud-label {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+.hud-meta {
+  color: var(--label-3);
+}
+.hud-tick {
+  color: var(--sky-3);
+}
+
+/* -------------------------------------------------------------------
+   Onboarding pane hero — round dot inside a glass capsule.
+------------------------------------------------------------------- */
+.pane-hero {
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.78),
+    rgba(255, 255, 255, 0.36));
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 8px 18px -6px rgba(0, 40, 120, 0.28);
+}
+.pane-hero::after {
+  /* Lime-gel pulse dot — replaces the white dot. */
+  background: radial-gradient(circle at 30% 25%,
+    #FFFFFF 0%,
+    #A8E063 55%,
+    #5FC92F 100%);
+  box-shadow: 0 0 8px rgba(95, 201, 47, 0.55);
+}
+
+/* Onboarding progress hairline — switch from white to the electric blue. */
+.onboarding-progress {
+  background: linear-gradient(90deg, var(--sky-3), var(--aqua));
+  height: 2px;
+  box-shadow: 0 0 8px rgba(0, 213, 255, 0.45);
+}
+
+/* -------------------------------------------------------------------
+   Icon button (chrome top-right) — gel circle.
+------------------------------------------------------------------- */
+.icon-button {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.85),
+    rgba(255, 255, 255, 0.45));
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  color: var(--ink-2);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 3px 8px -2px rgba(0, 40, 120, 0.20);
+}
+.icon-button:hover {
+  background: linear-gradient(180deg, #FFFFFF, rgba(207, 232, 255, 0.85));
+  color: var(--ink);
+  border-color: rgba(255, 255, 255, 0.95);
+}
+
+/* -------------------------------------------------------------------
+   Selection — softer cyan than Bloom's lilac.
+------------------------------------------------------------------- */
+::selection {
+  background: rgba(0, 213, 255, 0.35);
+  color: var(--ink);
+}
+
+/* -------------------------------------------------------------------
+   Reduced motion — kill the bouncing ellipsis for users who asked.
+------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .greeting::after { animation: none; opacity: 0.55; }
+}
+
+/* Built-in apps — Y2K / Frutiger Aero standalone kit:
+   sky backdrops, gel surfaces, glossy plastic highlights, water droplets. */
+html[data-theme="y2k-frutiger"] #system-modal .modal-backdrop {
+  background:
+    radial-gradient(circle at 74% 12%, rgba(255, 255, 255, 0.58), transparent 30%),
+    radial-gradient(circle at 14% 86%, rgba(168, 224, 99, 0.26), transparent 38%),
+    rgba(25, 130, 215, 0.46);
+  backdrop-filter: blur(18px) saturate(145%);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .system-frame {
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 84% 10%, rgba(255, 255, 255, 0.82), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(205, 236, 255, 0.62) 48%, rgba(126, 200, 255, 0.54));
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  border-radius: 26px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    inset 0 -1px 0 rgba(0, 102, 255, 0.16),
+    0 24px 60px rgba(0, 40, 120, 0.38);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .modal-header {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(198, 230, 255, 0.54));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 1px 0 #fff, 0 8px 18px rgba(0, 102, 255, 0.12);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .modal-title {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: 0;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .modal-actions button,
+html[data-theme="y2k-frutiger"] #system-modal .files-nav,
+html[data-theme="y2k-frutiger"] #system-modal .files-action,
+html[data-theme="y2k-frutiger"] #system-modal .files-place,
+html[data-theme="y2k-frutiger"] #system-modal .browser-launch .btn,
+html[data-theme="y2k-frutiger"] #system-modal .browser-actions .btn {
+  background:
+    var(--gel-gloss),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(190, 225, 255, 0.76));
+  color: var(--ink);
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    0 6px 14px rgba(0, 72, 150, 0.22);
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .files-action:hover,
+html[data-theme="y2k-frutiger"] #system-modal .files-nav:hover,
+html[data-theme="y2k-frutiger"] #system-modal .files-place:hover,
+html[data-theme="y2k-frutiger"] #system-modal .browser-launch .btn:hover,
+html[data-theme="y2k-frutiger"] #system-modal .browser-actions .btn:hover {
+  filter: saturate(1.12) brightness(1.03);
+  transform: translateY(-1px);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .btn-primary,
+html[data-theme="y2k-frutiger"] #system-modal .files-place.active,
+html[data-theme="y2k-frutiger"] #system-modal .file-row.selected {
+  background:
+    var(--gel-gloss),
+    linear-gradient(180deg, rgba(168, 224, 99, 0.95), rgba(0, 213, 255, 0.70));
+  border-color: rgba(255, 255, 255, 1);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .files-app,
+html[data-theme="y2k-frutiger"] #system-modal .browser-app {
+  background:
+    radial-gradient(circle at 86% 14%, rgba(255, 255, 255, 0.74), transparent 22%),
+    radial-gradient(circle at 20% 88%, rgba(168, 224, 99, 0.30), transparent 38%),
+    linear-gradient(180deg, rgba(229, 244, 255, 0.70), rgba(126, 200, 255, 0.32));
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .files-sidebar {
+  background: rgba(255, 255, 255, 0.44);
+  border-right: 1px solid rgba(255, 255, 255, 0.74);
+  box-shadow: inset -1px 0 0 rgba(0, 102, 255, 0.08);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .system-app-brand {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 800;
+  text-shadow: 0 1px 0 #fff;
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .system-app-glyph,
+html[data-theme="y2k-frutiger"] #system-modal .system-app-glyph::before,
+html[data-theme="y2k-frutiger"] #system-modal .files-place-icon,
+html[data-theme="y2k-frutiger"] #system-modal .files-place-icon::before {
+  background:
+    var(--gel-gloss),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(0, 213, 255, 0.32));
+  border-color: rgba(255, 255, 255, 0.92);
+  box-shadow: inset 0 1px 0 #fff, 0 3px 8px rgba(0, 102, 255, 0.18);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .files-toolbar {
+  background: rgba(255, 255, 255, 0.36);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow: 0 8px 18px rgba(0, 102, 255, 0.10);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .files-path,
+html[data-theme="y2k-frutiger"] #system-modal .browser-url {
+  background: rgba(255, 255, 255, 0.74);
+  color: var(--ink);
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  box-shadow: inset 0 1px 0 #fff, 0 5px 14px rgba(0, 102, 255, 0.12);
+  font-weight: 600;
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .files-list {
+  background: rgba(255, 255, 255, 0.28);
+  border-right: 1px solid rgba(255, 255, 255, 0.70);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .file-row,
+html[data-theme="y2k-frutiger"] #system-modal .browser-status,
+html[data-theme="y2k-frutiger"] #system-modal .browser-details div {
+  color: var(--ink);
+  background:
+    var(--gel-gloss),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(218, 241, 255, 0.56));
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  border-radius: 16px;
+  box-shadow: inset 0 1px 0 #fff, 0 8px 18px rgba(0, 80, 160, 0.16);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .file-row {
+  margin-bottom: 10px;
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .file-icon[data-kind],
+html[data-theme="y2k-frutiger"] #system-modal .file-icon[data-kind]::before,
+html[data-theme="y2k-frutiger"] #system-modal .file-icon[data-kind]::after,
+html[data-theme="y2k-frutiger"] #system-modal .files-preview-icon,
+html[data-theme="y2k-frutiger"] #system-modal .files-preview-icon::before,
+html[data-theme="y2k-frutiger"] #system-modal .files-preview-large-icon,
+html[data-theme="y2k-frutiger"] #system-modal .files-preview-large-icon::before,
+html[data-theme="y2k-frutiger"] #system-modal .files-preview-large-icon::after {
+  border-color: rgba(255, 255, 255, 0.95);
+  background:
+    var(--gel-gloss),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(0, 213, 255, 0.34));
+  box-shadow: inset 0 1px 0 #fff, 0 6px 14px rgba(0, 102, 255, 0.18);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .file-icon[data-kind="dir"],
+html[data-theme="y2k-frutiger"] #system-modal .file-icon[data-kind="dir"]::before,
+html[data-theme="y2k-frutiger"] #system-modal .files-preview-icon,
+html[data-theme="y2k-frutiger"] #system-modal .files-preview-icon::before,
+html[data-theme="y2k-frutiger"] #system-modal .files-preview-folder,
+html[data-theme="y2k-frutiger"] #system-modal .files-preview-folder::before {
+  background:
+    var(--gel-gloss),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(168, 224, 99, 0.48));
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .file-name {
+  font-weight: 700;
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .file-meta,
+html[data-theme="y2k-frutiger"] #system-modal .files-preview-kind,
+html[data-theme="y2k-frutiger"] #system-modal .browser-details span {
+  color: rgba(10, 42, 77, 0.58);
+  font-weight: 700;
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .files-preview {
+  background:
+    radial-gradient(circle at 76% 14%, rgba(255, 255, 255, 0.82), transparent 24%),
+    radial-gradient(circle at 20% 80%, rgba(0, 213, 255, 0.24), transparent 42%),
+    rgba(255, 255, 255, 0.36);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .files-preview-card {
+  color: var(--ink);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .files-download-link {
+  color: var(--sky-3);
+  font-weight: 800;
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .files-illustration {
+  right: 26px;
+  top: 78px;
+  width: 230px;
+  height: 184px;
+  opacity: 0.36;
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .files-illustration-folder,
+html[data-theme="y2k-frutiger"] #system-modal .files-illustration-card,
+html[data-theme="y2k-frutiger"] #system-modal .files-illustration-dot {
+  position: absolute;
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  background:
+    var(--gel-gloss),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(0, 213, 255, 0.28));
+  box-shadow: inset 0 1px 0 #fff, 0 14px 28px rgba(0, 102, 255, 0.24);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .files-illustration-folder {
+  left: 0;
+  top: 38px;
+  width: 154px;
+  height: 100px;
+  border-radius: 28px;
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .files-illustration-folder::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: 16px;
+  width: 80px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .files-illustration-card {
+  right: 8px;
+  bottom: 2px;
+  width: 76px;
+  height: 96px;
+  border-radius: 22px;
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .files-illustration-dot {
+  right: 22px;
+  top: 10px;
+  width: 58px;
+  height: 66px;
+  border-radius: 52% 48% 54% 46%;
+  background: radial-gradient(circle at 34% 24%, #fff, var(--lime) 34%, var(--aqua) 72%);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .browser-status.ready {
+  border-color: rgba(168, 224, 99, 0.92);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .browser-status.error {
+  border-color: rgba(255, 80, 120, 0.74);
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .browser-details div {
+  padding: 12px;
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .browser-details code,
+html[data-theme="y2k-frutiger"] #system-modal .browser-status strong,
+html[data-theme="y2k-frutiger"] #system-modal .browser-status span {
+  color: currentColor;
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .browser-illustration {
+  color: rgba(10, 42, 77, 0.42);
+  opacity: 0.28;
+}
+
+html[data-theme="y2k-frutiger"] #system-modal .browser-illustration-window,
+html[data-theme="y2k-frutiger"] #system-modal .browser-illustration-window::before,
+html[data-theme="y2k-frutiger"] #system-modal .browser-illustration-globe {
+  border-color: rgba(255, 255, 255, 0.92);
+  background:
+    var(--gel-gloss),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(0, 213, 255, 0.18));
+  box-shadow: inset 0 1px 0 #fff, 0 12px 24px rgba(0, 102, 255, 0.22);
+}
+
+html[data-theme="y2k-frutiger"] .thought-bubble {
+  --thought-bg:
+    var(--gel-gloss),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(151, 222, 255, 0.68));
+  --thought-border: rgba(255, 255, 255, 0.92);
+  --thought-text: #06254f;
+  --thought-shadow: inset 0 1px 0 #fff, 0 18px 34px rgba(0, 102, 255, 0.28), 0 0 0 1px rgba(0, 102, 255, 0.18);
+  border-radius: 30px 30px 12px 30px;
+}
+
+html[data-theme="y2k-frutiger"] .thought-bubble::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 22px;
+  top: 7px;
+  height: 13px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+}

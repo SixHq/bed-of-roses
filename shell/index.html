@@ -10,7 +10,27 @@
        available everywhere style.css references them. The link tag carries
        data-theme="..." so app.js can swap it out at runtime when the user
        picks a different theme. The id below corresponds to shell/themes/<id>/. -->
-  <link rel="stylesheet" id="theme-tokens" href="/themes/bloom/tokens.css" data-theme="bloom" data-role="tokens" />
+  <script>
+    (() => {
+      const themes = {
+        bloom: ['/themes/bloom/tokens.css', ''],
+        'cartoon-brutalist': ['/themes/cartoon-brutalist/tokens.css', '/themes/cartoon-brutalist/extras.css'],
+        'warm-earthy': ['/themes/warm-earthy/tokens.css', '/themes/warm-earthy/extras.css'],
+        'neo-brutalist': ['/themes/neo-brutalist/tokens.css', '/themes/neo-brutalist/extras.css'],
+        'y2k-frutiger': ['/themes/y2k-frutiger/tokens.css', '/themes/y2k-frutiger/extras.css'],
+        'liquid-glass': ['/themes/liquid-glass/tokens.css', '/themes/liquid-glass/extras.css'],
+        'pixel-crt': ['/themes/pixel-crt/tokens.css', '/themes/pixel-crt/extras.css'],
+        risograph: ['/themes/risograph/tokens.css', '/themes/risograph/extras.css'],
+      };
+      const saved = localStorage.getItem('bor.baseTheme') || 'bloom';
+      const id = themes[saved] ? saved : 'bloom';
+      const [tokens, extras] = themes[id];
+      document.documentElement.dataset.theme = id;
+      window.__BOR_BOOT_THEME = id;
+      document.write(`<link rel="stylesheet" id="theme-tokens" href="${tokens}" data-theme="${id}" data-role="tokens" />`);
+      if (extras) document.write(`<link rel="stylesheet" href="${extras}" data-theme="${id}" data-role="extras" />`);
+    })();
+  </script>
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -23,9 +43,6 @@
   <!-- Ambient field: drifting motes that tint with the avatar color.
        Sits at the back of every screen so onboarding and home share atmosphere. -->
   <canvas id="ambient-bg" class="ambient-bg" aria-hidden="true"></canvas>
-
-  <!-- Decoration layer: autonomous SVG objects placed by create_svg. -->
-  <div id="decor-layer" class="decor-layer" aria-hidden="true"></div>
 
   <!-- HUD: diegetic corner status lines. Visible during onboarding to signal
        you're inside a system, faded out once you reach home. -->
@@ -50,7 +67,48 @@
 
   <!-- Splash: full brand lockup, fades in/out -->
   <section id="splash" class="screen splash">
-    <img class="splash-logo" src="/assets/logo-full-dark.svg" alt="Bed of Roses" />
+    <div class="splash-lockup" aria-label="Bed of Roses">
+      <div class="splash-chrome splash-chrome-top" aria-hidden="true">
+        <span>FIG.01</span><span>BOOT LOCKUP</span>
+      </div>
+
+      <div class="splash-mark" aria-hidden="true">
+        <div class="splash-mark-flower">
+          <svg viewBox="0 0 48 48" width="56" height="56">
+            <circle cx="24" cy="24" r="9"></circle>
+            <circle cx="24" cy="11" r="6"></circle>
+            <circle cx="11" cy="24" r="6"></circle>
+            <circle cx="37" cy="24" r="6"></circle>
+            <circle cx="24" cy="37" r="6"></circle>
+          </svg>
+        </div>
+        <div class="splash-mark-orb"><span class="splash-mark-letter">R</span><span class="splash-mark-petal"></span></div>
+        <div class="splash-mark-square">R<span>.</span></div>
+        <div class="splash-mark-stamp"><span>Bed of Roses</span></div>
+        <svg class="splash-mark-pixel" viewBox="0 0 16 16" shape-rendering="crispEdges">
+          <rect x="6" y="2" width="1" height="1" class="px-m"/><rect x="7" y="2" width="1" height="1" class="px-m"/><rect x="8" y="2" width="1" height="1" class="px-m"/>
+          <rect x="5" y="3" width="1" height="1" class="px-m"/><rect x="6" y="3" width="1" height="1" class="px-a"/><rect x="7" y="3" width="1" height="1" class="px-m"/><rect x="8" y="3" width="1" height="1" class="px-a"/><rect x="9" y="3" width="1" height="1" class="px-m"/>
+          <rect x="4" y="4" width="1" height="1" class="px-m"/><rect x="5" y="4" width="1" height="1" class="px-a"/><rect x="6" y="4" width="1" height="1" class="px-m"/><rect x="7" y="4" width="1" height="1" class="px-a"/><rect x="8" y="4" width="1" height="1" class="px-m"/><rect x="9" y="4" width="1" height="1" class="px-a"/><rect x="10" y="4" width="1" height="1" class="px-m"/>
+          <rect x="4" y="5" width="1" height="1" class="px-m"/><rect x="5" y="5" width="1" height="1" class="px-m"/><rect x="6" y="5" width="1" height="1" class="px-a"/><rect x="7" y="5" width="1" height="1" class="px-m"/><rect x="8" y="5" width="1" height="1" class="px-a"/><rect x="9" y="5" width="1" height="1" class="px-m"/><rect x="10" y="5" width="1" height="1" class="px-m"/>
+          <rect x="5" y="6" width="1" height="1" class="px-m"/><rect x="6" y="6" width="1" height="1" class="px-m"/><rect x="7" y="6" width="1" height="1" class="px-m"/><rect x="8" y="6" width="1" height="1" class="px-m"/><rect x="9" y="6" width="1" height="1" class="px-m"/>
+          <rect x="7" y="7" width="1" height="1" class="px-d"/><rect x="8" y="7" width="1" height="1" class="px-d"/>
+          <rect x="6" y="8" width="1" height="1" class="px-g"/><rect x="7" y="8" width="1" height="1" class="px-g"/><rect x="8" y="8" width="1" height="1" class="px-g"/><rect x="9" y="8" width="1" height="1" class="px-g"/>
+          <rect x="5" y="9" width="1" height="1" class="px-g"/><rect x="7" y="9" width="1" height="1" class="px-d"/><rect x="8" y="9" width="1" height="1" class="px-d"/><rect x="10" y="9" width="1" height="1" class="px-g"/>
+          <rect x="4" y="10" width="1" height="1" class="px-g"/><rect x="5" y="10" width="1" height="1" class="px-g"/><rect x="7" y="10" width="1" height="1" class="px-d"/><rect x="8" y="10" width="1" height="1" class="px-d"/><rect x="10" y="10" width="1" height="1" class="px-g"/><rect x="11" y="10" width="1" height="1" class="px-g"/>
+          <rect x="7" y="11" width="1" height="1" class="px-d"/><rect x="8" y="11" width="1" height="1" class="px-d"/><rect x="7" y="12" width="1" height="1" class="px-d"/><rect x="8" y="12" width="1" height="1" class="px-d"/><rect x="9" y="12" width="1" height="1" class="px-d"/><rect x="7" y="13" width="1" height="1" class="px-d"/>
+        </svg>
+      </div>
+
+      <div class="splash-wordmark">
+        <span class="splash-title">Bed of Roses</span>
+        <span class="splash-subtitle">a soft little OS</span>
+      </div>
+      <div class="splash-bootline" aria-hidden="true"><span></span><span></span><span></span></div>
+
+      <div class="splash-chrome splash-chrome-bottom" aria-hidden="true">
+        <span>INITIALIZING</span><span>READY</span>
+      </div>
+    </div>
   </section>
 
   <!-- Onboarding: full-viewport, single-task panes, top progress bar -->
@@ -103,18 +161,18 @@
       </div>
     </div>
 
-    <!-- Pane 4: presence (memoji preview cards + color picker) -->
+    <!-- Pane 4: presence (theme-specific state components from the design kits) -->
     <div class="pane" data-pane="presence">
       <div class="pane-content presence-content">
         <h1 class="headline">Choose a presence.</h1>
-        <p class="subheadline">Pick a personality and a color. Same intelligence — different feeling.</p>
+        <p class="subheadline">Pick the state shape your AI uses across the OS.</p>
 
         <div class="presence-grid" id="presence-grid" role="radiogroup" aria-label="Presence">
-          <!-- Cards inserted by app.js so each canvas can be individually mounted -->
+          <!-- Cards inserted by app.js from the active theme presence kit -->
         </div>
 
         <div class="color-section">
-          <span class="color-section-label">Color</span>
+          <span class="color-section-label">Fallback color</span>
           <div class="color-picker" id="color-picker" role="radiogroup" aria-label="Color">
             <!-- Color swatches inserted by app.js -->
           </div>
@@ -127,7 +185,42 @@
       </div>
     </div>
 
-    <!-- Pane 4: connect — provider tile grid -->
+    <!-- Pane 4: tools — install optional CLIs (browser-use today, ffmpeg/yt-dlp possible later) -->
+    <div class="pane" data-pane="tools">
+      <div class="pane-content tools-content">
+        <h1 class="headline">Set up your tools.</h1>
+        <p class="subheadline">Bed of Roses uses local CLIs for the things web APIs can't do — driving real browsers, watching the screen, transcoding video. You can skip these and install later.</p>
+
+        <div class="tools-list" id="tools-list">
+          <article class="tool-card" id="tool-browser-use" data-status="checking">
+            <div class="tool-head">
+              <div class="tool-title">
+                <span class="tool-name">browser-use</span>
+                <span class="tool-badge" id="browser-use-badge">checking…</span>
+              </div>
+              <p class="tool-blurb">Drives a real Chrome/Chromium so I can sign in to Gmail, send DMs, scrape JS-rendered pages, fill forms, and pull TikTok/Instagram/YouTube media. <strong>Without it I can only do basic web search and fetch — no logged-in actions, no scraping.</strong></p>
+            </div>
+            <div class="tool-body" id="browser-use-body">
+              <p class="tool-install-line">Install it once with <a href="https://pipx.pypa.io/stable/installation/" target="_blank" rel="noreferrer">pipx</a>:</p>
+              <pre class="tool-install-cmd"><code id="browser-use-cmd">pipx install browser-use</code></pre>
+              <p class="tool-detail-line">Then click <em>Re-check</em> below. Docs: <a href="https://github.com/browser-use/browser-use" target="_blank" rel="noreferrer">github.com/browser-use/browser-use</a></p>
+              <div class="tool-meta-line" id="browser-use-meta"></div>
+            </div>
+            <div class="tool-actions">
+              <button class="btn btn-tertiary" id="browser-use-copy" type="button">Copy command</button>
+              <button class="btn btn-tertiary" id="browser-use-recheck" type="button">Re-check</button>
+            </div>
+          </article>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" id="tools-back" type="button">Back</button>
+          <button class="btn btn-primary" id="tools-next" type="button">Continue</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pane 5: connect — provider tile grid -->
     <div class="pane" data-pane="connect">
       <div class="pane-content connect-content">
         <h1 class="headline">Connect a model.</h1>
@@ -149,6 +242,9 @@
 
   <!-- Home -->
   <section id="home" class="screen home hidden">
+    <!-- Decoration layer: autonomous SVG objects placed by create_svg. -->
+    <div id="decor-layer" class="decor-layer"></div>
+
     <header class="home-chrome">
       <div class="home-chrome-left">
         <div class="wordmark">
@@ -177,15 +273,19 @@
          draggable anywhere on the viewport. Click expands it horizontally
          into a pill at its current position; the persona stays as the right
          edge and remains the send control. -->
+    <aside id="thought-bubble" class="thought-bubble hidden" role="status" aria-live="polite" aria-atomic="true">
+      <div id="thought-bubble-text" class="thought-bubble-text"></div>
+    </aside>
     <form id="chat-form" class="chat-orb" data-state="collapsed" autocomplete="off">
       <input id="chat-input" class="chat-input" type="text" placeholder="Ask. Or describe what you need." autocomplete="off" />
       <button type="submit" class="chat-send" aria-label="Send / drag persona" id="chat-send">
-        <canvas id="chat-send-canvas" class="send-persona-canvas" aria-hidden="true"></canvas>
+        <span id="chat-send-presence" class="chat-presence presence-visual" aria-hidden="true"></span>
         <span class="persona-loader" aria-hidden="true"></span>
         <span class="persona-xml-loader" aria-hidden="true">
           <i></i><i></i><i></i>
         </span>
       </button>
+      <span id="connectivity-alert" class="connectivity-alert hidden" role="status" tabindex="0" aria-label="Internet connection is down">!</span>
     </form>
 
     <aside id="chat-log" class="chat-log" aria-live="polite"></aside>
@@ -208,7 +308,7 @@
             </button>
           </div>
         </header>
-        <iframe id="modal-iframe" sandbox="allow-scripts" title="Widget"></iframe>
+        <iframe id="modal-iframe" sandbox="allow-scripts allow-forms allow-modals" allow="camera; microphone; fullscreen; clipboard-write" title="Widget"></iframe>
       </div>
     </div>
 

@@ -1,0 +1,98 @@
+/* Theme: Cartoon Brutalist — cream paper + ink strokes + sticker energy.
+   Loud, playful, screen-printed-poster confidence.
+
+   Hallmarks:
+     • 3px solid ink stroke on every card / button / chip
+     • Hard offset shadows (no blur) — 4px to 10px depending on hierarchy
+     • Saturated pop palette on warm cream
+     • Archivo Black display ALL CAPS, Bricolage Grotesque body, Space Mono micro
+
+   The structural shell (shell/style.css) reads from these variables. The
+   companion extras.css adds the component-level treatments — thick strokes,
+   sticker rotations — that go beyond simple tokens. */
+
+@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+:root {
+  /* Surfaces — cream paper backdrop, brighter paper for elevated cards */
+  --canvas:    #FFF4DC;
+  --surface-1: #FFFAF0;
+  --surface-2: #FFE9C5;
+  --surface-3: #FFD9A0;
+  --bloom:     #FF4FA3;
+
+  /* Ink — every stroke and label is this color or a transparency thereof */
+  --ink:       #0A0A0A;
+  --ink-2:     #2A2620;
+
+  /* Hairlines */
+  --hairline:        rgba(10, 10, 10, 0.20);
+  --hairline-strong: rgba(10, 10, 10, 0.40);
+  --hairline-soft:   rgba(10, 10, 10, 0.10);
+
+  /* Labels — ink-on-cream */
+  --label:    #0A0A0A;
+  --label-2:  rgba(10, 10, 10, 0.68);
+  --label-3:  rgba(10, 10, 10, 0.45);
+  --label-4:  rgba(10, 10, 10, 0.28);
+
+  --fill-1: rgba(10, 10, 10, 0.10);
+  --fill-2: rgba(10, 10, 10, 0.06);
+  --fill-3: rgba(10, 10, 10, 0.04);
+
+  /* Pop palette */
+  --pop-pink:   #FF4FA3;
+  --pop-yellow: #FFD93D;
+  --pop-sky:    #6BCEFF;
+  --pop-mint:   #5FE3A1;
+  --pop-purple: #9B5DE5;
+  --pop-tomato: #FF6B45;
+  --pop-lilac:  #C4A8F0;
+
+  /* Default presence — Pink. Loud, on-brand for this theme. */
+  --avatar-color-rgb: 255, 79, 163;
+  --wallpaper: transparent;
+
+  /* Atmosphere — flat cream. Anti-gradient. */
+  --atmosphere: var(--canvas);
+
+  /* Halos REPLACED with hard offset shadows. */
+  --halo-soft:    4px 4px 0 0 var(--ink);
+  --halo-medium:  6px 6px 0 0 var(--ink);
+  --halo-strong:  8px 8px 0 0 var(--ink);
+  --shadow-deep: 10px 10px 0 0 var(--ink);
+
+  /* Spacing */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-7: 32px; --s-8: 40px;
+  --s-9: 56px; --s-10: 72px; --s-11: 96px;
+
+  /* Radii */
+  --r-input:  14px;
+  --r-button: 14px;
+  --r-bar:    16px;
+  --r-tile:   20px;
+  --r-modal:  22px;
+
+  /* Type */
+  --font-display: "Archivo Black", "Bricolage Grotesque", system-ui, sans-serif;
+  --font-system:  "Bricolage Grotesque", "Space Grotesk", system-ui, -apple-system, sans-serif;
+  --font-mono:    "Space Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
+
+  --t-hero:     72px;
+  --t-display:  48px;
+  --t-title-1:  32px;
+  --t-title-2:  22px;
+  --t-headline: 17px;
+  --t-body:     15px;
+  --t-subhead:  13px;
+  --t-caption:  11px;
+  --t-micro:    10px;
+
+  /* Motion — snappier than Bloom. */
+  --ease-standard: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-snap:     cubic-bezier(0.20, 0.00, 0.00, 1);
+  --d-micro:  120ms;
+  --d-pane:   320ms;
+  --d-layout: 520ms;
+}

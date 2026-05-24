@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css"><style>
+body{margin:0;padding:30px;display:flex;gap:22px;align-items:center;justify-content:center}
+.w{display:flex;flex-direction:column;align-items:center;gap:10px}
+.tile{position:relative;width:64px;height:64px;border-radius:18px;background:rgba(34,31,45,.55);border:1px solid rgba(220,210,255,.14);display:flex;align-items:center;justify-content:center;color:var(--label);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.tile::before{content:'';position:absolute;inset:0;border-radius:inherit;background:radial-gradient(ellipse 80% 80% at 30% 0%,rgba(var(--g),.22),transparent 60%);pointer-events:none}
+.l{font-family:var(--font-display);font-style:italic;font-size:14px;color:rgba(238,232,250,.7);letter-spacing:-.005em}
+</style></head><body>
+<div class="w"><div class="tile" style="--g:196,168,240"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/></svg></div><span class="l">Anthropic</span></div>
+<div class="w"><div class="tile" style="--g:143,229,197"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></div><span class="l">OpenAI</span></div>
+<div class="w"><div class="tile" style="--g:160,203,240"><svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 2C12 7 13 11 22 12C13 13 12 17 12 22C12 17 11 13 2 12C11 11 12 7 12 2Z"/></svg></div><span class="l">Gemini</span></div>
+<div class="w"><div class="tile" style="--g:244,158,186"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="6" cy="6" r="2.4" fill="currentColor"/><circle cx="18" cy="6" r="2.4" fill="currentColor"/><circle cx="12" cy="18" r="2.4" fill="currentColor"/><line x1="6" y1="6" x2="18" y2="6"/><line x1="6" y1="6" x2="12" y2="18"/><line x1="18" y1="6" x2="12" y2="18"/></svg></div><span class="l">Compatible</span></div>
+</body></html>

@@ -1,0 +1,133 @@
+/* Bed of Roses — design tokens
+   v0.4 "Bloom" — pivoted from cold instrument-panel monochrome to soft-futurism.
+   The system feels like a garden at dusk: deep aubergine night, iridescent
+   chromatic rim light, contemporary serif + grotesk type. Both-genders,
+   dreamlike, alive — not "machine code in a black box." */
+
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap');
+
+:root {
+  /* ── Surfaces — warm-shifted near-black with violet/plum undertone ── */
+  --canvas:       #07060B;   /* Night, not void. Holds a faint violet cast. */
+  --surface-1:    #15131D;   /* Cards, inputs, chat-bar pill */
+  --surface-2:    #221F2D;   /* Hover / selected / modal frame */
+  --surface-3:    #322D40;   /* Pressed / depth-3 controls */
+  --bloom:        #2A1F38;   /* Atmospheric tint band — used for radial washes */
+
+  /* ── Hairlines — tinted toward iridescent rather than neutral white ─ */
+  --hairline:         rgba(220, 210, 255, 0.10);
+  --hairline-strong:  rgba(220, 210, 255, 0.18);
+  --hairline-soft:    rgba(220, 210, 255, 0.06);
+
+  /* ── Labels ─────────────────────────────────────────────────── */
+  --label:    #F5F1FF;   /* Off-white with a warm violet hint */
+  --label-2:  rgba(238, 232, 250, 0.62);
+  --label-3:  rgba(238, 232, 250, 0.34);
+  --label-4:  rgba(238, 232, 250, 0.20);
+
+  /* ── Presence colors (the AI's chosen tint) ─────────────────── */
+  --presence-pearl:  #E8E8EE;
+  --presence-amber:  #F5C36B;
+  --presence-ember:  #F88E66;
+  --presence-bloom:  #F49EBA;
+  --presence-aurora: #8FE5C5;
+  --presence-frost:  #A0CBF0;
+  --presence-lilac:  #C4A8F0;
+  --presence-onyx:   #9B9BA5;
+
+  /* Default presence — soft lilac → reads as warm/cool simultaneously,
+     gender-neutral, dreamlike. Customised after onboarding. */
+  --avatar-color-rgb: 196, 168, 240;
+
+  --wallpaper: transparent;
+
+  /* ── Spacing — 4px base ─────────────────────────────────────── */
+  --s-1:  4px;  --s-2:  8px;  --s-3:  12px; --s-4:  16px;
+  --s-5:  20px; --s-6:  24px; --s-7:  32px; --s-8:  40px;
+  --s-9:  56px; --s-10: 72px; --s-11: 96px;
+
+  /* ── Radii ──────────────────────────────────────────────────── */
+  --r-input:  12px; --r-button: 14px; --r-bar:    16px;
+  --r-tile:   22px; --r-modal:  28px;
+
+  /* ── Typography — contemporary serif + grotesk pairing ──────── */
+  /* Display: Instrument Serif — soft editorial serif. Italic-capable. */
+  --font-display: "Instrument Serif", "Cormorant Garamond", Georgia, serif;
+  /* UI body: Geist — Vercel's neutral grotesk. Modern, warm, gender-neutral. */
+  --font-system:  "Geist", -apple-system, "Helvetica Neue", system-ui, sans-serif;
+  /* Mono: Geist Mono — pairs naturally. */
+  --font-mono:    "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --t-hero:     56px;
+  --t-display:  44px;
+  --t-title-1:  28px;
+  --t-title-2:  22px;
+  --t-headline: 17px;
+  --t-body:     15px;
+  --t-subhead:  13px;
+  --t-caption:  11px;
+  --t-micro:    10px;
+
+  /* ── Motion ─────────────────────────────────────────────────── */
+  --ease-standard: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-snap:     cubic-bezier(0.20, 0.00, 0.00, 1);
+  --d-micro:  200ms;
+  --d-pane:   360ms;
+  --d-layout: 600ms;
+
+  /* ── Glow / halo system — iridescent, multi-stop ────────────── */
+  --halo-soft:   0 0 24px  rgba(var(--avatar-color-rgb), 0.20);
+  --halo-medium: 0 0 60px  rgba(var(--avatar-color-rgb), 0.16);
+  --halo-strong: 0 0 100px rgba(var(--avatar-color-rgb), 0.22);
+  --shadow-deep: 0 12px 32px rgba(0, 0, 0, 0.55);
+
+  /* Atmospheric body background — used as page bg in card previews
+     so surfaces sit on a living gradient, not a flat void. */
+  --atmosphere:
+    radial-gradient(ellipse 80% 60% at 20% 0%, rgba(196,168,240,0.10), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 90% 100%, rgba(143,229,197,0.08), transparent 65%),
+    radial-gradient(ellipse 60% 60% at 60% 50%, rgba(244,158,186,0.05), transparent 70%),
+    var(--canvas);
+}
+
+/* ───────────────────────────────────────────────────────────────
+   Semantic type rules.
+─────────────────────────────────────────────────────────────── */
+
+html, body {
+  background: var(--atmosphere);
+  color: var(--label);
+  font-family: var(--font-system);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.004em;
+}
+
+/* Display headlines opt into the serif. Italic is part of the register. */
+.t-hero, .t-display, h1.headline {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.015em;
+}
+
+.t-hero    { font-size: var(--t-hero); line-height: 1.05; }
+.t-display { font-size: var(--t-display); line-height: 1.08; }
+
+.t-title-1, h2 { font-family: var(--font-system); font-size: var(--t-title-1); line-height: 32px; letter-spacing: -0.018em; font-weight: 500; color: var(--label); }
+.t-title-2, h3 { font-family: var(--font-system); font-size: var(--t-title-2); line-height: 28px; letter-spacing: -0.012em; font-weight: 500; color: var(--label); }
+.t-headline    { font-size: var(--t-headline); line-height: 22px; letter-spacing: -0.008em; font-weight: 500; color: var(--label); }
+.t-body, p     { font-size: var(--t-body); line-height: 22px; font-weight: 400; color: var(--label-2); }
+.t-subhead     { font-size: var(--t-subhead); line-height: 18px; font-weight: 500; color: var(--label-2); }
+.t-caption     { font-size: var(--t-caption); line-height: 14px; letter-spacing: 0.06em; font-weight: 500; color: var(--label-3); text-transform: uppercase; }
+
+.t-mono-label {
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(var(--avatar-color-rgb), 0.62);
+}
+
+::selection { background: rgba(var(--avatar-color-rgb), 0.4); color: var(--label); }

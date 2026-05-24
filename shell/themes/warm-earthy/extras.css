@@ -1,0 +1,672 @@
+/* Warm & Earthy — component-level overrides.
+   The structural shell is built around Bloom's vocabulary: presence-color
+   halos, frosted glass orbs, gradient primary buttons, cool dark surfaces.
+   Warm & Earthy needs the opposite mood — paper, walnut ink, soft warm
+   shadows, italic serif accents — so this file selectively re-skins the
+   shell wherever a token swap alone would still leak Bloom's character.
+
+   Anything not redefined here keeps the shell's structure. */
+
+/* ------------------------------------------------------------------
+   Selection — Bloom highlights with avatar-color over white text.
+   On parchment we want walnut-on-honey instead.
+------------------------------------------------------------------ */
+::selection {
+  background: rgba(232, 184, 111, 0.55);   /* honey */
+  color: var(--ink);
+}
+
+/* ------------------------------------------------------------------
+   Headlines — italic-leaning serif. The design file uses a roman-
+   then-italic accent treatment ("title in roman, *terra italic*
+   accent inside"). We can't slice the JSX here, so we lean the
+   whole headline italic at the welcome pane, giving the theme an
+   instantly journal-y voice. Subheadlines stay roman.
+------------------------------------------------------------------ */
+.headline {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.020em;
+  line-height: 0.98;
+  color: var(--ink);
+}
+.pane[data-pane="welcome"] .headline {
+  /* Restore the design HTML's editorial 84px hero — there's room on the
+     welcome pane and it's the strongest first impression of the theme. */
+  font-size: clamp(56px, 9vw, 84px);
+  letter-spacing: -0.022em;
+  line-height: 0.96;
+}
+/* Italic accent — the AI's name, the user's first name, etc. — gets
+   terracotta italic. Use <em> in headline copy and the language
+   reads as field-journal handwriting, not bold-blue link. */
+.headline em,
+.subheadline em,
+.greeting em {
+  font-style: italic;
+  font-weight: 400;
+  color: var(--terracotta);
+}
+
+.subheadline {
+  font-family: var(--font-system);
+  color: var(--ink-2);
+  letter-spacing: -0.005em;
+}
+
+/* HUD corner labels — mono caps stay, but ink-on-parchment instead of
+   presence-color glow, and the pulsing tick uses terracotta so it
+   doesn't fight the warm field. */
+.hud-cell,
+.hud-label,
+.hud-meta {
+  color: rgba(42, 31, 20, 0.42);
+  font-family: var(--font-mono);
+  letter-spacing: 0.20em;
+}
+.hud-meta { color: rgba(42, 31, 20, 0.28); }
+.hud-tick { color: var(--terracotta); }
+
+/* ------------------------------------------------------------------
+   Onboarding pane hero — the breathing dot.
+   The shell draws a hairline ring with a presence-color drop-shadow
+   on .pane-hero-mark; on parchment that drop-shadow reads as a cool
+   blue smudge. Replace it with a warm honey halo.
+------------------------------------------------------------------ */
+.pane-hero {
+  border-color: var(--hairline-strong);
+  background: var(--surface-1);
+  box-shadow: var(--halo-soft);
+}
+.pane-hero::after { background: var(--terracotta); }
+.pane-hero-mark {
+  filter: drop-shadow(0 0 28px rgba(232, 184, 111, 0.45));
+}
+
+/* Top-edge progress bar — walnut ink rule rather than presence color. */
+.onboarding-progress { background: var(--ink); }
+
+/* ------------------------------------------------------------------
+   Form fields — match the design file's e-input. Warm parchment
+   inset + italic serif placeholder + terracotta focus ring.
+------------------------------------------------------------------ */
+.field-label {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 15px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-2);
+}
+/* Strip the Bloom "/ " prefix — italic serif label doesn't want a slash. */
+.field-label::before { content: none; }
+
+.field-input,
+.field-select,
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="email"],
+textarea {
+  background: rgba(255, 250, 235, 0.6);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-input);
+  color: var(--ink);
+  font-family: var(--font-system);
+  font-weight: 500;
+  /* Inset top-light + faint stroke gives the input a pressed-paper feel
+     without depending on the avatar-color glow that the dark theme uses. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 250, 235, 0.6),
+    inset 0 0 0 1px rgba(42, 31, 20, 0.06);
+  transition: border-color var(--d-micro) var(--ease-snap),
+              box-shadow var(--d-micro) var(--ease-snap),
+              background var(--d-micro) var(--ease-snap);
+}
+.field-input::placeholder,
+textarea::placeholder {
+  color: var(--ink-3);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 16px;
+}
+.field-input:focus,
+.field-select:focus,
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+input[type="email"]:focus,
+textarea:focus {
+  border-color: var(--terracotta);
+  background: rgba(255, 250, 235, 0.8);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 250, 235, 0.6),
+    inset 0 0 0 1px rgba(42, 31, 20, 0.06),
+    0 0 0 3px rgba(200, 85, 61, 0.15);
+}
+
+/* Select chevron — Bloom's CSS uses two diagonal slices in label-2 grey
+   on a dark field. Re-tint to walnut so the arrow doesn't disappear on
+   parchment. */
+.field-select {
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-2) 50%),
+                    linear-gradient(135deg, var(--ink-2) 50%, transparent 50%),
+                    none;
+}
+
+.field-error { color: var(--rust); opacity: 1; }
+.field-error::before { content: '— '; color: var(--ink-3); }
+
+/* ------------------------------------------------------------------
+   Buttons — design file's e-btn: 48px pill, warm shadow on lift, no
+   gradient, no presence aura. Primary is walnut-on-parchment for the
+   default action; variant-specific accents live on the modal etc.
+------------------------------------------------------------------ */
+.btn {
+  height: 48px;
+  border-radius: var(--r-button);
+  border: 1px solid var(--hairline-strong);
+  font-family: var(--font-system);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.005em;
+  box-shadow: var(--halo-soft);
+  background: var(--surface-1);
+  color: var(--ink);
+  transition: transform var(--d-micro) var(--ease-snap),
+              box-shadow var(--d-micro) var(--ease-snap),
+              background var(--d-micro) var(--ease-snap);
+  /* Disable the presence-aura keyframe the shell sets on .btn-primary. */
+  animation: none;
+}
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--halo-medium);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--halo-soft);
+}
+
+/* Primary — ink fill, parchment label. Anti-portal: this is a stamped-
+   leather button, not a glowing aurora pill. The keyframe override in
+   .btn already neutralises the breathing animation. */
+.btn-primary {
+  background: var(--ink);
+  color: var(--surface-1);
+  border-color: var(--ink);
+  box-shadow: var(--halo-soft);
+}
+.btn-primary:hover:not(:disabled) {
+  background: #1F1610;
+  box-shadow: var(--halo-medium);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--hairline-strong);
+  box-shadow: none;
+}
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 250, 235, 0.5);
+  box-shadow: var(--halo-soft);
+}
+
+.text-link {
+  color: var(--ink-2);
+  font-family: var(--font-system);
+  font-weight: 500;
+}
+.text-link:hover { color: var(--ink); }
+
+/* ------------------------------------------------------------------
+   Provider cards (Connect pane) — paper tiles with hairline rules.
+   The shell tints expanded/connected states with white-alpha; we
+   keep the same hierarchy but in walnut alpha.
+------------------------------------------------------------------ */
+.provider-card {
+  background: var(--surface-1);
+  border-color: var(--hairline);
+  box-shadow: var(--halo-soft);
+}
+.provider-card:hover {
+  background: var(--surface-2);
+  border-color: var(--hairline-strong);
+}
+.provider-card.expanded {
+  background: var(--surface-2);
+  border-color: var(--hairline-strong);
+}
+.provider-card.connected { border-color: var(--olive); }
+.provider-card.connected .status-dot {
+  background: var(--olive);
+  box-shadow: 0 0 0 2px rgba(122, 132, 80, 0.18);
+}
+
+.provider-head:hover { background: rgba(42, 31, 20, 0.03); }
+
+.provider-name {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 500;
+  color: var(--ink);
+}
+.provider-status { color: var(--ink-3); }
+.provider-card.connected .provider-status { color: var(--ink-2); }
+
+.default-pill {
+  background: var(--surface-3);
+  border-color: var(--hairline);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  letter-spacing: 0.14em;
+}
+.provider-drawer-content { border-top-color: var(--hairline); }
+.preset-chip {
+  background: rgba(255, 250, 235, 0.5);
+  border-color: var(--hairline);
+  color: var(--ink-2);
+  font-family: var(--font-system);
+}
+.preset-chip:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+  border-color: var(--hairline-strong);
+}
+.signup-link {
+  color: var(--ink-2);
+  border-bottom-color: var(--hairline);
+  font-family: var(--font-system);
+}
+.signup-link:hover { color: var(--ink); border-bottom-color: var(--ink-2); }
+
+/* ------------------------------------------------------------------
+   Theme picker + presence picker — paper cards with warm shadow.
+   Bloom selects with a white outer ring; we select with a terracotta
+   stamp instead, plus a slight lift so the selected card reads like
+   a postcard pinned to the page.
+------------------------------------------------------------------ */
+.presence-card,
+.theme-card {
+  background: var(--surface-1);
+  border-color: var(--hairline);
+  box-shadow: var(--halo-soft);
+}
+.presence-card::before,
+.theme-card::before {
+  /* Replace Bloom's white top-light with a sun-warm one. Subtle so it
+     reads as paper-edge highlight, not a glossy plastic card. */
+  background: linear-gradient(180deg, rgba(255, 250, 235, 0.55), transparent 38%);
+}
+.presence-card:hover,
+.theme-card:hover {
+  background: var(--surface-2);
+  border-color: var(--hairline-strong);
+  box-shadow: var(--halo-medium);
+  transform: translateY(-1px);
+}
+.presence-card.selected,
+.theme-card.selected {
+  background: var(--surface-2);
+  border-color: var(--terracotta);
+  box-shadow: var(--halo-medium);
+}
+.presence-card.selected::after,
+.theme-card.selected::after {
+  inset: -2px;
+  border-radius: 20px;
+  box-shadow: 0 0 0 1px rgba(200, 85, 61, 0.35);
+}
+
+.theme-swatches { border: 1px solid var(--hairline); border-radius: 12px; }
+
+.presence-card-label,
+.theme-label {
+  font-family: var(--font-system);
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.008em;
+}
+.presence-card-sub,
+.theme-tagline {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Presence canvas wrap — Bloom paints a presence-color tinted ring. We
+   want a walnut-hairline ring with a sage interior glow so the memoji
+   sits inside a soft fern-light disc. */
+.presence-canvas-wrap {
+  border-color: var(--hairline);
+  background: radial-gradient(circle at 50% 60%,
+    rgba(156, 175, 136, 0.18), transparent 70%);
+}
+.presence-card:hover .presence-canvas-wrap,
+.presence-card.selected .presence-canvas-wrap {
+  border-color: var(--hairline-strong);
+  box-shadow: 0 0 0 4px rgba(232, 184, 111, 0.18);
+}
+
+/* ------------------------------------------------------------------
+   Color picker swatches — walnut hairline ring with terracotta stamp
+   on selection, instead of Bloom's bright label outer ring.
+------------------------------------------------------------------ */
+.color-swatch { border-color: var(--hairline); }
+.color-swatch:hover { border-color: var(--hairline-strong); }
+.color-swatch.selected {
+  border-color: var(--terracotta);
+  box-shadow: 0 0 0 2px var(--canvas), 0 0 0 3px var(--terracotta);
+}
+
+.color-section-label {
+  font-family: var(--font-mono);
+  color: var(--ink-3);
+  letter-spacing: 0.20em;
+}
+
+/* Pill chips — gender / hair pickers. Match e-chip in design HTML:
+   parchment alpha background, walnut text, ink fill on selection. */
+.chip {
+  background: rgba(255, 250, 235, 0.5);
+  border: 1px solid var(--hairline);
+  color: var(--ink-2);
+  font-family: var(--font-system);
+  font-weight: 500;
+}
+.chip:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+  border-color: var(--hairline-strong);
+}
+.chip.selected {
+  background: var(--ink);
+  color: var(--surface-1);
+  border-color: var(--ink);
+}
+
+/* ------------------------------------------------------------------
+   Avatar — Bloom paints a presence-color hairline ring with a glow
+   that matches the avatar color. On parchment a presence glow reads
+   as a coloured smudge, so we soften it to a warm halo + walnut
+   hairline + dashed concentric ring (the design HTML's e-avatar
+   ::before treatment).
+------------------------------------------------------------------ */
+.avatar {
+  border-color: var(--hairline-strong);
+  background:
+    radial-gradient(circle at 50% 40%,
+      rgba(255, 250, 235, 0.4),
+      rgba(232, 184, 111, 0.10) 70%,
+      transparent 100%);
+  box-shadow: var(--halo-soft), inset 0 -10px 20px rgba(42, 31, 20, 0.08);
+}
+.avatar:hover {
+  border-color: var(--ink-3);
+  box-shadow: var(--halo-medium), inset 0 -10px 20px rgba(42, 31, 20, 0.10);
+}
+/* Concentric dashed ring — the field-journal "this is your companion"
+   marker from the design HTML's e-avatar::before. Only on the centered
+   onboarding avatar so the home-corner pip stays clean. */
+.avatar-center::before {
+  content: '';
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  border: 1px dashed var(--hairline-strong);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------
+   Greeting — italic Newsreader on the empty desk.
+------------------------------------------------------------------ */
+.greeting {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 22px;
+  line-height: 1.3;
+  color: var(--ink-2);
+  letter-spacing: -0.005em;
+}
+
+/* ------------------------------------------------------------------
+   Wordmark + chrome
+------------------------------------------------------------------ */
+.wordmark {
+  font-family: var(--font-mono);
+  letter-spacing: 0.20em;
+  color: var(--ink-3);
+}
+.wordmark-mark { opacity: 0.92; color: var(--ink); }
+
+.icon-button {
+  border-color: var(--hairline);
+  color: var(--ink-2);
+  background: transparent;
+}
+.icon-button:hover {
+  background: var(--surface-1);
+  color: var(--ink);
+  border-color: var(--hairline-strong);
+}
+
+/* ------------------------------------------------------------------
+   Tile grid — paper plates on the desk. The shell paints tiles with
+   a presence-color gradient and a heavy dark vignette; that reads
+   like a desktop wallpaper widget, not a journal entry. We replace
+   it with parchment + warm shadow + a soft sun-glow gradient.
+------------------------------------------------------------------ */
+.tile-thumb {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-tile);
+  box-shadow: var(--halo-soft);
+  color: var(--ink);
+}
+.tile:hover .tile-thumb {
+  transform: translateY(-2px) scale(1.02);
+  border-color: var(--hairline-strong);
+  box-shadow: var(--halo-medium);
+}
+.tile:active .tile-thumb { transform: translateY(0) scale(0.99); }
+
+.tile-svg { color: var(--ink); }
+.tile-glyph-fallback { color: var(--ink); opacity: 0.72; }
+
+/* When the tile has only the fallback glyph, give it a sun-warm wash
+   (clay top-right + parchment) instead of Bloom's near-black vignette. */
+.tile:not([data-size="1x1"]) .tile-thumb:has(> .tile-glyph-fallback) {
+  background:
+    radial-gradient(120% 80% at 85% 15%,
+      rgba(232, 184, 111, 0.30),
+      rgba(232, 184, 111, 0) 60%),
+    linear-gradient(160deg, var(--surface-1), var(--surface-2));
+}
+
+.tile-name {
+  color: var(--ink-2);
+  font-family: var(--font-system);
+  font-weight: 500;
+}
+.tile:not([data-size="1x1"]) .tile-name {
+  color: var(--ink);
+  /* Drop the dark text-shadow — text sits on parchment now, not over
+     a dark thumbnail, so it doesn't need a halo for legibility. */
+  text-shadow: none;
+}
+/* Replace the dark bottom vignette with a parchment fade — protects
+   legibility over rich thumbnails without going cool/black. */
+.tile:not([data-size="1x1"]) .tile-thumb::after {
+  background: linear-gradient(180deg,
+    transparent,
+    rgba(250, 243, 227, 0.85));
+  height: 56px;
+}
+
+.tile-delete {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline-strong);
+  color: var(--ink-2);
+  box-shadow: var(--halo-soft);
+}
+.tile-delete:hover {
+  background: var(--terracotta);
+  border-color: var(--terracotta);
+  color: var(--surface-1);
+}
+
+/* ------------------------------------------------------------------
+   Chat orb — Bloom's frosted dark pill with iridescent halo doesn't
+   belong on a parchment desk. Re-skin as a walnut-ink pill with a
+   warm honey glow — still draws attention, still reads as the AI's
+   voice, but in the theme's hue family.
+------------------------------------------------------------------ */
+.chat-orb {
+  /* Soft warm halo replaces the presence-color drop-shadow. */
+  filter: drop-shadow(0 6px 18px rgba(82, 55, 28, 0.18));
+}
+.chat-orb[data-state="collapsed"] {
+  background: var(--ink);
+  border: 1px solid var(--ink);
+}
+.chat-orb[data-state="expanded"] {
+  background: rgba(250, 243, 227, 0.92);
+  border: 1px solid var(--hairline-strong);
+  /* Drop the cool inset top-light; warm top-light + warm shadow. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 250, 235, 0.8),
+    0 0 0 3px rgba(232, 184, 111, 0.18),
+    0 14px 36px rgba(82, 55, 28, 0.18);
+  /* Frosted glass off — paper isn't translucent. */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.chat-orb .chat-input {
+  color: var(--ink);
+  font-family: var(--font-system);
+}
+.chat-orb .chat-input::placeholder {
+  color: var(--ink-3);
+  font-family: var(--font-display);
+  font-style: italic;
+}
+
+/* Send button — terracotta in expanded state, parchment-on-ink when
+   collapsed (so the orb itself reads as a single ink dot). The
+   gradient + presence-glow box-shadow that the shell paints on the
+   send button has to be neutralised, otherwise it bleeds violet. */
+.chat-orb .chat-send {
+  background: var(--surface-1);
+  color: var(--ink);
+  box-shadow: none;
+}
+.chat-orb[data-state="collapsed"] .chat-send {
+  background: transparent;
+  color: var(--surface-1);
+  box-shadow: none;
+}
+.chat-orb[data-state="expanded"] .chat-send {
+  background: var(--terracotta);
+  color: var(--surface-1);
+  box-shadow: 0 4px 12px rgba(200, 85, 61, 0.30);
+}
+.chat-orb .chat-send:hover { filter: brightness(1.04); }
+
+/* Speaking — soft honey breath instead of presence-color neon. */
+.chat-orb.speaking {
+  filter:
+    drop-shadow(0 0 24px rgba(232, 184, 111, 0.55))
+    drop-shadow(0 0 50px rgba(200, 85, 61, 0.25));
+  animation: orb-speak-warm 1.6s var(--ease-standard) infinite;
+}
+@keyframes orb-speak-warm {
+  0%, 100% {
+    filter:
+      drop-shadow(0 0 18px rgba(232, 184, 111, 0.40))
+      drop-shadow(0 0 40px rgba(200, 85, 61, 0.18));
+  }
+  50% {
+    filter:
+      drop-shadow(0 0 28px rgba(232, 184, 111, 0.65))
+      drop-shadow(0 0 64px rgba(200, 85, 61, 0.32));
+  }
+}
+
+/* ------------------------------------------------------------------
+   Modal sheet — paper card on a softly darkened parchment scrim.
+   Bloom uses a 60% black backdrop with heavy blur; on a warm theme
+   that reads as cold smoke. Use a warm walnut wash instead.
+------------------------------------------------------------------ */
+.modal-backdrop {
+  background: rgba(42, 31, 20, 0.45);
+  backdrop-filter: blur(18px) saturate(1.05);
+  -webkit-backdrop-filter: blur(18px) saturate(1.05);
+}
+.modal-frame {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-modal);
+  box-shadow: var(--shadow-deep);
+}
+.modal-header { border-bottom-color: var(--hairline-soft); }
+.modal-title {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  letter-spacing: 0.16em;
+}
+
+/* Bubbles — only used by debug log, but kept on-theme so accessibility
+   readers get the right contrast if they're surfaced. */
+.bubble.user {
+  background: var(--ink);
+  color: var(--surface-1);
+}
+.bubble.ai {
+  background: var(--surface-1);
+  color: var(--ink);
+  border-color: var(--hairline);
+}
+.bubble.system {
+  background: var(--surface-2);
+  border-color: var(--hairline);
+  color: var(--ink-2);
+}
+
+.thought-bubble {
+  --thought-bg:
+    radial-gradient(rgba(122, 132, 80, 0.10) 1px, transparent 1.2px) 0 0 / 8px 8px,
+    var(--surface-1);
+  --thought-border: rgba(95, 63, 42, 0.24);
+  --thought-text: var(--ink);
+  --thought-shadow: 0 18px 38px rgba(95, 63, 42, 0.20), 0 0 0 1px rgba(255, 255, 255, 0.42);
+  border-radius: 20px 20px 8px 20px;
+  font-family: var(--font-system);
+}
+
+/* ------------------------------------------------------------------
+   Wallpaper layer — parchment base with sun-warm radial bleed and
+   a faint paper-grain noise. Layered behind everything so even the
+   home grid reads as a desk surface, not a void.
+------------------------------------------------------------------ */
+.wallpaper {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(196, 113, 72, 0.08), transparent 42%),
+    radial-gradient(circle at 88% 80%, rgba(122, 132, 80, 0.07), transparent 48%),
+    radial-gradient(rgba(42, 31, 20, 0.045) 1px, transparent 1.2px) 0 0 / 4px 4px,
+    var(--canvas);
+  opacity: 1;
+}
+
+/* Respect reduced-motion — kill the gentle warm orb-speak pulse for
+   users who've opted out. The static halo still communicates speaking
+   state. */
+@media (prefers-reduced-motion: reduce) {
+  .chat-orb.speaking { animation: none; }
+}

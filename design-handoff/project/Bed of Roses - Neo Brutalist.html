@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Bed of Roses — Neo Brutalist UI Kit</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    /* Neo Brutalist tokens — paper, ink, single hot accent.
+       1px hairlines, sharp 90° corners, structural metadata. */
+    :root{
+      --paper:#F4F2ED;
+      --paper-2:#FFFFFF;
+      --ink:#0A0A0A;
+      --ink-2:rgba(10,10,10,.72);
+      --ink-3:rgba(10,10,10,.48);
+      --ink-4:rgba(10,10,10,.20);
+      --hot:#FF3B00;
+      --acid:#D6FF3B;
+      --hair:rgba(10,10,10,.18);
+      --hair-2:rgba(10,10,10,.32);
+
+      --sans:"Inter Tight",-apple-system,system-ui,sans-serif;
+      --mono:"JetBrains Mono",ui-monospace,monospace;
+    }
+    html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+      background-image:linear-gradient(to right, var(--hair-2) 1px, transparent 1px), linear-gradient(to bottom, var(--hair-2) 1px, transparent 1px);
+      background-size:64px 64px, 64px 64px;background-position:-1px -1px;
+    }
+    body::before{content:'';position:fixed;inset:0;background:
+      radial-gradient(circle at 50% 50%, var(--paper) 30%, transparent 70%);pointer-events:none;z-index:0}
+    *{box-sizing:border-box}
+    /* Type */
+    .n-h1{font-family:var(--sans);font-weight:800;font-size:96px;line-height:.92;letter-spacing:-.04em}
+    .n-h2{font-family:var(--sans);font-weight:700;font-size:42px;line-height:1;letter-spacing:-.03em;text-transform:uppercase}
+    .n-h3{font-family:var(--sans);font-weight:700;font-size:24px;line-height:1.1;letter-spacing:-.02em;text-transform:uppercase}
+    .n-display{font-family:var(--sans);font-weight:500;font-size:20px;line-height:1.35;letter-spacing:-.012em;color:var(--ink-2)}
+    .n-body{font-family:var(--sans);font-weight:400;font-size:14px;line-height:1.55;color:var(--ink-2)}
+    .n-mono{font-family:var(--mono);font-weight:500;font-size:12px;letter-spacing:.04em;color:var(--ink)}
+    .n-eyebrow{font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--hot)}
+    .n-tag{font-family:var(--mono);font-weight:500;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+    .n-divider{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--ink-4);user-select:none;white-space:nowrap;overflow:hidden}
+
+    /* Cards — squared, hairline, no shadow */
+    .n-card{background:var(--paper-2);border:1px solid var(--ink);border-radius:0}
+    .n-card-soft{background:var(--paper-2);border:1px solid var(--hair);border-radius:0}
+
+    /* Buttons */
+    .n-btn{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 20px;
+      font-family:var(--sans);font-weight:600;font-size:14px;letter-spacing:0;text-transform:uppercase;
+      border:1px solid var(--ink);border-radius:0;cursor:pointer;background:var(--paper-2);color:var(--ink);
+      transition:background .12s, color .12s}
+    .n-btn:hover{background:var(--ink);color:var(--paper-2)}
+    .n-btn-pri{background:var(--ink);color:var(--paper-2)}
+    .n-btn-pri:hover{background:var(--hot);color:var(--paper-2);border-color:var(--hot)}
+    .n-btn-hot{background:var(--hot);color:var(--paper-2);border-color:var(--hot)}
+    .n-btn-hot:hover{background:var(--ink);border-color:var(--ink)}
+    .n-btn-acid{background:var(--acid);color:var(--ink);border-color:var(--ink)}
+    .n-btn-ghost{background:transparent;border-color:transparent;text-transform:none;font-weight:500;color:var(--ink-2);padding:0 8px}
+    .n-btn-ghost:hover{background:transparent;color:var(--hot);text-decoration:underline;text-underline-offset:4px}
+
+    /* Field */
+    .n-field{display:flex;flex-direction:column;gap:6px}
+    .n-field label{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-2)}
+    .n-input{display:flex;align-items:center;height:44px;padding:0 14px;background:var(--paper-2);
+      border:1px solid var(--ink);border-radius:0;font-family:var(--mono);font-size:14px;color:var(--ink);outline:0;width:100%}
+    .n-input::placeholder{color:var(--ink-3);font-family:var(--mono)}
+    .n-input-focus{outline:2px solid var(--hot);outline-offset:-3px}
+
+    /* Chip */
+    .n-chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;
+      border:1px solid var(--ink);border-radius:0;background:var(--paper-2);
+      font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);cursor:pointer}
+    .n-chip-on{background:var(--ink);color:var(--paper-2)}
+    .n-chip-hot{background:var(--hot);color:var(--paper-2);border-color:var(--hot)}
+
+    /* Bubble */
+    .n-bubble{padding:12px 14px;border:1px solid var(--ink);border-radius:0;font-family:var(--sans);font-size:14px;line-height:1.5;font-weight:400;max-width:80%;background:var(--paper-2)}
+    .n-bubble-user{background:var(--ink);color:var(--paper-2);align-self:flex-end}
+    .n-bubble-ai{align-self:flex-start}
+    .n-bubble-ai .n-bubble-name{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--hot);display:block;margin-bottom:4px}
+
+    /* Tile */
+    .n-tile{display:flex;flex-direction:column;justify-content:space-between;padding:16px;border:1px solid var(--ink);border-radius:0;background:var(--paper-2)}
+    .n-tile-title{font-family:var(--sans);font-weight:700;font-size:22px;line-height:1.05;letter-spacing:-.02em;text-transform:uppercase}
+    .n-tile-meta{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+
+    /* Avatar */
+    .n-avatar{position:relative;width:128px;height:128px;border-radius:0;display:flex;align-items:center;justify-content:center;background:var(--c,var(--paper-2));border:1px solid var(--ink)}
+    .n-avatar::before{content:'';position:absolute;left:-1px;top:-1px;right:-9px;bottom:-9px;border:1px solid var(--ink);z-index:-1;background:var(--hot)}
+
+    /* Helpers */
+    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .col{display:flex;flex-direction:column;gap:12px}
+  </style>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script type="text/babel" src="brutalist/design-canvas.jsx"></script>
+</head>
+<body>
+  <div id="root" style="position:relative;z-index:1"></div>
+  <script type="text/babel" src="neobrutal/kit.jsx"></script>
+</body>
+</html>

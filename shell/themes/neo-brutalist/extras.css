@@ -1,0 +1,1185 @@
+/* Neo Brutalist — component-level overrides.
+   The structural shell at shell/style.css inherits Bloom's vocabulary:
+   serif italic headlines, gradient primary buttons, atmospheric halos,
+   rounded modal frames, drop-shadowed tiles. None of that fits a brutalist
+   register. This file flips every visible surface to:
+
+     • 1px hairline borders (or full-ink at high contrast)
+     • Hard 90° corners — every radius collapses to 0
+     • Flat fills — no gradients, no inner glow, no atmosphere
+     • Inter Tight 700 ALL CAPS for display, JetBrains Mono for metadata
+     • The single hot red (#FF3B00) ONLY on focus / selected / error / CTA
+
+   What's NOT overridden: spacing, layout grids, screen / pane positioning,
+   z-index stacking, animation timing primitives. Those are tokens or
+   structure, not aesthetics, and they stay. */
+
+/* ──────────────────────────────────────────────────────────────────────
+   Wallpaper — flat paper, with a faint 64px ASCII grid for "engineering
+   blueprint" texture. Lifted directly from the design HTML's body bg.
+   The grid sits at 18% opacity (via the hairline-soft alpha already
+   baked into the gradient color) so it never fights with foreground UI.
+   ────────────────────────────────────────────────────────────────────── */
+.wallpaper {
+  background:
+    linear-gradient(to right,  var(--hairline-soft) 1px, transparent 1px) 0 0 / 64px 64px,
+    linear-gradient(to bottom, var(--hairline-soft) 1px, transparent 1px) 0 0 / 64px 64px,
+    var(--canvas);
+  opacity: 1;
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Selection — ink rectangle, paper text. No translucent halo.
+   ────────────────────────────────────────────────────────────────────── */
+::selection { background: var(--ink); color: var(--canvas); }
+
+/* ──────────────────────────────────────────────────────────────────────
+   Headlines & wordmark — serif italic in Bloom, Inter Tight ALL CAPS here.
+   The shell's `.headline` / `.subheadline` rules use --font-display, so
+   the swap to Inter Tight in tokens.css does most of the work. We still
+   need to strip the italic, force uppercase, and tighten the tracking. */
+
+.headline,
+.subheadline,
+.modal-title,
+.tile-name,
+.greeting,
+.wordmark span,
+.provider-name,
+.theme-label,
+.presence-card-label {
+  font-style: normal;
+  font-family: var(--font-display);
+}
+
+.headline {
+  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+}
+
+/* Welcome-pane hero headline — 56px in the shell. Brutalist scales it up
+   slightly and tightens further; 96px hero is too large for the centered
+   onboarding pane width but a 64px display weight reads correctly. */
+.pane[data-pane="welcome"] .headline {
+  font-size: 64px;
+  letter-spacing: -0.04em;
+  line-height: 0.92;
+}
+
+.subheadline {
+  font-family: var(--font-system);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: -0.012em;
+  color: var(--label-2);
+}
+
+/* Wordmark in the home chrome — mono caps with the structural-label feel. */
+.wordmark {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  color: var(--label-2);
+}
+.wordmark span {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+
+/* Greeting (visible only when grid is empty) */
+.greeting {
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Field labels — already mono-caps in the shell, but the shell prefixes
+   them with "/" for a Bloom-flavored cue. Brutalist swaps that for a
+   structural-label bracket "[" — feels like a config-file key.
+   ────────────────────────────────────────────────────────────────────── */
+.field-label,
+.color-section-label {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-2, var(--label-2));
+}
+.field-label::before,
+.color-section-label::before {
+  content: '';   /* drop the Bloom "/ " prefix; brackets feel more brutalist */
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Inputs / textareas — flat paper, 1px ink, mono font. Focus = hot accent
+   ring at 2px offset-inside (matches the design HTML's .n-input-focus).
+   ────────────────────────────────────────────────────────────────────── */
+.field-input,
+.field-select,
+.chat-input,
+input[type="text"],
+input[type="password"],
+input[type="number"],
+textarea {
+  background: var(--surface-1);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--ink);
+  box-shadow: none;
+}
+.field-input::placeholder,
+.chat-input::placeholder,
+textarea::placeholder {
+  color: var(--label-3);
+  font-family: var(--font-mono);
+  font-style: normal;
+}
+.field-input:focus,
+.field-select:focus,
+.chat-input:focus,
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+textarea:focus {
+  border-color: var(--ink);
+  outline: 2px solid var(--hot);
+  outline-offset: -3px;
+  box-shadow: none;
+  background: var(--surface-1);
+}
+
+/* The .field-select chevron uses two 5px diagonals built from a linear-
+   gradient — that visual still works on paper, but we make the strokes
+   ink rather than label-2 so they're sharp against the white fill. */
+.field-select {
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink) 50%),
+                    linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+}
+
+.field-error {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--hot);
+  font-size: var(--t-caption);
+}
+.field-error::before { content: '! '; color: var(--hot); }
+
+/* ──────────────────────────────────────────────────────────────────────
+   Buttons — uppercase Inter Tight 600, 1px ink, NO offset shadow, NO
+   gradient. Hover inverts fg/bg. Primary on hover swaps to the hot red.
+   This drops the Bloom portal-aura `btn-portal-breathe` animation entirely.
+   ────────────────────────────────────────────────────────────────────── */
+.btn {
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  font-family: var(--font-system);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  background: var(--surface-1);
+  color: var(--ink);
+  /* Kill the breathing animation, the gradient fill, and every shadow that
+     comes from the shell's .btn-primary rule. We re-declare them cleanly. */
+  box-shadow: none;
+  animation: none;
+  transition: background var(--d-micro) var(--ease-snap),
+              color var(--d-micro) var(--ease-snap),
+              border-color var(--d-micro) var(--ease-snap);
+}
+.btn:active { transform: none; }   /* shell scales by 0.98 — feels too soft */
+
+.btn-primary {
+  background: var(--ink);
+  color: var(--canvas);
+  border-color: var(--ink);
+  box-shadow: none;
+  animation: none;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--hot);
+  border-color: var(--hot);
+  color: var(--canvas);
+  box-shadow: none;
+}
+
+.btn-secondary {
+  background: var(--surface-1);
+  color: var(--ink);
+  border-color: var(--ink);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--canvas);
+  border-color: var(--ink);
+}
+
+.btn:disabled,
+.btn[disabled] {
+  background: var(--surface-1);
+  color: var(--label-4);
+  border-color: var(--hairline-soft);
+  cursor: not-allowed;
+}
+
+/* Text link — strip the underline-on-hover Bloom uses and replace with
+   the hot accent so it stays the only colored ink in the page. */
+.text-link {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  font-size: var(--t-caption);
+  color: var(--label-2);
+}
+.text-link:hover { color: var(--hot); }
+
+/* ──────────────────────────────────────────────────────────────────────
+   Provider cards — connect pane. 1px hairline, square. Selected = hot red.
+   The shell uses 3D perspective tilt on hover (rotateX/rotateY); we keep
+   that — feels mechanical and works well in a brutalist register — but
+   strip the soft fill change and re-tighten the radius.
+   ────────────────────────────────────────────────────────────────────── */
+.provider-card {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: 0;
+  box-shadow: none;
+}
+.provider-card:hover {
+  background: var(--surface-1);
+  border-color: var(--ink);
+}
+.provider-card.expanded {
+  background: var(--surface-1);
+  border-color: var(--ink);
+}
+.provider-card.connected {
+  border-color: var(--ink);
+}
+
+/* Provider head — flat hover state, no fill wash */
+.provider-head:hover {
+  background: transparent;
+}
+
+.provider-name {
+  font-family: var(--font-display);
+  font-style: normal;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  font-size: 18px;
+}
+
+.provider-status {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--label-3);
+}
+
+.status-dot {
+  border-radius: 0;   /* square dot — file-system aesthetic */
+  width: 6px;
+  height: 6px;
+}
+.provider-card.connected .status-dot {
+  background: var(--hot);
+  box-shadow: none;   /* drop the white halo from Bloom */
+}
+
+.default-pill {
+  font-family: var(--font-mono);
+  background: var(--ink);
+  color: var(--canvas);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.provider-drawer-content {
+  border-top: 1px solid var(--hairline);
+}
+
+/* Quick-preset chips inside the drawer — pill→square, hairline→ink */
+.preset-chip {
+  background: var(--surface-1);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.preset-chip:hover {
+  background: var(--ink);
+  color: var(--canvas);
+  border-color: var(--ink);
+}
+
+.signup-link {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  border-bottom: 1px solid var(--ink);
+}
+.signup-link:hover {
+  color: var(--hot);
+  border-color: var(--hot);
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Theme picker cards — onboarding pane. Hot accent on .selected.
+   ────────────────────────────────────────────────────────────────────── */
+.theme-card {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: 0;
+  transition: background var(--d-micro) var(--ease-snap),
+              border-color var(--d-micro) var(--ease-snap);
+}
+.theme-card::before { display: none; }   /* kill the inner top-light glow */
+.theme-card:hover {
+  background: var(--surface-1);
+  border-color: var(--ink);
+  transform: none;
+}
+.theme-card.selected {
+  background: var(--surface-1);
+  border-color: var(--hot);
+  /* The selected card's distinguishing cue is the hot ring, NOT a fill swap.
+     Reinforce with a 2px inset outline so the selection reads even when the
+     card sits next to another at hover state. */
+  box-shadow: inset 0 0 0 1px var(--hot);
+}
+.theme-card.selected::after { display: none; }   /* drop Bloom's outer halo */
+
+.theme-swatches {
+  border: 1px solid var(--ink);
+  border-radius: 0;
+}
+
+.theme-label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+}
+.theme-tagline {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--label-3);
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Presence picker cards — same treatment as theme cards.
+   The presence preview canvas sits inside a circular frame in the shell;
+   we leave that round (it's the avatar-ring preview, not a generic card)
+   but the *card* containing it goes square.
+   ────────────────────────────────────────────────────────────────────── */
+.presence-card {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: 0;
+}
+.presence-card::before { display: none; }
+.presence-card:hover {
+  background: var(--surface-1);
+  border-color: var(--ink);
+}
+.presence-card.selected {
+  background: var(--surface-1);
+  border-color: var(--hot);
+  box-shadow: inset 0 0 0 1px var(--hot);
+  transform: none;
+}
+.presence-card.selected::after { display: none; }
+
+.presence-card-label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  color: var(--ink);
+}
+.presence-card-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--label-3);
+}
+
+/* The avatar-ring preview inside the presence card — keep it round (it's
+   meant to read as a head silhouette) but switch the soft tinted ring for
+   a flat 1px ink line. */
+.presence-canvas-wrap {
+  border: 1px solid var(--ink);
+  background: var(--canvas);
+}
+.presence-card:hover .presence-canvas-wrap,
+.presence-card.selected .presence-canvas-wrap {
+  border-color: var(--ink);
+  box-shadow: none;
+}
+
+/* Onboarding + presence — match the Neo Brutalist kit's square avatar blocks. */
+html[data-theme="neo-brutalist"] .onboarding .pane-content {
+  background: var(--surface-1);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 32px;
+}
+
+html[data-theme="neo-brutalist"] .onboarding .presence-content {
+  max-width: 760px;
+  align-items: flex-start;
+  text-align: left;
+  background: var(--surface-3);
+  border-top: 1px solid var(--ink);
+}
+
+html[data-theme="neo-brutalist"] .pane[data-pane="presence"] .presence-grid {
+  gap: 32px;
+}
+
+html[data-theme="neo-brutalist"] .pane[data-pane="presence"] .presence-card {
+  min-height: 154px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  overflow: visible;
+  gap: 8px;
+}
+
+html[data-theme="neo-brutalist"] .pane[data-pane="presence"] .presence-canvas-wrap {
+  width: 120px;
+  height: 120px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-theme="neo-brutalist"] .pane[data-pane="presence"] .presence-block {
+  display: block;
+  background: var(--presence-neo);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  box-shadow: 8px 8px 0 var(--hot);
+}
+
+html[data-theme="neo-brutalist"] .pane[data-pane="presence"] .presence-card[data-presence-state="alert"] .presence-block {
+  box-shadow: 8px 8px 0 var(--surface-1);
+}
+
+html[data-theme="neo-brutalist"] .pane[data-pane="presence"] .presence-face,
+html[data-theme="neo-brutalist"] .pane[data-pane="presence"] .presence-orb,
+html[data-theme="neo-brutalist"] .pane[data-pane="presence"] .presence-stamp,
+html[data-theme="neo-brutalist"] .pane[data-pane="presence"] .presence-pixel-face {
+  display: none;
+}
+
+html[data-theme="neo-brutalist"] .pane[data-pane="presence"] .presence-card.selected .presence-block {
+  outline: 3px solid var(--hot);
+  outline-offset: 5px;
+}
+
+html[data-theme="neo-brutalist"] .pane[data-pane="presence"] .presence-card-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+html[data-theme="neo-brutalist"] .pane[data-pane="presence"] .presence-card-sub {
+  font-family: var(--font-mono);
+  color: var(--label-3);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+html[data-theme="neo-brutalist"] .pane[data-pane="presence"] .color-section {
+  display: none;
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Color picker swatches — square ink-bordered chips, not round halos.
+   ────────────────────────────────────────────────────────────────────── */
+.color-swatch {
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  box-shadow: none;
+}
+.color-swatch::after { border-radius: 0; }
+.color-swatch:hover {
+  transform: none;
+  border-color: var(--ink);
+}
+.color-swatch.selected {
+  border-color: var(--hot);
+  box-shadow: inset 0 0 0 1px var(--hot);
+}
+
+/* Pill-row chips (gender / hair) — squared, hairline, monospace caps */
+.chip {
+  background: var(--surface-1);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.chip:hover {
+  background: var(--surface-1);
+  color: var(--ink);
+  border-color: var(--ink);
+}
+.chip.selected {
+  background: var(--ink);
+  color: var(--canvas);
+  border-color: var(--ink);
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Onboarding progress bar — 1px ink line at top, full hot-red on completion
+   would be too noisy; keep it ink (matches the spec — hot is reserved). */
+.onboarding-progress {
+  background: var(--ink);
+  height: 1px;
+}
+
+/* Pane hero (the 72px breathing dot above headlines) — square ink frame,
+   with a flat 6px square inside instead of the breathing circle. */
+.pane-hero {
+  border: 1px solid var(--ink);
+  border-radius: 0;
+}
+.pane-hero::after {
+  width: 8px;
+  height: 8px;
+  border-radius: 0;
+  background: var(--ink);
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   HUD corner labels — file-system caret cues in mono, hot accent on tick.
+   The shell uses rgba(--avatar-color-rgb,…) — since we set that to ink in
+   tokens.css, the existing rules already render in ink. We just need to
+   force the tick to the hot accent and bump font weight so the mono reads
+   confidently at 10px.
+   ────────────────────────────────────────────────────────────────────── */
+.hud {
+  font-family: var(--font-mono);
+}
+.hud-cell {
+  color: var(--ink-2, var(--label-2));
+  font-weight: 500;
+  letter-spacing: 0.20em;
+}
+.hud-label {
+  color: var(--ink);
+  font-weight: 700;
+}
+.hud-meta {
+  color: var(--label-3);
+}
+.hud-tick {
+  color: var(--hot);
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Icon button (top-chrome circular control) — keep round (it's the glasses
+   / settings affordance), but trade the soft hairline for full ink and
+   strip the surface-1 hover wash.
+   ────────────────────────────────────────────────────────────────────── */
+.icon-button {
+  background: var(--surface-1);
+  border: 1px solid var(--ink);
+  color: var(--ink);
+}
+.icon-button:hover {
+  background: var(--ink);
+  color: var(--canvas);
+  border-color: var(--ink);
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Avatar — the memoji ring. The shell paints a 1.5px tinted ring + soft
+   radial inner glow; we replace with a 1px flat ink ring and kill the
+   inner radial entirely. The hover halo becomes a 2px ink offset.
+   The avatar canvas itself is unchanged — DiceBear avataaars handle the
+   face primitives and we don't touch them.
+   ────────────────────────────────────────────────────────────────────── */
+.avatar {
+  border: 1px solid var(--ink);
+  border-radius: 50%;   /* head silhouette stays round — this is anatomy, not chrome */
+  background: var(--canvas);
+}
+.avatar:hover {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Tile grid — every desktop tile gets a flat hairline plate, no shadow,
+   no gradient fill, no inner top-light. Hover state = full ink ring.
+   ────────────────────────────────────────────────────────────────────── */
+.tile-thumb {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: 0;
+  box-shadow: none;
+  /* Override Bloom's iridescent gradient with a flat fill */
+  color: var(--ink);
+}
+.tile:hover .tile-thumb {
+  transform: none;   /* Bloom lifts by 2px + scales; brutalist stays put */
+  border-color: var(--ink);
+  box-shadow: none;
+}
+.tile:active .tile-thumb {
+  transform: none;
+  border-color: var(--ink);
+}
+
+.tile-svg,
+.tile-glyph-fallback {
+  color: var(--ink);
+  opacity: 1;
+}
+
+/* The shell paints a dark gradient mask behind tile names (so white text
+   stays legible over busy thumbnails). On paper, that mask reads as muddy
+   grey — replace with a paper-toned gradient that fades to opaque white at
+   the bottom 64px. The 1x1 caption tiles don't get this treatment. */
+.tile:not([data-size="1x1"]) .tile-thumb::after {
+  background: linear-gradient(180deg, transparent, var(--canvas));
+}
+
+/* When the auto-banner is missing and the tile falls back to a vector
+   glyph, Bloom paints a tinted aubergine wash. Brutalist replaces with
+   a flat paper fill — the hairline + glyph carry the visual weight. */
+.tile:not([data-size="1x1"]) .tile-thumb:has(> .tile-glyph-fallback) {
+  background: var(--surface-1);
+}
+
+.tile-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  text-shadow: none;
+}
+.tile:not([data-size="1x1"]) .tile-name {
+  color: var(--ink);
+  text-shadow: none;
+}
+
+/* Tile delete button (the × that appears on hover) — square, ink, paper. */
+.tile-delete {
+  background: var(--canvas);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  color: var(--ink);
+}
+.tile-delete:hover {
+  background: var(--hot);
+  color: var(--canvas);
+  border-color: var(--hot);
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Chat orb — the floating draggable send/input pill.
+   Bloom: round, frosted-glass, gradient send button, presence-color halo.
+   Brutalist: 4px-rounded rectangle (the *one* exception to 0 radius —
+   keeps it readable as an interactive control while still feeling
+   structural), flat ink fill, mono caret, NO drop-shadow halo.
+   ────────────────────────────────────────────────────────────────────── */
+.chat-orb {
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  filter: none;   /* drop the avatar-color halo Bloom paints around the orb */
+  box-shadow: none;
+}
+.chat-orb[data-state="collapsed"] {
+  border-radius: 4px;
+}
+.chat-orb[data-state="expanded"] {
+  background: var(--surface-1);
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  height: 52px;
+}
+/* TTS-speaking pulse — replace iridescent breath with a 2px hot-accent
+   ring that pulses at 1.4s. Single hue, single ring; still legible as
+   "the AI is talking right now." */
+.chat-orb.speaking {
+  filter: none;
+  animation: orb-speak-brutal 1.4s var(--ease-standard) infinite;
+}
+@keyframes orb-speak-brutal {
+  0%, 100% { box-shadow: 0 0 0 0 var(--hot); }
+  50%      { box-shadow: 0 0 0 3px var(--hot); }
+}
+
+.chat-orb .chat-input {
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+.chat-orb .chat-input::placeholder {
+  color: var(--label-3);
+  font-family: var(--font-mono);
+  font-style: normal;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+/* Send button — square ink chip, paper glyph. In collapsed state it IS the
+   orb (same square), so the visual continues to read as "click here."
+   In expanded state it's a 38px square anchored at the right. */
+.chat-orb .chat-send {
+  background: var(--canvas);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  box-shadow: none;
+  width: 38px;
+  height: 38px;
+  margin: 6px;
+}
+.chat-orb[data-state="collapsed"] .chat-send {
+  background: var(--ink);
+  color: var(--canvas);
+  border: 0;
+  border-radius: 4px;
+  width: 50px;
+  height: 50px;
+  margin: 0;
+}
+.chat-orb .chat-send:hover {
+  filter: none;
+  background: var(--hot);
+  color: var(--canvas);
+  border-color: var(--hot);
+}
+.chat-orb[data-state="collapsed"] .chat-send:hover {
+  background: var(--hot);
+  color: var(--canvas);
+}
+html[data-theme="neo-brutalist"] .chat-send .chat-presence {
+  inset: 6px;
+  filter: none;
+}
+html[data-theme="neo-brutalist"] .chat-send .presence-block {
+  display: block;
+  background: var(--presence-neo);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  box-shadow: 3px 3px 0 var(--hot);
+}
+html[data-theme="neo-brutalist"] .chat-send[data-presence-state="alert"] .presence-block {
+  box-shadow: 3px 3px 0 var(--surface-1);
+}
+html[data-theme="neo-brutalist"] .chat-send .presence-face,
+html[data-theme="neo-brutalist"] .chat-send .presence-orb,
+html[data-theme="neo-brutalist"] .chat-send .presence-stamp,
+html[data-theme="neo-brutalist"] .chat-send .presence-pixel-face {
+  display: none;
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Bubbles — chat-log is display:none in the shell, but if it's ever made
+   visible (debugging / accessibility), keep it on-brand: paper bubbles
+   with 1px ink, square corners, mono name labels in hot accent.
+   ────────────────────────────────────────────────────────────────────── */
+.bubble {
+  border-radius: 0;
+}
+.bubble.user {
+  background: var(--ink);
+  color: var(--canvas);
+}
+.bubble.ai {
+  background: var(--surface-1);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+}
+.bubble.system {
+  background: var(--surface-1);
+  color: var(--label-2);
+  border: 1px solid var(--hairline);
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Modal — square frame, 1px ink, no shadow. Backdrop stays a heavy blur
+   (it's a viewport-level affordance), but we drop the saturate to keep
+   the whole register monochrome.
+   ────────────────────────────────────────────────────────────────────── */
+.modal-backdrop {
+  background: rgba(10, 10, 10, 0.55);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+.modal-frame {
+  background: var(--surface-1);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  box-shadow: none;
+}
+.modal-header {
+  border-bottom: 1px solid var(--ink);
+}
+.modal-title {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* Built-in apps — Neo Brutalist standalone kit:
+   white paper, hard 1px ink grid, Inter Tight caps, one hot accent. */
+html[data-theme="neo-brutalist"] #system-modal .modal-backdrop {
+  background: rgba(244, 242, 237, 0.86);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .system-frame {
+  background: var(--surface-1);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  box-shadow: 0 0 0 1px var(--ink);
+}
+
+html[data-theme="neo-brutalist"] #system-modal .modal-header {
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--ink);
+}
+
+html[data-theme="neo-brutalist"] #system-modal .modal-title {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .modal-title::before {
+  content: "[SYSTEM] ";
+  color: var(--hot);
+}
+
+html[data-theme="neo-brutalist"] #system-modal .modal-actions button,
+html[data-theme="neo-brutalist"] #system-modal .files-nav,
+html[data-theme="neo-brutalist"] #system-modal .files-action,
+html[data-theme="neo-brutalist"] #system-modal .files-place,
+html[data-theme="neo-brutalist"] #system-modal .browser-launch .btn,
+html[data-theme="neo-brutalist"] #system-modal .browser-actions .btn {
+  background: var(--surface-1);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  box-shadow: none;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .files-action:hover,
+html[data-theme="neo-brutalist"] #system-modal .files-nav:hover,
+html[data-theme="neo-brutalist"] #system-modal .files-place:hover,
+html[data-theme="neo-brutalist"] #system-modal .browser-launch .btn:hover,
+html[data-theme="neo-brutalist"] #system-modal .browser-actions .btn:hover,
+html[data-theme="neo-brutalist"] #system-modal .files-place.active {
+  background: var(--ink);
+  color: var(--surface-1);
+}
+
+html[data-theme="neo-brutalist"] #system-modal .btn-primary,
+html[data-theme="neo-brutalist"] #system-modal .file-row.selected {
+  background: var(--hot);
+  color: var(--surface-1);
+  border-color: var(--ink);
+}
+
+html[data-theme="neo-brutalist"] #system-modal .files-app,
+html[data-theme="neo-brutalist"] #system-modal .browser-app {
+  background:
+    linear-gradient(var(--hairline-soft) 1px, transparent 1px) 0 0 / 28px 28px,
+    linear-gradient(90deg, var(--hairline-soft) 1px, transparent 1px) 0 0 / 28px 28px,
+    var(--surface-1);
+}
+
+html[data-theme="neo-brutalist"] #system-modal .files-sidebar {
+  background: var(--surface-3);
+  border-right: 1px solid var(--ink);
+}
+
+html[data-theme="neo-brutalist"] #system-modal .system-app-brand {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--ink);
+  padding-bottom: 12px;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .system-app-brand::after {
+  content: "01";
+  margin-left: auto;
+  color: var(--hot);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .system-app-glyph,
+html[data-theme="neo-brutalist"] #system-modal .system-app-glyph::before,
+html[data-theme="neo-brutalist"] #system-modal .files-place-icon,
+html[data-theme="neo-brutalist"] #system-modal .files-place-icon::before {
+  background: var(--surface-1);
+  border-color: var(--ink);
+  border-radius: 0;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .files-toolbar {
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--ink);
+}
+
+html[data-theme="neo-brutalist"] #system-modal .files-path,
+html[data-theme="neo-brutalist"] #system-modal .browser-url {
+  height: 42px;
+  background: var(--surface-1);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .files-list {
+  background: var(--surface-1);
+  border-right: 1px solid var(--ink);
+}
+
+html[data-theme="neo-brutalist"] #system-modal .file-row {
+  color: var(--ink);
+  background: var(--surface-1);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  margin-bottom: -1px;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .file-row:hover {
+  background: var(--surface-3);
+}
+
+html[data-theme="neo-brutalist"] #system-modal .file-icon[data-kind],
+html[data-theme="neo-brutalist"] #system-modal .file-icon[data-kind]::before,
+html[data-theme="neo-brutalist"] #system-modal .file-icon[data-kind]::after,
+html[data-theme="neo-brutalist"] #system-modal .files-preview-icon,
+html[data-theme="neo-brutalist"] #system-modal .files-preview-icon::before,
+html[data-theme="neo-brutalist"] #system-modal .files-preview-large-icon,
+html[data-theme="neo-brutalist"] #system-modal .files-preview-large-icon::before,
+html[data-theme="neo-brutalist"] #system-modal .files-preview-large-icon::after {
+  background: var(--surface-1);
+  border-color: var(--ink);
+  border-radius: 0;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .file-row.selected .file-icon[data-kind],
+html[data-theme="neo-brutalist"] #system-modal .file-row.selected .file-icon[data-kind]::before,
+html[data-theme="neo-brutalist"] #system-modal .file-row.selected .file-icon[data-kind]::after {
+  background: var(--surface-1);
+}
+
+html[data-theme="neo-brutalist"] #system-modal .file-name {
+  font-weight: 700;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .file-meta,
+html[data-theme="neo-brutalist"] #system-modal .files-preview-kind,
+html[data-theme="neo-brutalist"] #system-modal .browser-details span {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .files-preview {
+  background: var(--surface-3);
+}
+
+html[data-theme="neo-brutalist"] #system-modal .files-preview-card {
+  background: var(--surface-1);
+  color: var(--ink);
+  border-left: 1px solid var(--ink);
+}
+
+html[data-theme="neo-brutalist"] #system-modal .files-download-link {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .files-illustration {
+  right: 22px;
+  top: 74px;
+  width: 210px;
+  height: 160px;
+  color: var(--ink);
+  opacity: 0.14;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .files-illustration-folder,
+html[data-theme="neo-brutalist"] #system-modal .files-illustration-card,
+html[data-theme="neo-brutalist"] #system-modal .files-illustration-dot {
+  position: absolute;
+  background: var(--surface-1);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .files-illustration-folder {
+  left: 0;
+  top: 30px;
+  width: 150px;
+  height: 94px;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .files-illustration-folder::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: -24px;
+  width: 80px;
+  height: 24px;
+  border: 1px solid var(--ink);
+  border-bottom: 0;
+  background: var(--surface-1);
+}
+
+html[data-theme="neo-brutalist"] #system-modal .files-illustration-card {
+  right: 0;
+  bottom: 0;
+  width: 64px;
+  height: 86px;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .files-illustration-dot {
+  right: 30px;
+  top: 8px;
+  width: 36px;
+  height: 36px;
+  background: var(--hot);
+}
+
+html[data-theme="neo-brutalist"] #system-modal .browser-status,
+html[data-theme="neo-brutalist"] #system-modal .browser-details div {
+  background: var(--surface-1);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .browser-status.ready {
+  border-left: 8px solid var(--hot);
+}
+
+html[data-theme="neo-brutalist"] #system-modal .browser-status.error {
+  background: var(--hot);
+  color: var(--surface-1);
+}
+
+html[data-theme="neo-brutalist"] #system-modal .browser-details div {
+  padding: 12px;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .browser-details code,
+html[data-theme="neo-brutalist"] #system-modal .browser-status strong,
+html[data-theme="neo-brutalist"] #system-modal .browser-status span {
+  color: currentColor;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .browser-illustration {
+  color: var(--ink);
+  opacity: 0.11;
+}
+
+html[data-theme="neo-brutalist"] #system-modal .browser-illustration-window,
+html[data-theme="neo-brutalist"] #system-modal .browser-illustration-window::before,
+html[data-theme="neo-brutalist"] #system-modal .browser-illustration-globe {
+  border-color: var(--ink);
+  border-radius: 0;
+}
+
+html[data-theme="neo-brutalist"] .thought-bubble {
+  --thought-bg: var(--surface-1);
+  --thought-border: var(--ink);
+  --thought-text: var(--ink);
+  --thought-shadow: 8px 8px 0 var(--hot);
+  border-radius: 0;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+}
+
+html[data-theme="neo-brutalist"] .thought-bubble::before {
+  content: "SAY";
+  position: absolute;
+  left: 10px;
+  top: -11px;
+  padding: 2px 8px;
+  background: var(--hot);
+  color: var(--surface-1);
+  border: 1px solid var(--ink);
+  font: 800 10px/1 var(--font-mono);
+}
+
+html[data-theme="neo-brutalist"] .thought-bubble::after {
+  border-right-color: var(--ink);
+  border-bottom-color: var(--ink);
+  border-radius: 0;
+}

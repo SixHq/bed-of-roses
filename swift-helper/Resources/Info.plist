@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTD/PropertyLists-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleExecutable</key>
+  <string>BedOfRosesHelper</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.bedofroses.helper</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>BedOfRosesHelper</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>0.1.0</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>13.0</string>
+  <!-- Background-agent: no Dock icon, no menu bar. Helper is invisible to
+       the user; they see only the NSWindows it creates. -->
+  <key>LSUIElement</key>
+  <true/>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+  <key>NSPrincipalClass</key>
+  <string>NSApplication</string>
+  <key>NSSupportsAutomaticTermination</key>
+  <false/>
+  <key>NSSupportsSuddenTermination</key>
+  <false/>
+  <!-- Usage descriptions for permissions the helper exercises in later
+       phases. Declaring them up-front avoids a re-sign when those phases
+       land. macOS shows these strings to the user when prompting. -->
+  <key>NSScreenCaptureUsageDescription</key>
+  <string>Bed of Roses captures the screen when you ask it to look at something or take a screenshot.</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Bed of Roses uses Apple events as a fallback when the modern wallpaper API is unavailable.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Bed of Roses uses the microphone for voice features when you opt in.</string>
+</dict>
+</plist>

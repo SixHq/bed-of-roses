@@ -1,0 +1,169 @@
+/* Theme: Y2K Frutiger Aero — translucent gel, sky gradients, lime accents.
+   2003 corporate optimism. Sony VAIO, Windows Vista Aero, water droplets on
+   a glossy plastic shell. Reads as hopeful, slightly artificial, brand-new.
+
+   Hallmarks:
+     • Saturated blue-cyan SKY gradient atmosphere — the glass needs color
+       beneath it to refract; without it the frosted surfaces read empty.
+     • Glass-white surfaces with rgba whites at 70-90% + backdrop-filter blur.
+     • Gel buttons with a hard 50%-line gloss break (top half bright, bottom
+       half deep), inset top specular highlight, soft outer drop shadow.
+     • Pixel-precise rounded rectangles (no half-pixels). Generous radii.
+     • Sora display in restrained weights with negative tracking — the
+       design file specifies Sora; matches the Frutiger-tense corporate
+       optimism better than a flat Inter Display can.
+     • Halos REPURPOSED: instead of presence-color glow, they're the
+       cyan/blue "gel-bloom" outer drop shadow that defines this theme.
+
+   Tokens stay in the same contract as Bloom — the structural shell reads
+   from these variable names. Component-level treatments (gel gradients,
+   specular highlights, frosted backdrops) live in extras.css. */
+
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* ----------------------------------------------------------------
+     Surfaces — light blue gradient base, glass-white tinted elevations.
+     Canvas is a soft sky gradient; surfaces use translucent whites that
+     read as frosted glass once backdrop-filter is applied in extras.
+     ---------------------------------------------------------------- */
+  --canvas:    #BFE7FF;                          /* sky base — top of the gradient */
+  --surface-1: rgba(255, 255, 255, 0.78);        /* gel sheet — primary glass */
+  --surface-2: rgba(255, 255, 255, 0.62);        /* recessed glass (drawers, expanded cards) */
+  --surface-3: rgba(255, 255, 255, 0.46);        /* most-recessed glass */
+  --bloom:     #00D5FF;                          /* aqua — celebratory highlight */
+
+  /* Ink — the design file uses a dark navy, not pure black. Pure black
+     would feel out of period — Aero leaned cool-warm navy. */
+  --ink:       #0A2A4D;
+  --ink-2:     rgba(10, 42, 77, 0.72);
+
+  /* Hairlines — bright white edge-light is the dominant hairline in Aero.
+     The strong variant exists for focused/active states. */
+  --hairline:        rgba(255, 255, 255, 0.55);
+  --hairline-strong: rgba(255, 255, 255, 0.85);
+  --hairline-soft:   rgba(255, 255, 255, 0.30);
+
+  /* Labels — navy ink on glass. Avoid black; Y2K never used pure black. */
+  --label:    #0A2A4D;
+  --label-2:  rgba(10, 42, 77, 0.72);
+  --label-3:  rgba(10, 42, 77, 0.50);
+  --label-4:  rgba(10, 42, 77, 0.32);
+
+  /* Translucent fills — light overlays that work over the glass surfaces
+     (vs Bloom's neutral greys which work over a near-black canvas). */
+  --fill-1: rgba(0, 102, 255, 0.14);
+  --fill-2: rgba(0, 102, 255, 0.08);
+  --fill-3: rgba(0, 102, 255, 0.04);
+
+  /* ----------------------------------------------------------------
+     Y2K accent palette. Available as named tokens for the LLM and
+     component overrides; the structural shell never references them.
+     ---------------------------------------------------------------- */
+  --sky-1:  #9ED6FF;
+  --sky-2:  #3BA8FF;
+  --sky-3:  #0066FF;   /* electric blue — the hero accent */
+  --aqua:   #00D5FF;   /* listening / focus */
+  --lime:   #A8E063;   /* lime green — celebratory accent */
+  --lime-deep: #5FC92F;
+  --silver: #C8D6E5;
+  --silver-2: #E6EEF6;
+
+  /* Gloss — the half-half gradient that sits on top of every gel surface.
+     Hard break at 50% is the Aero hallmark — a gradient that "snaps"
+     instead of blends, suggesting a plastic seam. */
+  --gel-gloss: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.85) 0%,
+    rgba(255, 255, 255, 0.35) 48%,
+    rgba(255, 255, 255, 0.00) 50%,
+    rgba(255, 255, 255, 0.18) 100%);
+
+  /* Default presence — Electric blue. Y2K's signature hue. The avatar
+     orb on the home screen will pulse this color. */
+  --avatar-color-rgb: 0, 102, 255;
+
+  /* Wallpaper layer — the structural shell paints this on top of canvas.
+     We default to transparent and let .wallpaper override in extras with
+     a saturated multi-stop sky gradient. */
+  --wallpaper: transparent;
+
+  /* ----------------------------------------------------------------
+     Atmosphere — multi-stop blue-glass sky gradient applied to body.
+     The glass surfaces NEED this saturation underneath them to refract,
+     otherwise frosted blur reads grey. Stops match the design file:
+     soft sky at the top → mid blue at the horizon → electric depth.
+     ---------------------------------------------------------------- */
+  --atmosphere:
+    radial-gradient(ellipse 90% 70% at 80% 0%,    rgba(255, 255, 255, 0.55), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 10% 100%,  rgba(168, 224, 99, 0.20),  transparent 65%),
+    radial-gradient(ellipse 60% 50% at 90% 100%,  rgba(0, 213, 255, 0.22),   transparent 70%),
+    linear-gradient(180deg,
+      #E5F4FF 0%,
+      #BFE7FF 35%,
+      #7FC8FF 75%,
+      #3BA8FF 100%);
+
+  /* ----------------------------------------------------------------
+     Halos REPURPOSED as gel-bloom drop shadows. The structural shell
+     uses --halo-* on the active value, the chat orb, the primary CTA.
+     Here those halos are the soft cyan/blue outer glows that make the
+     gel surfaces feel like they're floating above the sky. The deeper
+     shadow handles modal-level elevation.
+     ---------------------------------------------------------------- */
+  --halo-soft:   0  4px 12px rgba(0, 102, 255, 0.18),
+                 0  1px  2px rgba(0,  40, 120, 0.20);
+  --halo-medium: 0  8px 22px rgba(0, 102, 255, 0.28),
+                 0  2px  4px rgba(0,  40, 120, 0.20);
+  --halo-strong: 0 14px 36px rgba(0, 102, 255, 0.36),
+                 0  3px  6px rgba(0,  40, 120, 0.22);
+  --shadow-deep: 0 24px 60px rgba(0,  40, 120, 0.40),
+                 0  4px  8px rgba(0,  40, 120, 0.24);
+
+  /* Spacing — 4px base, unchanged from the system grid. */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-7: 32px; --s-8: 40px;
+  --s-9: 56px; --s-10: 72px; --s-11: 96px;
+
+  /* ----------------------------------------------------------------
+     Radii — Aero used soft, generous, pixel-precise corners. No half-
+     pixels. Buttons aren't pill-shaped at this token tier; the gel
+     button override in extras pulls them out to 999px when wanted.
+     ---------------------------------------------------------------- */
+  --r-input:  12px;
+  --r-button: 12px;
+  --r-bar:    14px;
+  --r-tile:   16px;
+  --r-modal:  18px;
+
+  /* ----------------------------------------------------------------
+     Type — Sora for display (the design file's choice; reads as the
+     period-correct corporate-friendly geometric sans), Inter for body
+     (highly legible across long-form), JetBrains Mono for telemetry.
+     The brief calls for "Inter Display in restrained weights" and the
+     design file uses Sora — they're cousins; Sora is the designer's
+     intent and we honor it.
+     ---------------------------------------------------------------- */
+  --font-display: "Sora", "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+  --font-system:  "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
+
+  /* Type scale — display sizes a touch larger than Bloom; Y2K liked big
+     optimistic numbers. Body stays at 15 for legibility. */
+  --t-hero:     64px;
+  --t-display:  44px;
+  --t-title-1:  32px;
+  --t-title-2:  22px;
+  --t-headline: 17px;
+  --t-body:     15px;
+  --t-subhead:  13px;
+  --t-caption:  11px;
+  --t-micro:    10px;
+
+  /* Motion — same easing curves as Bloom (these are good defaults), but
+     a touch faster on micro-interactions. Aero felt responsive. */
+  --ease-standard: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-snap:     cubic-bezier(0.20, 0.00, 0.00, 1);
+  --d-micro:  160ms;
+  --d-pane:   340ms;
+  --d-layout: 580ms;
+}

@@ -1,0 +1,157 @@
+/* Theme: Liquid Glass — Apple WWDC25 / visionOS frosted refraction.
+
+   The whole theme is built around one central idea: every elevated surface is
+   a thick pane of frosted glass, and what makes the glass *sing* is the
+   richly chromatic world that sits behind it. Without a saturated wallpaper
+   the refraction has nothing to refract — so this token set ships its own
+   violet→magenta→cyan→amber aurora as the canvas.
+
+   Hallmarks:
+     • Translucent white surfaces (rgba 0.10/0.18/0.28) over a saturated
+       multi-radial gradient backdrop.
+     • Edge-light specular hairlines along the top of every card — the
+       single 1px bright-white inner highlight that visionOS uses to imply
+       a refracting bevel.
+     • Generous corner radii (24–32px) and pill buttons (999px). Glass
+       needs room to breathe.
+     • SF Pro Display first (loads natively on Apple silicon), Inter Tight
+       fallback so non-Apple devices still render with similar metrics.
+     • Italic Instrument Serif kept loaded for the editorial register
+       (logo "R", italic headline flourishes — mirrors the source canvas).
+     • JetBrains Mono fallback for SF Mono on HUD telemetry / micro-caps.
+
+   The structural shell (shell/style.css) reads from these variables. The
+   companion extras.css adds the backdrop-filter blur, the gradient backdrop,
+   the inner top-light, and the cursor-tilt parallax that go beyond simple
+   tokens. */
+
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* ------------------------------------------------------------------
+     SURFACES — translucent whites over a saturated chromatic backdrop.
+     The canvas is NOT used as a flat fill — it's the colored sky the
+     glass refracts. The shell paints `body { background: var(--atmosphere) }`,
+     so --atmosphere is where the four-stop aurora lives.
+  ------------------------------------------------------------------ */
+  --canvas:    #06090F;             /* deep navy fallback if blur is unavailable */
+  --surface-1: rgba(255, 255, 255, 0.10);   /* default glass — clearest */
+  --surface-2: rgba(255, 255, 255, 0.18);   /* hover / elevated glass   */
+  --surface-3: rgba(255, 255, 255, 0.28);   /* pressed / selected glass */
+  --bloom:     #A78BFA;             /* iridescent violet — accent presence */
+
+  /* Hairlines — bright translucent white because they read as edge-light
+     specular highlights, not borders. The "soft" variant is used for the
+     bottom edge so the bevel feels asymmetric like real glass. */
+  --hairline:        rgba(255, 255, 255, 0.18);
+  --hairline-strong: rgba(255, 255, 255, 0.45);
+  --hairline-soft:   rgba(255, 255, 255, 0.10);
+
+  /* Labels — pure white over saturated wallpaper. The 0.78 muted variant is
+     the visionOS standard for secondary copy on glass; 0.55 for tertiary
+     captions; 0.34 for whispered metadata. */
+  --label:    #FFFFFF;
+  --label-2:  rgba(255, 255, 255, 0.78);
+  --label-3:  rgba(255, 255, 255, 0.55);
+  --label-4:  rgba(255, 255, 255, 0.34);
+
+  /* Translucent fills — kept warm-white so they tint inside frosted panes
+     without going grey-flat. */
+  --fill-1: rgba(255, 255, 255, 0.16);
+  --fill-2: rgba(255, 255, 255, 0.10);
+  --fill-3: rgba(255, 255, 255, 0.06);
+
+  /* Default presence — iridescent violet (#A78BFA = rgb 167,139,250). Picks
+     up the violet cluster of the wallpaper, complements the cyan cluster on
+     the opposite side. Reads as "Apple Intelligence" without copying it. */
+  --avatar-color-rgb: 167, 139, 250;
+  --wallpaper: transparent;
+
+  /* ------------------------------------------------------------------
+     ATMOSPHERE — the four-stop aurora the glass refracts.
+     Layered radial gradients give us the photo-real backdrop without
+     loading an image. Order matters: deep navy base goes last so the
+     chromatic clusters sit on top of it.
+       1. violet/magenta cluster (top-left)   — #C13BB5 / #FF7AB6
+       2. cyan/blue cluster (bottom-right)    — #1E5BC7 / #6DC8FF
+       3. amber/coral warm pop (center)       — #E76F00 / #FFD08A
+       4. mint flash (top-right, restrained)  — #1E9F6B / #B6FFE5
+     The glass surfaces above pick up whichever cluster sits behind them —
+     that's the whole game. extras.css adds the same gradient at .wallpaper
+     scope so it covers the home screen too.
+  ------------------------------------------------------------------ */
+  --atmosphere:
+    radial-gradient(60% 80% at  10%   0%, rgba(193,  59, 181, 0.85), transparent 60%),
+    radial-gradient(60% 80% at 110% 110%, rgba( 30,  91, 199, 0.85), transparent 60%),
+    radial-gradient(50% 50% at  60%  60%, rgba(231, 111,   0, 0.65), transparent 65%),
+    radial-gradient(38% 38% at  85%  10%, rgba( 30, 159, 107, 0.55), transparent 70%),
+    #06090F;
+
+  /* ------------------------------------------------------------------
+     HALOS — iridescent multi-color specular bloom around the avatar/orb.
+     The violet core gets a cyan secondary at the soft outer edge so the
+     glow reads as iridescent rather than a single-hue flare.
+  ------------------------------------------------------------------ */
+  --halo-soft:
+    0 0 24px  rgba(var(--avatar-color-rgb), 0.30),
+    0 0 48px  rgba( 34, 211, 238, 0.16);
+  --halo-medium:
+    0 0 60px  rgba(var(--avatar-color-rgb), 0.30),
+    0 0 100px rgba( 34, 211, 238, 0.14);
+  --halo-strong:
+    0 0 100px rgba(var(--avatar-color-rgb), 0.40),
+    0 0 160px rgba( 34, 211, 238, 0.18);
+  /* The "deep" shadow for floating glass: large soft drop, no offset.
+     Two stacked shadows give the parallax depth visionOS uses — a tight
+     contact shadow + a wide ambient one. */
+  --shadow-deep:
+    0  8px 24px -8px rgba(0, 0, 0, 0.35),
+    0 30px 60px -20px rgba(0, 0, 0, 0.55);
+
+  /* Spacing — 4px base, identical to Bloom so layout stays consistent
+     across themes. */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-7: 32px; --s-8: 40px;
+  --s-9: 56px; --s-10: 72px; --s-11: 96px;
+
+  /* Radii — generous. visionOS / Liquid Glass uses pill geometry on
+     interactive elements (button = 999px) and 22–28px on cards. */
+  --r-input:  22px;
+  --r-button: 999px;
+  --r-bar:    24px;
+  --r-tile:   24px;
+  --r-modal:  32px;
+
+  /* ------------------------------------------------------------------
+     TYPE — SF Pro first (native on Apple silicon), Inter Tight as the
+     cross-platform fallback (loaded via Google Fonts), Instrument Serif
+     kept loaded for the italic editorial register the source canvas uses
+     for the logo and headline flourishes.
+  ------------------------------------------------------------------ */
+  --font-display: "SF Pro Display", "Inter Tight", -apple-system, BlinkMacSystemFont, "Helvetica Neue", system-ui, sans-serif;
+  --font-system:  "SF Pro Text", "Inter Tight", -apple-system, BlinkMacSystemFont, "Helvetica Neue", system-ui, sans-serif;
+  --font-mono:    "SF Mono", "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --font-serif:   "Instrument Serif", "New York", Georgia, serif;
+
+  /* Type scale — slightly larger hero than Bloom. The aurora canvas can
+     carry a bigger headline without crowding. */
+  --t-hero:     64px;
+  --t-display:  44px;
+  --t-title-1:  28px;
+  --t-title-2:  22px;
+  --t-headline: 17px;
+  --t-body:     15px;
+  --t-subhead:  13px;
+  --t-caption:  11px;
+  --t-micro:    10px;
+
+  /* Motion — visionOS easings: longer duration, softer curves. The shell's
+     standard ease lines up with Apple's preferred fluid spring; we slow
+     pane transitions slightly so glass feels weightier than the brutalist
+     theme's snap. */
+  --ease-standard: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-snap:     cubic-bezier(0.20, 0.00, 0.00, 1);
+  --d-micro:  220ms;
+  --d-pane:   420ms;
+  --d-layout: 680ms;
+}

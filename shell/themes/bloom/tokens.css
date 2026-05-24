@@ -1,0 +1,83 @@
+/* Theme: Bloom — the default Bed of Roses signature.
+   Warm aubergine night, iridescent rim light, Instrument Serif headlines,
+   Geist body, Lilac presence. Reads as a garden at dusk. */
+
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap');
+
+:root {
+  /* Surfaces — warm-shifted near-black with violet/plum undertone */
+  --canvas:    #07060B;
+  --surface-1: #15131D;
+  --surface-2: #221F2D;
+  --surface-3: #322D40;
+  --bloom:     #2A1F38;
+
+  /* Hairlines — tinted iridescent rather than neutral white */
+  --hairline:        rgba(220, 210, 255, 0.10);
+  --hairline-strong: rgba(220, 210, 255, 0.18);
+  --hairline-soft:   rgba(220, 210, 255, 0.06);
+
+  /* Labels — off-white with a warm violet hint */
+  --label:    #F5F1FF;
+  --label-2:  rgba(238, 232, 250, 0.62);
+  --label-3:  rgba(238, 232, 250, 0.34);
+  --label-4:  rgba(238, 232, 250, 0.20);
+
+  /* Translucent fills — kept neutral grey for surface depth */
+  --fill-1: rgba(120, 120, 128, 0.36);
+  --fill-2: rgba(120, 120, 128, 0.24);
+  --fill-3: rgba(118, 118, 128, 0.16);
+
+  /* Default presence — soft Lilac. Reads as warm/cool simultaneously,
+     gender-neutral, dreamlike. Customised after onboarding. */
+  --avatar-color-rgb: 196, 168, 240;
+  --wallpaper: transparent;
+
+  /* Atmospheric body wash — multi-radial of presence colors over the canvas */
+  --atmosphere:
+    radial-gradient(ellipse 80% 60% at 20% 0%,    rgba(196, 168, 240, 0.10), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 90% 100%,  rgba(143, 229, 197, 0.08), transparent 65%),
+    radial-gradient(ellipse 60% 60% at 60% 50%,   rgba(244, 158, 186, 0.05), transparent 70%),
+    var(--canvas);
+
+  /* Halo / glow system — iridescent, multi-stop */
+  --halo-soft:   0 0 24px  rgba(var(--avatar-color-rgb), 0.20);
+  --halo-medium: 0 0 60px  rgba(var(--avatar-color-rgb), 0.16);
+  --halo-strong: 0 0 100px rgba(var(--avatar-color-rgb), 0.22);
+  --shadow-deep: 0 12px 32px rgba(0, 0, 0, 0.55);
+
+  /* Spacing — 4px base */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-7: 32px; --s-8: 40px;
+  --s-9: 56px; --s-10: 72px; --s-11: 96px;
+
+  /* Radii */
+  --r-input: 12px;
+  --r-button: 14px;
+  --r-bar: 16px;
+  --r-tile: 22px;
+  --r-modal: 28px;
+
+  /* Type — Instrument Serif (display) + Geist (body) + Geist Mono (labels) */
+  --font-display: "Instrument Serif", "Cormorant Garamond", Georgia, serif;
+  --font-system:  "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  --font-mono:    "Geist Mono", "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
+
+  /* Type scale */
+  --t-hero:     56px;
+  --t-display:  44px;
+  --t-title-1:  28px;
+  --t-title-2:  22px;
+  --t-headline: 17px;
+  --t-body:     15px;
+  --t-subhead:  13px;
+  --t-caption:  11px;
+  --t-micro:    10px;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-snap:     cubic-bezier(0.20, 0.00, 0.00, 1);
+  --d-micro:  200ms;
+  --d-pane:   360ms;
+  --d-layout: 600ms;
+}

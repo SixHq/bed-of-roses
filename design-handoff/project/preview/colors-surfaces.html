@@ -1,0 +1,15 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css"><style>
+body{margin:0;padding:24px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.s{position:relative;height:104px;border-radius:18px;overflow:hidden;border:1px solid var(--hairline);display:flex;flex-direction:column;justify-content:flex-end;padding:14px;background:var(--bg)}
+.s::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 120% 80% at 30% 0%,rgba(var(--rim),.18),transparent 60%),radial-gradient(ellipse 100% 70% at 80% 100%,rgba(var(--rim2),.12),transparent 70%);pointer-events:none}
+.s::after{content:'';position:absolute;inset:0;border-radius:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),inset 0 0 0 1px rgba(var(--rim),.10);pointer-events:none}
+.name{font-family:var(--font-display);font-size:22px;font-style:italic;color:var(--label);letter-spacing:-.012em;position:relative}
+.row{display:flex;justify-content:space-between;align-items:baseline;position:relative;margin-top:2px}
+.tier{font-family:var(--font-mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--label-3)}
+.hex{font-family:var(--font-mono);font-size:10px;color:var(--label-2)}
+</style></head><body>
+<div class="s" style="--bg:#07060B;--rim:196,168,240;--rim2:143,229,197"><span class="name">Canvas</span><div class="row"><span class="tier">L0 · Night</span><span class="hex">#07060B</span></div></div>
+<div class="s" style="--bg:#15131D;--rim:196,168,240;--rim2:244,158,186"><span class="name">Surface</span><div class="row"><span class="tier">L1 · Petal</span><span class="hex">#15131D</span></div></div>
+<div class="s" style="--bg:#221F2D;--rim:160,203,240;--rim2:196,168,240"><span class="name">Lifted</span><div class="row"><span class="tier">L2 · Bloom</span><span class="hex">#221F2D</span></div></div>
+<div class="s" style="--bg:#322D40;--rim:244,158,186;--rim2:196,168,240"><span class="name">Pressed</span><div class="row"><span class="tier">L3 · Dusk</span><span class="hex">#322D40</span></div></div>
+</body></html>

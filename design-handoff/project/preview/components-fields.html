@@ -1,0 +1,20 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css"><style>
+body{margin:0;padding:26px;display:flex;flex-direction:column;gap:18px;max-width:480px}
+.field{display:flex;flex-direction:column;gap:8px}
+.lbl{font-family:var(--font-display);font-style:italic;font-size:15px;color:var(--label-2);letter-spacing:-.005em}
+.in{position:relative}
+.in input{width:100%;padding:16px 18px;background:rgba(34,31,45,.55);border:1px solid rgba(220,210,255,.12);border-radius:14px;color:var(--label);font-size:15px;font-family:var(--font-system);outline:0;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);letter-spacing:-.005em}
+.in input::placeholder{color:rgba(238,232,250,.34);font-style:italic;font-family:var(--font-display);font-size:16px}
+.in.f input{border-color:rgba(196,168,240,.55);box-shadow:0 0 0 4px rgba(196,168,240,.10),0 0 32px rgba(196,168,240,.18)}
+.glow{position:absolute;inset:-2px;border-radius:16px;pointer-events:none;background:linear-gradient(120deg,transparent 30%,rgba(196,168,240,.22) 50%,transparent 70%);opacity:0;transition:opacity .3s}
+.in.f .glow{opacity:1}
+</style></head><body>
+<div class="field">
+  <span class="lbl">What should I call you?</span>
+  <div class="in"><div class="glow"></div><input placeholder="say a name…"></div>
+</div>
+<div class="field">
+  <span class="lbl">Your key</span>
+  <div class="in f"><div class="glow"></div><input type="password" value="••••••••••••"></div>
+</div>
+</body></html>

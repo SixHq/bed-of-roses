@@ -1,0 +1,16 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css"><style>
+body{margin:0;padding:30px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;height:46px;padding:0 22px;border-radius:14px;font-family:var(--font-system);font-size:15px;font-weight:500;letter-spacing:-.005em;border:1px solid transparent;cursor:pointer;transition:transform .12s}
+.btn:active{transform:scale(.98)}
+.p{background:linear-gradient(180deg,rgba(255,255,255,.96),rgba(245,241,255,.92));color:#1a1525;box-shadow:0 0 0 1px rgba(196,168,240,.45),0 0 28px rgba(196,168,240,.30),0 0 70px rgba(143,229,197,.14),0 12px 36px rgba(0,0,0,.55)}
+.s{background:rgba(34,31,45,.5);color:var(--label);border-color:rgba(220,210,255,.18);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.s:hover{background:rgba(50,45,64,.6);border-color:rgba(220,210,255,.30)}
+.t{background:transparent;color:rgba(238,232,250,.6);border:0;font-weight:400;height:auto;padding:8px 0}
+.t:hover{color:var(--label)}
+.dot{width:6px;height:6px;border-radius:50%;background:#C4A8F0;box-shadow:0 0 8px #C4A8F0}
+</style></head><body>
+<button class="btn p"><span class="dot"></span>Begin</button>
+<button class="btn s">Continue</button>
+<button class="btn p" style="opacity:.4;cursor:not-allowed">Begin</button>
+<button class="btn t">Maybe later</button>
+</body></html>

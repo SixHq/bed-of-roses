@@ -1,0 +1,70 @@
+---
+title: "Command Line"
+description: "The bor CLI (bin/bed-of-roses.cjs, also runnable as npx bor) launches the host and manages presences from the terminal. It's the headless complement to the Main BOR app."
+---
+
+The `bor` CLI (`bin/bed-of-roses.cjs`, also runnable as `npx bor`) launches the host and manages presences from the terminal. It's the headless complement to the [Main BOR app](../features/multi-presence.md#the-main-bor-app).
+
+## Commands
+
+```
+bor onboard               Launch the host and create a new presence with onboarding.
+bor create [name]         Register a new presence (headless). Prints its id.
+bor delete <presence_id>  Delete a presence + its data dir (headless).
+bor list                  List presences (headless). (alias: ls)
+bor help                  Show help. (aliases: --help, -h)
+```
+
+With no subcommand, `bor` (i.e. `npx bor` / `npm run v2`) launches the Electron host.
+
+### `bor onboard`
+
+Launches the host and starts onboarding for a new presence — pick a provider, name, personality, avatar, and theme. The same flow you get on first run.
+
+### `bor create [name]`
+
+Registers a new presence **headlessly** (no window) and prints its id. Give it a nickname:
+
+```bash
+bor create "Work"
+# → created presence p-1a2b3c4d ("Work")
+# Run `bor onboard` to set it up, or restart Bed of Roses if it's already running.
+```
+
+The presence exists but isn't onboarded yet — run `bor onboard` (or open it in the app) to configure it.
+
+### `bor delete <presence_id>`
+
+Deletes a presence **and its entire data directory** (its surfaces, memory, files, config). This is irreversible.
+
+```bash
+bor delete p-1a2b3c4d
+```
+
+The delete is guarded so it only ever removes a directory under `os-data/presences/`.
+
+### `bor list` (alias `bor ls`)
+
+Lists every presence with its id, nickname, and whether it's been onboarded:
+
+```bash
+bor list
+# id            nickname   onboarded
+# p-903a4b1e    Bed of…    yes
+# p-1a2b3c4d    Work       no
+```
+
+If there are none, it tells you to run `bor onboard`.
+
+## Relationship to the app
+
+- `bor` / `npx bor` / `npm run v2` — launch the full Electron host (presence windows, etc.).
+- `bor create/delete/list` — manage the presence **registry** (`os-data/presences.json`) without a window.
+- The Main BOR app does the same management with a UI.
+
+If the host is already running, `bor create` registers the presence; restart (or use the Main app) to spin up its window/runtime.
+
+## See also
+
+- [Multi-presence](../features/multi-presence.md) — what presences are and how isolation works.
+- [Installation](../getting-started/installation.md) — the full `npm`/`npx` command list.

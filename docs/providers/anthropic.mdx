@@ -1,0 +1,28 @@
+---
+title: "Anthropic"
+description: "Use Claude models in BOR with an Anthropic API key. Adapter: server/providers/anthropic.js."
+---
+
+Use Claude models in BOR with an Anthropic API key. Adapter: `server/providers/anthropic.js`.
+
+## Setup
+
+1. Get an API key from the Anthropic Console (the provider's `signupUrl` links there from onboarding).
+2. In [onboarding](../getting-started/onboarding.md), pick **Anthropic**, paste your key, and choose a model.
+3. BOR validates the key and you're in.
+
+## Choosing a model
+
+Pick a **current** Claude model from Anthropic's live docs. Model ids change on a months-long cadence, so prefer the latest capable model rather than an old hardcoded id. A vision-capable model is recommended so features like `locate_screen_element`, screenshot feedback in the [browser](../features/the-browser.md), and image attachments work.
+
+## Notes
+
+- Anthropic supports prompt **caching** and image blocks; BOR's multimodal layer handles both.
+- Claude is strong at the tool-following BOR relies on (the XML protocol, the build→run→preview discipline).
+- Configure later by editing `providers.anthropic` in the presence's `config.json`, or just ask BOR to switch models.
+
+## Troubleshooting
+
+- **401 / invalid key** — re-check the key in onboarding or `config.json`.
+- **404 model** — the model id retired; pick a current one.
+- See [Troubleshooting](../troubleshooting.md).

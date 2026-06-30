@@ -1,0 +1,27 @@
+---
+title: "OpenAI"
+description: "Use GPT models in BOR with an OpenAI API key. Adapter: server/providers/openai.js."
+---
+
+Use GPT models in BOR with an OpenAI API key. Adapter: `server/providers/openai.js`.
+
+## Setup
+
+1. Get an API key from the OpenAI platform (linked from onboarding).
+2. In [onboarding](../getting-started/onboarding.md), pick **OpenAI**, paste your key, and choose a model.
+3. BOR validates and you're ready.
+
+## Choosing a model
+
+Pick a **current** GPT model from OpenAI's live docs — model ids rotate, so avoid stale hardcoded ones. A vision-capable model is recommended so screenshot-based features work ([browser](../features/the-browser.md) previews, `locate_screen_element`, image attachments).
+
+## Notes
+
+- BOR's multimodal layer handles OpenAI image blocks and streaming via the shared provider utilities.
+- Prompt-prefix caching is supported through a byte-stable prefix where the provider allows it.
+- Edit `providers.openai` in `config.json` to change the key/model later, or ask BOR to switch.
+
+## Troubleshooting
+
+- **401** — bad key. **404 model** — model retired; pick a current one. **429** — rate-limited; slow down or upgrade your plan.
+- See [Troubleshooting](../troubleshooting.md).

@@ -1,0 +1,76 @@
+---
+title: "The Browser"
+description: "BOR drives a real headless Chromium to load, view, and interact with web pages — and reads back a screenshot plus console logs. This is how it previews the UIs it builds (a landing page, a dev…"
+---
+
+BOR drives a real headless **Chromium** to load, view, and interact with web pages — and reads back a screenshot plus console logs. This is how it **previews the UIs it builds** (a landing page, a dev server, a deployed site) and does light browser work. The tool is `browser_action`, backed by a Playwright session (`server/runtime/browser-session.js`, `server/protocol/handlers/browser.js`).
+
+## How it works
+
+`browser_action` takes one `action` per call:
+
+| Action | Params | What it does |
+|---|---|---|
+| `launch` | `url` | Open a new browser at a URL (must be first). |
+| `click` | `coordinate` (`"x,y"`) | Click at a pixel coordinate. |
+| `type` | text in the body | Type a string. |
+| `scroll_down` / `scroll_up` | — | Scroll one page. |
+| `close` | — | Close the browser (must be last). |
+
+Every action except `close` returns a **fresh screenshot** of the page plus any new console logs. The model inspects the screenshot before deciding the next action. The window is **1024×720**, so click coordinates are in that space, aimed at the center of the target element (read from the screenshot).
+
+The sequence always **starts with `launch`** and **ends with `close`**. While the browser is open, only `browser_action` may be used — any other tool auto-closes it (so BOR can never operate other tools "inside" a live browser). To visit a different URL it can't navigate to, BOR closes and re-launches.
+
+## In the bubble
+
+A `browser_action` session renders as a **browser card** that mirrors a real browser inspector:
+
+- A header (spinner while working, then a label of the action).
+- An **address bar** showing the current URL.
+- The **screenshot**, with an animated **mouse-cursor dot** at the last click position.
+- An expandable **Console Logs** section.
+- **Step pagination** ("Step N of M") so you can scrub through the actions.
+
+The card adapts to your active theme.
+
+## The build → run → preview loop
+
+The browser tool is the third step of how BOR ships a web project:
+
+1. **Build** the project as real code in `.bor/workspaces/` (see [File editing](file-editing.md)).
+2. **Run** the dev server as a [background command](running-commands.md) — it returns the `localhost` URL in ~15s while staying up.
+3. **Preview** with `browser_action launch http://localhost:PORT` and inspect the screenshot.
+
+This is why BOR no longer wraps a website as a BOR app to "show" it — it builds the real thing, runs it, and opens it in the browser.
+
+## What it feeds back to the model
+
+After each action, the model gets:
+
+- a text result with the **console logs** (so it can spot a 500, a missing import, a stack trace), and
+- the **screenshot** attached as an image (so it can see the rendered page).
+
+This lets BOR debug visually: launch the page, see the error in the console, close the browser, fix the file, re-launch, and confirm.
+
+## Requirements
+
+`browser_action` uses the bundled Playwright Chromium. Install it once:
+
+```bash
+npm run browser:install
+```
+
+If it's missing, BOR falls back to your system Chrome (via the `chrome` channel) and otherwise tells you to install it. The session is force-closed on error so BOR is never stuck inside a dead browser.
+
+## The user-facing Browser app vs. `browser_action`
+
+These are different:
+
+- **`browser_action`** — a headless inspector BOR uses to preview and verify pages, shown in the bubble.
+- **The user-facing Browser app** — a visible Chrome BOR can drive for *you* (with its own profile at `.bed-of-roses/browser/user-profile`), controlled via `/api/browser/*` and the `browser-use` commands. Use `BOR_BROWSER_HEADLESS`, `BOR_BROWSER_EXECUTABLE_PATH`, `BOR_BROWSER_CHANNEL` to configure it.
+
+## Use cases
+
+- *"Build me a portfolio and show me."* → build, run, `browser_action` it; iterate on what the screenshot shows.
+- *"Is my landing page rendering correctly?"* → launch it, inspect the screenshot and console.
+- *"Click the Get Started button and show me the next screen."* → launch, click the coordinate, screenshot.

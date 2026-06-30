@@ -1,0 +1,65 @@
+---
+title: "Adding a Provider"
+description: "A provider is an adapter that turns BOR's canonical messages into a vendor's wire format and streams the reply back. Add one by writing the adapter and registering it."
+---
+
+A provider is an adapter that turns BOR's canonical messages into a vendor's wire format and streams the reply back. Add one by writing the adapter and registering it.
+
+## 1. Write the adapter
+
+Create `server/providers/myvendor.js` exporting the common shape:
+
+```js
+export const id = 'myvendor';
+export const label = 'My Vendor';
+export const defaultModel = 'my-current-model';     // pick a CURRENT id
+export const models = ['my-current-model', '…'];
+export const signupUrl = 'https://myvendor.example/keys';
+export const needsBaseUrl = false;                  // true if the endpoint needs a base URL
+
+export async function* stream({ apiKey, model, baseUrl, system, messages, signal }) {
+  // Translate `system` + `messages` (canonical content blocks, incl. images)
+  // into the vendor's request, call its streaming API, and YIELD text chunks.
+  const res = await fetch(`${baseUrl || 'https://api.myvendor.example'}/v1/chat`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ model, stream: true, /* …translated messages… */ }),
+    signal,
+  });
+  // …parse the stream and `yield` each text delta…
+}
+
+// Optional, if the vendor supports it:
+// export async function generateImage({ apiKey, model, prompt, size }) { … }
+```
+
+### What `stream` must do
+
+- Yield **text chunks** as they arrive (it's an async generator).
+- Respect the abort `signal`.
+- Translate **canonical messages** — including `tool_use` / `tool_result` blocks and **image blocks** — to the vendor's shape. Use the shared helpers in `server/providers/multimodal.js`, `sse-util.js`, and `limits.js` so multimodal and streaming behave like every other provider.
+
+## 2. Register it
+
+Add your adapter to `ALL_PROVIDERS` in `server/providers/index.js`. That's what makes it appear in onboarding (`publicCatalog()`), which must keep working — onboarding and the public catalog depend on it.
+
+## 3. Test it
+
+- Re-run onboarding and pick **My Vendor**; enter a key (and base URL if `needsBaseUrl`).
+- Run a simple turn (`<say>` should stream).
+- Run a multimodal turn (attach a screenshot) to confirm image handling.
+- Confirm a tool turn (e.g. `write_file`) round-trips — the model must read `<tool_results>` and continue.
+
+## Conventions
+
+- **Provider parity.** Your provider must be a first-class peer — never a second-class adapter. The chat loop, tools, surfaces, and bridge must behave identically.
+- **Model ids go stale.** Don't hardcode an old id as the default; fetch the vendor's live docs and pick a current model.
+- **Caching.** If the vendor supports prompt/context caching, wire it through the shared prompt-cache layer where the new harness uses it.
+- **Vision.** If the vendor has a vision model, image-driven features (`locate_screen_element`, browser/screenshot feedback) work; if it's text-only, they won't.
+
+## Checklist
+
+- [ ] Adapter exports `{ id, label, defaultModel, models, signupUrl, needsBaseUrl, stream }`.
+- [ ] `stream` yields text deltas, respects `signal`, handles image blocks.
+- [ ] Registered in `ALL_PROVIDERS` (`server/providers/index.js`).
+- [ ] Appears in onboarding; simple + multimodal + tool turns all work.

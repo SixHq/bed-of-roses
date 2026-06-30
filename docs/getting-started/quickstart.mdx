@@ -1,0 +1,76 @@
+---
+title: "Quickstart"
+description: "This page walks through your first useful turns with the presence. It assumes you've installed BOR and finished onboarding."
+---
+
+This page walks through your first useful turns with the presence. It assumes you've [installed](installation.md) BOR and finished [onboarding](onboarding.md).
+
+## Talk to the presence
+
+Click the orb. The composer expands. Type a message and press Enter. While BOR works, the **thought bubble** opens and streams what it's doing.
+
+You can also:
+- **Attach context** — drag a file or screenshot onto the composer, or click the attach button.
+- **Minimize** the bubble (the work keeps running; a task chip appears).
+- **Stop** a running task.
+
+## Five things to try
+
+### 1. Ask a question
+
+> "What's the weather like for a hike near me this weekend?"
+
+BOR searches the web, reads sources, and answers in the bubble with a concise, sourced reply. No app gets built — *answering one question is a valid response.*
+
+### 2. Build a BOR app
+
+> "Make me a calorie tracker."
+
+This is ambiguous on platform, so BOR may ask whether you want a BOR app, a web app, a desktop app, or a mobile app. Say "a BOR app." BOR researches what a good calorie tracker needs, then builds a full app — camera/photo meal capture, AI nutrition estimates, history, goals, settings — and opens it as its own **Mac window**. It persists; reopen it any time from the **App Library** (the grid icon in the bubble header).
+
+### 3. Drop a shortcut in the bubble
+
+> "Give me a quick currency converter card."
+
+BOR builds a **shortcut** — a small live card that renders *inside the bubble*. It has its own state, can call the AI, and stays across turns.
+
+### 4. Build and preview a real project
+
+> "Build a landing page for my coffee shop."
+
+A landing page is a *website*, not a BOR app. BOR scaffolds a real project into `.bor/workspaces/`, starts the dev server in the background, and opens it with the **browser tool** so you can see it render. See [Running commands](../features/running-commands.md) and [The browser](../features/the-browser.md).
+
+### 5. Change how everything looks
+
+> "Make it feel like a cozy 2000s aqua desktop."
+
+BOR sets the **Y2K / Frutiger Aero** theme, may generate a matching wallpaper, and restyles the presence and every generated surface. See [Themes](../features/themes.md).
+
+## Reading the thought bubble
+
+While BOR works, the bubble shows **live cards**:
+
+- **Editor card** — a file being written, streaming line by line. One card per file.
+- **Terminal card** — a command running, with live stdout/stderr.
+- **Browser card** — a browser session: address bar, screenshot, console logs, step pagination.
+- **Wait card** — a countdown while BOR pauses (e.g. for a build to finish).
+- **Image card** — a generated image.
+- **Web card** — search results being read.
+
+Each tool call is "bracketed" in the bubble so you always see what BOR is doing and why.
+
+## The header options
+
+The thought-bubble header has quick actions on the right:
+
+- **App Library** — the grid of apps BOR built for you (also mirrored into `~/Applications`).
+- **Notifications** — the notification inbox.
+- **History** — past conversations.
+- **MCP Marketplace** — browse and install [MCP servers](../mcp/overview.md).
+- **Minimize / Stop / Close**.
+
+## Next
+
+- [Onboarding](onboarding.md) — re-run or change your setup.
+- [Apps](../features/apps.md) and [Shortcuts](../features/shortcuts.md) — the two kinds of surfaces.
+- [Configuration](configuration.md) — env vars and tuning.

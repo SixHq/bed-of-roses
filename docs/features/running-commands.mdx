@@ -1,0 +1,72 @@
+---
+title: "Running Commands"
+description: "BOR runs real shell commands on your machine. This is how it installs dependencies, runs builds and tests, starts dev servers, and drives any CLI. The command tools live in…"
+---
+
+BOR runs real shell commands on your machine. This is how it installs dependencies, runs builds and tests, starts dev servers, and drives any CLI. The command tools live in `server/protocol/handlers/exec.js`.
+
+## `execute_command`
+
+```xml
+<execute_command cwd=".bor/workspaces/site"><![CDATA[npm install]]></execute_command>
+```
+
+The command runs through a **real bash shell**, so everything works: pipes, redirects, globs, `&&`, `||`, `;`, `cd`, subshells, env-var expansion, and quoting. (Earlier builds ran commands without a shell, which broke `cd X && npm …` — that's fixed; commands now run via `/bin/bash -c`.)
+
+- **Body** = the command (CDATA if it contains `<`).
+- **`cwd`** = working directory (optional).
+- Output streams live into a **terminal card** in the bubble, with stdout/stderr and exit status.
+- Stdout is captured up to 64 KB, stderr up to 32 KB; the model sees a compact preview with a `run_id` for paging.
+
+### The hard 60-second rule
+
+A command **never blocks the model longer than 60 seconds.**
+
+- If it finishes first, you get its full result.
+- If it's still running at 60s, you get the output captured so far plus a `run_id`, and **the process keeps running in the background** — it is *not* killed.
+
+To follow a still-running command, BOR uses `wait_until` to pause, then `read_command_tail` to fetch newer output, repeating until it's done. This means a long `npm install` or build doesn't hang the conversation — BOR checks back on it.
+
+### Background commands
+
+For something you already know is long-running (a dev server, a watcher, a daemon), set `background="true"`:
+
+```xml
+<execute_command cwd=".bor/workspaces/site" background="true"><![CDATA[npm run dev]]></execute_command>
+```
+
+This returns after **~15 seconds** instead of 60 — just long enough to capture the startup output (including the `http://localhost:PORT` URL) — while leaving the server running. BOR then opens it with [`browser_action`](the-browser.md). A dev server started without `background="true"` would just hit the 60s window.
+
+### Killing
+
+The tool only force-kills a command when you pass an explicit `timeout_seconds` (a kill bound separate from the return window) or the chat is cancelled. The whole process tree is killed (so `npm`'s children die too). To stop a background process later, BOR runs another command (`kill`/`pkill`).
+
+## `wait_until`
+
+```xml
+<wait_until duration="30" reason="letting the dev server start"/>
+```
+
+Pauses for a fixed number of seconds (1–600) so something already in motion can make progress — a build finishing, a server warming up, a file appearing — then BOR continues (typically with `read_command_tail`). The chat genuinely waits; if you cancel, the wait ends early. In the bubble it shows a **countdown card** with a progress bar.
+
+This is the companion to the 60-second rule: when a command is still running, `wait_until` + `read_command_tail` is how BOR follows it without blocking.
+
+## `read_command_tail` & `list_recent_commands`
+
+| Tool | Purpose |
+|---|---|
+| `read_command_tail` | Fetch more output from a prior command by `run_id` (page through long output, or read what a background command produced after it returned). |
+| `list_recent_commands` | List the last 8 commands so BOR can pick a `run_id`. |
+
+The runtime keeps a ring of the last 8 runs, each with its captured output — and a background command's record keeps filling as it produces more, so `read_command_tail` always returns the latest.
+
+## Safety
+
+`server/validator.js` refuses dangerous commands even though a real shell is used: heredocs, host-restart commands (`npm run v2`, `electron`, `npx bor`), and catastrophic patterns (`rm -rf /`, `rm -rf ~`, fork bombs, `mkfs`, `dd` to a root device, `curl | bash`). Multi-line inline code (`python -c`, `node -e`) is refused — BOR writes a script with `write_file` and runs that instead.
+
+## Use cases
+
+- *"Install and run my project."* → `npm install`, then `npm run dev` as a background command, then preview.
+- *"Run my tests."* → run them; if they take >60s, `wait_until` + `read_command_tail` to see the result.
+- *"What's using port 3000?"* → `lsof -i :3000` (pipes and all work).
+- *"Convert these images to webp."* → a glob + a CLI, all in one shell command.

@@ -1,0 +1,47 @@
+---
+title: "MCP Marketplace"
+description: "BOR has a built-in MCP marketplace — a window where you browse, search, filter, and install MCP servers from a hosted catalog. Open it from the MCP button in the thought-bubble header."
+---
+
+BOR has a built-in **MCP marketplace** — a window where you browse, search, filter, and install MCP servers from a hosted catalog. Open it from the **MCP** button in the thought-bubble header.
+
+## Opening it
+
+Click the package icon in the bubble header. The marketplace opens as its own window, reused across opens (hidden on close, so it reopens instantly). It **follows your active theme** — the same look as your presence.
+
+## The catalog
+
+The catalog is the same one Sixth uses — **Cline's hosted MCP marketplace** (`https://api.cline.bot/v1/mcp/marketplace`), ~200 servers strong. The runtime fetches it and **caches it server-side** (1-hour TTL, serve-stale-on-error), so the page is instant and never blanks out on a network hiccup. Override the source with `BOR_MCP_MARKETPLACE_URL` if you host your own.
+
+Each server shows a logo, name, author, description, category, tags, GitHub stars, and download count.
+
+## Finding a server
+
+Three ways:
+
+1. **Search** — type in the search box to filter by name, description, tags, author, or category instantly.
+2. **Category chips** — filter by category (developer tools, data, AI, …) or jump to **Installed**.
+3. **Ask AI** — describe what you need in plain language and let the model pick. See [Ask AI](ask-ai.md).
+
+Already-installed servers show an **Installed** badge instead of an Install button.
+
+## Installing
+
+Click **Install** on a card. BOR installs it the same way Sixth does — **LLM-driven**:
+
+1. The runtime fetches the server's details (README + install notes) from the catalog.
+2. It hands the presence a ready-made install task and brings the chat forward.
+3. The AI reads your existing `.bor/mcp.json` (so it never clobbers another server), clones/builds/installs the server if needed (with `execute_command`), writes the new server under its id, wires any required env/keys, and — if it can — demonstrates one of the server's tools.
+
+So installation isn't a blind config write: BOR actually sets the server up and verifies it, handling servers that need a build step or an API key.
+
+> The server is written to this presence's `.bor/mcp.json`. The runtime picks it up — see [Configuring servers](configuring-servers.md).
+
+## After installing
+
+The new server appears in the **Installed** filter (the badge refreshes when you reopen the marketplace). BOR can now `list_mcp_tools` and `use_mcp_tool` against it. If the server needs an API key, the install task tells you exactly which value to provide and where to get it.
+
+## Notes
+
+- The marketplace window talks to the runtime through the Electron main process, so there's no CORS issue and the catalog stays cached.
+- Everything is **per-presence** — installing in one presence doesn't affect another.

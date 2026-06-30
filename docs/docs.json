@@ -1,0 +1,120 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "linden",
+  "name": "Bed of Roses",
+  "description": "An AI-native macOS companion. A draggable presence lives above your desktop; every chat turn can produce apps, widgets, files, theme changes, or tool calls.",
+  "colors": {
+    "primary": "#111111",
+    "light": "#FBFBFA",
+    "dark": "#0D0D0F"
+  },
+  "favicon": "/assets/favicon.png",
+  "appearance": {
+    "default": "system"
+  },
+  "navbar": {
+    "links": [
+      { "label": "GitHub", "href": "https://github.com/SixHq/bed-of-roses" }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Install",
+      "href": "https://github.com/SixHq/bed-of-roses"
+    }
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Getting Started",
+        "pages": [
+          "introduction",
+          "getting-started/what-is-bor",
+          "getting-started/installation",
+          "getting-started/quickstart",
+          "getting-started/onboarding",
+          "getting-started/configuration"
+        ]
+      },
+      {
+        "group": "Core Concepts",
+        "pages": [
+          "concepts/architecture",
+          "concepts/the-runtime",
+          "concepts/the-presence",
+          "concepts/surfaces",
+          "concepts/the-protocol",
+          "concepts/chat-loop",
+          "concepts/storage-and-data"
+        ]
+      },
+      {
+        "group": "Features",
+        "pages": [
+          "features/apps",
+          "features/shortcuts",
+          "features/the-bridge",
+          "features/themes",
+          "features/memory",
+          "features/skills",
+          "features/multi-presence",
+          "features/cron-and-notifications"
+        ]
+      },
+      {
+        "group": "Agent Tools",
+        "pages": [
+          "features/file-editing",
+          "features/running-commands",
+          "features/the-browser",
+          "features/computer-use",
+          "features/web-and-media"
+        ]
+      },
+      {
+        "group": "Providers",
+        "pages": [
+          "providers/overview",
+          "providers/bed-of-roses-credits",
+          "providers/anthropic",
+          "providers/openai",
+          "providers/gemini",
+          "providers/openai-compatible"
+        ]
+      },
+      {
+        "group": "MCP",
+        "pages": [
+          "mcp/overview",
+          "mcp/marketplace",
+          "mcp/ask-ai",
+          "mcp/configuring-servers"
+        ]
+      },
+      {
+        "group": "Command Line",
+        "pages": ["cli/command-line"]
+      },
+      {
+        "group": "Reference",
+        "pages": [
+          "reference/tool-reference",
+          "reference/http-api",
+          "reference/configuration-reference"
+        ]
+      },
+      {
+        "group": "Contributing",
+        "pages": [
+          "contributing/development",
+          "contributing/adding-a-tool",
+          "contributing/adding-a-provider",
+          "contributing/adding-a-theme"
+        ]
+      },
+      {
+        "group": "Help",
+        "pages": ["troubleshooting"]
+      }
+    ]
+  }
+}

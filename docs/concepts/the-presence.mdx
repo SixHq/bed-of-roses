@@ -1,0 +1,62 @@
+---
+title: "The Presence"
+description: "The presence is BOR's face: a frameless, always-on-top window that floats above your real desktop. It is the v2 product surface (v2/host/presence.{html,js,css}), driven by SSE events the runtime…"
+---
+
+The presence is BOR's face: a frameless, always-on-top window that floats above your real desktop. It is the v2 product surface (`v2/host/presence.{html,js,css}`), driven by SSE events the runtime forwards through the Electron main process.
+
+## States
+
+The presence has a small set of modes:
+
+- **Collapsed orb** — idle. A draggable circle with the AI's avatar/glyph. Click to talk; drag to move.
+- **Collapsed-with-notification** — the orb showing an unread badge.
+- **Expanded prompt** — the composer: a text input with attach, send, and voice (coming soon) controls.
+- **Thinking** — the **thought bubble** is open and streaming work.
+- **Minimized** — a small task chip; the work keeps running in the background.
+
+The orb itself has visual states (`idle`, `busy`, `thinking`, `sleep`) and animates while BOR works.
+
+## The thought bubble
+
+While BOR works, the bubble streams two things: its **voice** (`<say>` text) and a **thread** of live cards. Every tool call is "bracketed" — you see it start and finish — so the bubble is a faithful, real-time view of what BOR is doing.
+
+### Card types
+
+| Card | Shows | Tool(s) |
+|---|---|---|
+| **Editor** | A file being written, streaming line-by-line. One card per file. | `write_file`, `replace_in_file`, `create_app`, `create_shortcut` |
+| **Terminal** | A command running, with live stdout/stderr and exit status. | `execute_command` |
+| **Browser** | A browser session: address bar, screenshot, mouse-cursor dot, expandable console logs, step pagination. | `browser_action` |
+| **Wait** | A countdown with a progress bar while BOR pauses. | `wait_until` |
+| **Image** | A generated or captured image. | `generate_image`, `screen_capture` |
+| **Web** | Search results being read. | `web_search` |
+| **Shortcut** | A live sandboxed iframe card (the shortcut itself). | `create_shortcut` |
+
+Shortcuts render *inside* the bubble as live iframes; up to 5 stay live at once, older ones demote to a "tap to revive" placeholder to save memory.
+
+### Header options
+
+On the right of the bubble header:
+
+- **App Library** — the grid of apps BOR built.
+- **Notifications** — the inbox (with an unread badge).
+- **History** — past conversations.
+- **MCP Marketplace** — browse/install MCP servers (see [Marketplace](../mcp/marketplace.md)).
+- **Minimize / Stop / Close**.
+
+## Resizing & placement
+
+The bubble is resizable from any edge or corner (the user size persists). The presence anchors to a screen corner (`top-right`, `bottom-right`, etc.) and the bubble + tail flip to stay on-screen. You can drag the orb anywhere.
+
+## How events reach the presence
+
+1. The runtime emits SSE events on `/api/chat`.
+2. The Electron main process (`v2/host/main.cjs`) forwards each as `bor:chat-event` to the presence renderer.
+3. `presence.js#handleChatEvent` routes the event: `tag_start` opens the right card, `tag_delta` streams content into it, the final result event marks it done.
+
+The presence also receives `bor:submit-prompt` (used by the MCP marketplace's "Install" to start an install task) and `bor:toggle-presence` (the global show/hide shortcut).
+
+## Theming
+
+The presence reads `data-theme` from config and restyles itself entirely — orb, bubble, cards, fonts. Each of the 10 v2 themes has a full token set. See [Themes](../features/themes.md).

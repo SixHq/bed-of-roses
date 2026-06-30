@@ -1,0 +1,83 @@
+---
+title: "The Bridge"
+description: "Surfaces (apps and shortcuts) run in sandboxed iframes with no direct disk or network access. The bridge is how they do real work: a small client API that routes every call through…"
+---
+
+Surfaces (apps and shortcuts) run in **sandboxed iframes** with no direct disk or network access. The **bridge** is how they do real work: a small client API that routes every call through `parent.postMessage` to the runtime, which validates and answers it. BOR copies the bridge helper into every surface that needs state, AI, web, or images.
+
+The bridge lives in `shell/surface-bridge.js` (classic) and is forwarded by `v2/host/surface-preload.cjs` when a surface is opened as a native window. Server-side it's backed by the `widget-host` / surface endpoints.
+
+## The API
+
+A surface calls these on the injected bridge object:
+
+### State
+
+```js
+const state = await getState();        // read this surface's persisted state.json
+await setState({ ...next });           // write it (survives HTML rewrites)
+```
+
+`state.json` is the surface's private store. It survives `update_app`/`update_shortcut`, so a redesign keeps user data.
+
+### AI
+
+```js
+const reply = await askAI(prompt, { images, system });   // call the user's configured provider
+```
+
+`askAI` runs server-side through `/api/surface-llm` using the **same provider** onboarding set up. This is how a "translator card" streams translations or a calorie app estimates nutrition from a photo. **No separate API key is needed** — BOR already has the user's provider configured. Surfaces should never tell the user "you'd need an API key for that" for the built-in bridge call.
+
+### Web
+
+```js
+const results = await webSearch(query);   // /api/surface-search
+const page = await webFetch(url);          // /api/surface-fetch
+```
+
+### Images
+
+```js
+const url = await generateImage(prompt, { size });   // /api/surface-image-gen
+```
+
+### Launching
+
+```js
+await launchApp(appId);   // open a full BOR app from inside a shortcut
+```
+
+### Cron & notifications
+
+Surfaces can schedule work and notify the user through the bridge:
+
+- Schedule a cron job (`type: 'cron'`).
+- Push a notification (`type: 'notification-push'`).
+
+See [Cron & notifications](cron-and-notifications.md).
+
+## How it's secured
+
+Every bridge call is a `postMessage` the runtime receives, **validates server-side**, and answers. The surface never holds your keys, never touches your disk, and can't make arbitrary network calls. The [validator](../concepts/the-runtime.md#the-validator) additionally blocks `eval`, `Function`, external `<script src>`, `localStorage`, and all `parent.*` access except `parent.postMessage`. The iframe `sandbox` attribute is the first wall; the validator and server-side checks are the rest.
+
+## Using it in a surface
+
+BOR pastes the bridge bootstrap into the surface's HTML, then calls the API like any local function. A minimal pattern:
+
+```html
+<script>
+  // (BOR injects the bridge helper that defines getState/setState/askAI/…)
+  async function translate() {
+    const text = document.querySelector('#in').value;
+    const out = await askAI(`Translate to French: ${text}`);
+    document.querySelector('#out').textContent = out;
+    await setState({ last: text });
+  }
+</script>
+```
+
+## When to wire AI in
+
+BOR is told to wire `askAI` (or `generateImage`) into any surface that's AI-shaped — a translator, summarizer, classifier, explainer, planner, image lab, extractor, comparison dashboard. If you ask a one-off AI question, BOR answers directly with `<say>`; if a *durable* AI workflow helps, it builds a surface around `askAI`.
+
+Surfaces should also use state like a real app team uses a local store: remember drafts, last-opened routes, preferred cities, recent results, cached data, and active-tab state when it improves the experience.

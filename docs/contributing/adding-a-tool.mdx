@@ -1,0 +1,95 @@
+---
+title: "Adding a Tool"
+description: "Adding to BOR's tool surface is two steps: a handler module and a registry entry. The prompt docs, the executor, and both LLM harnesses pick it up automatically."
+---
+
+Adding to BOR's tool surface is two steps: a **handler module** and a **registry entry**. The prompt docs, the executor, and both LLM harnesses pick it up automatically.
+
+## 1. Write the handler
+
+Create (or extend) a module under `server/protocol/handlers/`. Export an `execute(block, ctx)` that returns the standard result shape:
+
+```js
+// server/protocol/handlers/myfeature.js
+export async function executeMyTool(block, ctx) {
+  // block.attrs   — tag attributes
+  // block.body    — inner text (CDATA-unwrapped)
+  // block.children — typed sub-tags (if your tool uses them)
+  // ctx           — per-request context: audit(), emit(), signal, loadConfig(), …
+
+  const target = (block.attrs?.target || '').trim();
+  if (!target) {
+    return { ok: false, event: 'tool_error', payload: { tag: 'my_tool', reason: 'target required' }, llmEcho: 'my_tool: target required' };
+  }
+
+  // …do the work…
+  await ctx.audit({ kind: 'my_tool', target });
+
+  return {
+    ok: true,
+    event: 'my_tool',                 // SSE event name → the presence
+    payload: { target, result: '…' }, // card data for the bubble
+    llmEcho: `Did the thing to ${target}.`, // what the model reads next pass
+    // llmMedia: [{ type: 'image_url', url, mediaType, label }]  // optional images for the model
+  };
+}
+```
+
+### The result contract
+
+| Field | Goes to | Purpose |
+|---|---|---|
+| `ok` | executor | success/failure (retries on transient failure). |
+| `event` + `payload` | the presence | rendered as a card via SSE. |
+| `llmEcho` | the model | a compact, model-facing result string. |
+| `llmMedia` | the model | optional image blocks (e.g. a screenshot). |
+
+Keep `llmEcho` compact — it's read every following pass. Never throw; return a `tool_error` result.
+
+## 2. Register it
+
+Add one entry to `TAGS` in `server/protocol/registry.js`:
+
+```js
+my_tool: {
+  description: "What it does. This text is rendered into the system prompt, so be precise about when and how to use it.",
+  params: {
+    attrs: { target: 'required. the thing to act on.' },
+    body: 'optional text payload',
+    // children: { … }  // if your tool takes typed sub-tags
+  },
+  examples: [`<my_tool target="x"/>`],
+  voiced: false,        // does its run surface in the bubble?
+  feedsBack: true,      // does its result trigger another model pass? (usually yes)
+  execute: myfeature.executeMyTool,
+},
+```
+
+Import your module at the top of `registry.js` (`import * as myfeature from './handlers/myfeature.js'`).
+
+That's it. `buildToolDocs()` renders the new tool into the system prompt automatically, the executor invokes your handler, and the new harness shims it.
+
+## 3. (Optional) render a custom card
+
+If you want a richer bubble card than the default activity row, handle your `event` in `v2/host/presence.js`:
+
+- Add a `TOOL_META` entry (`my_tool: ['Label', 'subtitle', '◆']`).
+- Add a `tag_start` branch (open a card) and a result-event branch (finalize it) in `handleChatEvent`.
+- Add a card type + renderer, and styles in `presence.css`.
+
+The browser, terminal, editor, and wait cards are all examples of this pattern.
+
+## Notes & gotchas
+
+- **Children & attributes.** The new-harness shim treats children as flat string properties; tools whose children carry XML attributes need handler-side schema overrides. Prefer attributes for scalars.
+- **Opaque content tags.** If your tool's body is file-like content, the parser already handles CDATA robustly — anchor on your own close tag, not CDATA. See [The protocol](../concepts/the-protocol.md#robustness).
+- **Audit.** Anything that mutates state should call `ctx.audit(...)`.
+- **Safety.** If your tool runs shell or writes files, route through the validator / path guards.
+
+## Checklist
+
+- [ ] Handler returns `{ ok, event, payload, llmEcho }` (+ optional `llmMedia`).
+- [ ] Registry entry with `description`, `params`, `examples`, `voiced`, `feedsBack`, `execute`.
+- [ ] Module imported in `registry.js`.
+- [ ] (Optional) presence card + CSS.
+- [ ] `node --check` the changed files.

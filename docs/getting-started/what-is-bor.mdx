@@ -1,0 +1,56 @@
+---
+title: "What is Bed of Roses?"
+description: "Bed of Roses is an AI-native operating-system layer for macOS. It is built on a single premise: a conversation with an AI should be able to produce durable software and take real action — not just…"
+---
+
+Bed of Roses is an **AI-native operating-system layer for macOS**. It is built on a single premise: a conversation with an AI should be able to *produce durable software and take real action* — not just return text.
+
+## The presence
+
+The thing you interact with is the **presence**: a small orb that floats above your desktop, always on top, draggable anywhere. It has three states you'll see constantly:
+
+- **Collapsed orb** — idle, waiting. Click it to talk.
+- **Expanded prompt** — a composer where you type (or attach files / screenshots).
+- **Thought bubble** — while BOR works, a bubble streams its thinking and shows **live cards**: a code editor filling in, a terminal running a command, a browser session with screenshots, a generated image, a countdown while it waits.
+
+The presence is deliberately *ambient*. It sits beside your real apps, not in front of them. When it builds you an app, that app opens as its own native Mac window you can dock-tab to, resize, and keep.
+
+## What a "turn" produces
+
+When you ask for something, BOR doesn't only reply — it can emit any combination of:
+
+- **A spoken answer** (`<say>`) — streamed text in the bubble.
+- **An app** — a full-screen, stateful application that opens as a Mac window (a calorie tracker, a CRM, a dashboard).
+- **A shortcut** — a small live interactive card that lives *inside* the thought bubble (a translator, a Pomodoro timer, a pay button).
+- **Files** — real source code or documents written to disk.
+- **Commands** — shell commands actually executed on your machine.
+- **A new look** — a theme change, a generated wallpaper, new fonts.
+- **Actions** — clicking in another app, opening a URL in a browser, scheduling a job, sending a notification.
+
+Each of these is a **tool call** in BOR's XML protocol. See [The protocol](../concepts/the-protocol.md).
+
+## Apps vs. shortcuts vs. real projects
+
+This distinction matters and BOR enforces it:
+
+- **App** (`<create_app>`) — a BOR-internal surface that opens as its own Mac window. Long-lived, multi-screen, the kind of thing you return to.
+- **Shortcut** (`<create_shortcut>`) — a BOR-internal surface that renders as a sandboxed iframe card *inside the bubble*. Conversation-adjacent, small, stateful.
+- **Real project** — when you ask BOR to "build a React landing page" or "fix the bug in my repo", that is **not** a BOR app. BOR writes real code to a workspace, runs the dev server, and previews it in the browser. See [Apps](../features/apps.md) for how BOR chooses.
+
+## Who it's for
+
+- People who want an AI that *does things on their Mac*, not just chats.
+- Developers who want a conversational way to scaffold, run, and preview real projects.
+- Anyone who wants a customizable, ambient assistant that remembers them and grows with use.
+
+## What it is **not**
+
+- It is not a VSCode extension (though it can write and run code like one).
+- It is not locked to a single AI vendor — you bring your own provider, or use BOR credits.
+- It is not a cloud service that owns your data. Everything generated lives on your disk and is yours.
+
+## Next
+
+- [Installation](installation.md) — get it running.
+- [Quickstart](quickstart.md) — your first useful turns.
+- [Architecture](../concepts/architecture.md) — how the pieces fit.

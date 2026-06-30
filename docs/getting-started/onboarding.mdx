@@ -1,0 +1,52 @@
+---
+title: "Onboarding"
+description: "The first time you launch the v2 host (or run bor onboard), BOR opens an onboarding flow. It collects everything the presence needs to feel like yours. Onboarding writes to the presence's…"
+---
+
+The first time you launch the v2 host (or run `bor onboard`), BOR opens an onboarding flow. It collects everything the presence needs to feel like *yours*. Onboarding writes to the presence's `config.json`; you can change any of it later.
+
+## Steps
+
+### 1. Choose a provider
+
+BOR is **provider-agnostic** and treats every provider as first-class (see the [provider parity](../providers/overview.md) principle). You'll pick one of:
+
+| Provider | Notes |
+|---|---|
+| **Bed of Roses credits** (`bor`) | Use BOR's metered credits — no key of your own required. |
+| **Anthropic** (`anthropic`) | Claude models. Bring an Anthropic API key. |
+| **OpenAI** (`openai`) | GPT models. Bring an OpenAI API key. |
+| **Google Gemini** (`gemini`) | Gemini models. Bring a Gemini key. |
+| **OpenAI-compatible** (`openai-compatible`) | Any endpoint that speaks the OpenAI API (local models, proxies, other vendors). Requires a base URL. |
+
+Each provider exposes a sign-up link if you don't have a key yet. You enter the key (and base URL for OpenAI-compatible), pick a model, and BOR validates it.
+
+### 2. Name your AI
+
+Give the presence a name (this is what it calls itself and what the bubble shows). You can change it any time — the AI itself can do it with the `set_ai_name` tool, or you can ask.
+
+### 3. Personality
+
+Describe how it should behave — tone, verbosity, attitude. The default is *"Warm, exact, slightly understated. Brief by default. First person."* This becomes part of the system prompt, so it genuinely shapes every reply.
+
+### 4. Avatar
+
+Pick an avatar. BOR's avatars are built on **DiceBear `avataaars`** (the Pablo Stanley illustration set). The avatar shows on the orb and in chat.
+
+### 5. Theme
+
+Choose a starting theme. Themes restyle the presence *and* every surface BOR generates — see [Themes](../features/themes.md). You can switch themes later just by asking ("make it pixel-CRT").
+
+## After onboarding
+
+You land on the presence. Your choices are saved to `os-data/presences/<id>/config.json` (or `os-data/config.json` in single-tenant mode). Re-run onboarding any time with:
+
+```bash
+bor onboard
+```
+
+or from the presence by asking BOR to change its name, persona, theme, or provider.
+
+## Multiple presences
+
+Onboarding runs **per presence**. Each presence has its own provider, name, personality, avatar, theme, memory, and data root — they don't share anything. See [Multi-presence](../features/multi-presence.md).

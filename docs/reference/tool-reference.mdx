@@ -1,0 +1,283 @@
+---
+title: "Tool Reference"
+description: "Every tool BOR can call, grouped by family. The authoritative source is server/protocol/registry.js; this page mirrors it. Each tool is XML the model emits; the runtime parses, executes, and feeds…"
+---
+
+Every tool BOR can call, grouped by family. The authoritative source is `server/protocol/registry.js`; this page mirrors it. Each tool is XML the model emits; the runtime parses, executes, and feeds the result back. See [The protocol](../concepts/the-protocol.md).
+
+> **Format.** Scalars ride as attributes (`<tag attr="…">`); long/`<`-containing content rides in the body, usually wrapped in `<![CDATA[ … ]]>`. Some tools take typed children (e.g. `<create_app>`'s `<html>`, `<doc>`, `<thumbnail>`).
+
+---
+
+## Conversation & control
+
+### `say`
+Stream-only spoken text in the bubble. Never a tool result; it's BOR's voice.
+```xml
+<say tone="warm">Building your landing page now.</say>
+```
+
+### `attempt_completion`
+Signals the turn is done. The `<result>` is shown to you; the model must not call tools after it.
+```xml
+<attempt_completion><result>Done — your tracker is open and saved.</result></attempt_completion>
+```
+
+### `wait_for_human_input`
+The model needs something only you can give (a choice, OTP, CAPTCHA, credential, manual click). It states what it needs and ends the turn.
+```xml
+<wait_for_human_input kind="short_reason"><![CDATA[Which Google profile should I use?]]></wait_for_human_input>
+```
+
+### `reset_chat`
+Clear the current conversation.
+
+---
+
+## Surfaces — apps
+
+### `create_app`
+Build a full app that opens as a Mac window. Carries `<html>`, `<doc>`, `<thumbnail>`. Requires `get_ux_ui_strict_guidelines` first.
+
+### `update_app`
+Revise an existing app by `id` (read its doc first). State persists.
+
+### `launch_app`
+Open/bring forward an existing app — `<launch_app id="app-…"/>` (or by name).
+
+### `delete_app`
+Remove an app — `<delete_app id="app-…"/>`.
+
+See [Apps](../features/apps.md).
+
+---
+
+## Surfaces — shortcuts (widgets)
+
+### `create_shortcut`
+Build a live card inside the bubble. Carries `<html>`, `<doc>`, `<thumbnail>`. Requires the design gate.
+
+### `update_shortcut`
+Revise a shortcut by `id` (read its doc first).
+
+### `launch_shortcut` / `delete_shortcut` / `rename_widget`
+Re-render, remove, or rename a shortcut.
+
+### `suggest_shortcut`
+Offer a shortcut inline (Yes/No) without building it yet.
+
+> Legacy aliases `create_widget` / `update_widget` / `launch_widget` / `delete_widget` exist for the same surfaces. See [Shortcuts](../features/shortcuts.md).
+
+---
+
+## Design gate
+
+### `get_ux_ui_strict_guidelines`
+Returns the strict design contract for the active theme — the shortcut-card spec, the app icon kit, and the theme handbook. Must be called once before the first surface create/update in a turn.
+```xml
+<get_ux_ui_strict_guidelines/>
+```
+
+---
+
+## Themes & identity
+
+### `set_theme`
+Set the theme, plus optional wallpaper and fonts.
+```xml
+<set_theme name="y2k-frutiger">
+  <wallpaper from_prompt="glossy aqua bubbles, soft light"/>
+  <fonts display="Sora" system="Geist" mono="IBM Plex Mono"/>
+</set_theme>
+```
+
+### `reset_theme`
+Return to the default theme.
+
+### `set_ai_name`
+Rename the presence — `<set_ai_name>Atlas</set_ai_name>`.
+
+### `create_svg`
+Place a vector graphic / decorative OS item.
+
+See [Themes](../features/themes.md).
+
+---
+
+## Surface data
+
+### `list_surfaces`
+List existing apps and shortcuts (so BOR updates instead of cloning).
+
+### `read_surface_data`
+Read a surface's `state.json`.
+
+### `mutate_surface_data`
+Update a surface's `state.json` (JSON-pointer based).
+
+---
+
+## Files
+
+### `read_file`
+Read a file. `device:/` → home, `bor:/` → BOR-created files.
+
+### `read_file_in_chunks`
+Read a large file by chunk.
+
+### `read_batch`
+Read several files at once.
+
+### `write_file` / `write_to_file`
+Create or fully replace a file (content in the CDATA body).
+```xml
+<write_file path=".bor/files/hello.py"><![CDATA[print("hi")]]></write_file>
+```
+
+### `replace_in_file`
+Surgical SEARCH/REPLACE patch.
+```xml
+<replace_in_file path="app.js"><![CDATA[------- SEARCH
+const a = 1;
+=======
+const a = 2;
++++++++ REPLACE]]></replace_in_file>
+```
+
+### `delete_file`
+Remove a file.
+
+### `list_files` / `search_files` / `list_code_definition_names`
+List a directory, regex-search contents, or list code definitions.
+
+See [File editing](../features/file-editing.md).
+
+---
+
+## Commands
+
+### `execute_command`
+Run a shell command (real bash). Hard 60s return window; still-running commands keep running. `background="true"` returns in ~15s for long-runners. `timeout_seconds` force-kills.
+```xml
+<execute_command cwd=".bor/workspaces/site" background="true"><![CDATA[npm run dev]]></execute_command>
+```
+
+### `wait_until`
+Pause N seconds (1–600) to let something in motion progress.
+```xml
+<wait_until duration="30" reason="letting the dev server start"/>
+```
+
+### `read_command_tail`
+Fetch more output from a prior command by `run_id`.
+```xml
+<read_command_tail run_id="run_a1b2c3d4" stream="stdout" offset="64000"/>
+```
+
+### `list_recent_commands`
+List the last 8 commands and their run ids.
+
+See [Running commands](../features/running-commands.md).
+
+---
+
+## Memory
+
+### `remember` / `recall` / `forget`
+Store, retrieve, or delete a durable fact. See [Memory](../features/memory.md).
+
+---
+
+## Skills
+
+### `use_skill`
+Load a skill's playbook for the current task — `<use_skill name="design"/>`. See [Skills](../features/skills.md).
+
+---
+
+## MCP
+
+### `list_mcp_servers` / `list_mcp_tools`
+List configured servers, or the tools one server exposes.
+
+### `use_mcp_tool`
+Call a tool on a server.
+```xml
+<use_mcp_tool server="github" tool="create_issue"><![CDATA[{"repo":"me/app","title":"Bug"}]]></use_mcp_tool>
+```
+
+### `access_mcp_resource`
+Read a resource by URI from a server.
+
+See [MCP](../mcp/overview.md).
+
+---
+
+## The browser
+
+### `browser_action`
+Drive a headless Chromium: `launch` (with `url`), `click` (with `coordinate`), `type` (text in body), `scroll_down`, `scroll_up`, `close`. Returns a screenshot + console logs.
+```xml
+<browser_action action="launch" url="http://localhost:5173"/>
+<browser_action action="click" coordinate="512,360"/>
+<browser_action action="close"/>
+```
+
+See [The browser](../features/the-browser.md).
+
+---
+
+## Computer use
+
+### `screen_capture`
+Capture the real Mac screen (BOR's presence hidden by default).
+
+### `locate_screen_element`
+Vision-find a UI element; returns click coordinates.
+
+### `computer_click` / `computer_type` / `computer_key`
+Click at coordinates, type into the focused app, press a shortcut.
+
+### `open_app`
+Launch a macOS app — `<open_app name="Figma"/>`.
+
+### `computer_use`
+A goal-directed capture→locate→act→verify loop.
+
+See [Computer use](../features/computer-use.md).
+
+---
+
+## Web & media
+
+### `web_search` / `web_fetch`
+Search the web, or fetch and read a URL.
+
+### `generate_image`
+Generate an image; returns a `/api/images/…` URL.
+
+### `view_image`
+Read/understand an external image by URL.
+
+### `display_media` / `display_tweet`
+Show chosen media URLs or a tweet/embed in the bubble.
+
+See [Web & media](../features/web-and-media.md).
+
+---
+
+## Scheduling & notifications
+
+### `cron`
+Schedule, list, enable/disable, or run cron jobs.
+
+### `push_notification`
+Send a notification to the inbox.
+
+See [Cron & notifications](../features/cron-and-notifications.md).
+
+---
+
+## Adding your own
+
+Every tool here is one registry entry + one handler. To add a tool, see [Adding a tool](../contributing/adding-a-tool.md).

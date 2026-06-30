@@ -1,0 +1,66 @@
+---
+title: "Adding a Theme"
+description: "A theme is a complete visual identity for the presence and every generated surface. Adding one means defining its tokens (for the presence), its handbook (for the AI), and registering it."
+---
+
+A theme is a complete visual identity for the presence and every generated surface. Adding one means defining its **tokens** (for the presence), its **handbook** (for the AI), and registering it.
+
+## What a theme consists of
+
+1. **Presence tokens** — the CSS variable set that restyles the orb, bubble, and cards.
+2. **A handbook** — `design-guideline/<theme>.md`, the canonical design contract the AI must read before generating a surface for the theme.
+3. **Registration** — so onboarding and `set_theme` know about it.
+
+## 1. Define the presence tokens
+
+In `v2/host/presence.css`, add a `.presence[data-theme="my-theme"]` token block, mirroring the existing themes. Define the palette and identity:
+
+```css
+.presence[data-theme="my-theme"] {
+  --label: #1A1A2E;          /* text */
+  --surface-1: #FFFFFF;       /* card backgrounds */
+  --hairline: rgba(26,26,46,0.16);
+  --hairline-strong: rgba(26,26,46,0.4);
+  --aura: 255, 79, 163;       /* accent (rgb) */
+  --aurora: 95, 227, 161;     /* secondary (rgb) */
+  --display: "Fraunces", Georgia, serif;
+  --sans: "Space Grotesk", Geist, sans-serif;
+}
+```
+
+Then style the orb, bubble, and cards for the theme as the other themes do (look at how `liquid-glass`, `y2k-frutiger`, etc. are built). Keep the theme cohesive — palette, fonts, border style, and radius should all express one identity.
+
+## 2. Write the handbook
+
+Create `design-guideline/my-theme.md`. This is the contract the AI reads via `get_ux_ui_strict_guidelines` before building any surface in your theme. Cover:
+
+- The **palette** (exact colors) and when to use each.
+- **Typography** — display vs. body vs. mono, scale, weights.
+- **Spacing & layout** rules.
+- **Components** — how buttons, cards, inputs, lists should look.
+- **Motion** — what's allowed.
+- **Dos and don'ts** — the identity guardrails.
+
+The more precise the handbook, the more on-brand every generated app and shortcut will be.
+
+## 3. Register the theme
+
+- Add it to the theme list (`shell/themes/index.js` for the classic shell; the presence reads `data-theme` from config for v2).
+- Make sure the theme **alias normalizer** recognizes its name (so `set_theme name="my-theme"` and any short aliases resolve). The presence and the MCP marketplace both normalize theme names.
+
+## 4. (Optional) theme the marketplace
+
+The MCP marketplace window follows the active theme. To make it match yours, add a `[data-theme="my-theme"]` palette block in `v2/host/mcp-marketplace.css` (the `--bg`, `--surface`, `--ink`, `--accent`, `--sans`, etc. variables).
+
+## Conventions
+
+- The **default** aesthetic is strict B&W — your theme is a deliberate, opinionated departure. Within the theme, commit fully to its identity.
+- Each theme gets a `user-extras.css` (one of the few source-tree files the AI may write) — the canvas for small per-theme decorations the AI/dreams add.
+
+## Checklist
+
+- [ ] `.presence[data-theme="my-theme"]` tokens + styling in `presence.css`.
+- [ ] `design-guideline/my-theme.md` handbook.
+- [ ] Registered + alias-normalized so `set_theme` resolves it.
+- [ ] (Optional) marketplace palette block.
+- [ ] Looks cohesive across orb, bubble, cards, and a generated surface.

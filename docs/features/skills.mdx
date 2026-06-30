@@ -1,0 +1,50 @@
+---
+title: "Skills"
+description: "A skill is a Markdown file that teaches BOR how to do a specific kind of task — a reusable playbook the AI loads on demand. Skills are how you extend BOR's know-how without changing its code."
+---
+
+A **skill** is a Markdown file that teaches BOR how to do a specific kind of task — a reusable playbook the AI loads on demand. Skills are how you extend BOR's *know-how* without changing its code.
+
+## Where skills live
+
+`server/runtime/skills.js` loads skills from two places:
+
+- **Project skills** — `.bed-of-roses/skills/` (scoped to this project/presence).
+- **Global skills** — `~/.bed-of-roses/skills/` (available everywhere).
+
+Each skill is a Markdown file (often a folder with a primary `.md`). The loader makes them available to the model, which invokes one with the `use_skill` tool when a task matches.
+
+## What a skill looks like
+
+A skill is just structured Markdown: a name, a description of *when to use it*, and the steps/knowledge to follow. For example, a "design" skill might encode the research-first UI process; a "deploy" skill might encode your exact release steps; a "competitor-research" skill might encode a structured market-analysis brief.
+
+The description matters most: it's how the model decides the skill is relevant. Write it so it triggers on the right requests and not the wrong ones.
+
+## Using a skill
+
+The model calls:
+
+```xml
+<use_skill name="design"/>
+```
+
+The runtime loads that skill's content and returns it as a tool result; the model then follows it for the current task. Skills compose with everything else — a skill can tell the model to research with `web_search`, build with `create_app`, and run with `execute_command`.
+
+## Bundled examples
+
+Out of the box BOR knows about skill-style capabilities such as a research-first **frontend/mobile/desktop design** process, **marketing/competitor research**, and a **deep-research** harness. Your own skills sit alongside these.
+
+## Writing a good skill
+
+- **Lead with a precise description** of when to use it (the trigger).
+- **Be concrete** — exact steps, exact commands, exact output shape.
+- **Reference BOR's tools** the skill should use (`web_search`, `create_app`, `execute_command`, …).
+- **Keep it focused** — one job per skill. The model picks the right one by description.
+
+## Skills vs. memory vs. MCP
+
+- **Memory** — facts about *you* and durable preferences. See [Memory](memory.md).
+- **Skills** — reusable *procedures* for the AI to follow.
+- **MCP** — external *tools/data sources* the AI can call. See [MCP](../mcp/overview.md).
+
+Use a skill when you want BOR to do something a *particular way* every time.

@@ -1,0 +1,37 @@
+---
+title: "Ask AI (semantic MCP finder)"
+description: "The marketplace has ~200 servers. Ask AI lets you skip the browsing: describe what you need in plain language, and the model picks the matching servers for you, ranked best-first, in the grid."
+---
+
+The marketplace has ~200 servers. **Ask AI** lets you skip the browsing: describe what you need in plain language, and the model picks the matching servers for you, ranked best-first, in the grid.
+
+## How to use it
+
+1. Open the [marketplace](marketplace.md).
+2. In the search box, type a *need* rather than a keyword — e.g. *"manage my Postgres database"*, *"automate my GitHub pull requests"*, *"read and send Slack messages"*.
+3. Click **Ask AI** (next to the search box) — or just press **Enter**.
+
+The grid replaces itself with the AI's picks, under a banner: *"✦ AI picks for '…' — N servers"*. Click **Clear** (or type again / pick a category) to return to normal browsing.
+
+## How it works
+
+1. The runtime sends your **configured provider** a compact JSON of the whole catalog (each server's id, name, category, tags, and a short description) plus your request.
+2. The model returns the ids that genuinely satisfy the need, most relevant first.
+3. The runtime **validates** those ids against the real catalog (so it can never surface an invented server) and shows them in ranked order.
+
+It reuses the **cached** catalog (no extra fetch) and your **configured provider** (the same one onboarding set up) — so it costs one small model call and nothing else.
+
+## When to use Ask AI vs. search
+
+- **Search** — you know the server's name or a keyword ("github", "postgres").
+- **Ask AI** — you know the *outcome* you want but not which server does it ("something to let me query my analytics warehouse").
+
+## Requirements & errors
+
+- Needs a configured provider. With none set up, you'll get *"No AI provider is configured — finish onboarding first."*
+- If the model finds nothing, the grid says so and suggests rephrasing or browsing by category.
+- Network/model failures show a toast and leave you in normal browsing.
+
+## Endpoint
+
+Under the hood this is `POST /api/mcp/ask { query }` → `{ query, matches: [mcpId, …] }`. See [HTTP API](../reference/http-api.md).

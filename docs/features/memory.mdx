@@ -1,0 +1,61 @@
+---
+title: "Memory"
+description: "BOR remembers. It keeps short-term session history, a durable long-term store the AI writes to explicitly, and a learned profile built by a background consolidation pass. Memory is per-presence…"
+---
+
+BOR remembers. It keeps short-term **session** history, a durable **long-term store** the AI writes to explicitly, and a learned **profile** built by a background consolidation pass. Memory is per-presence and lives under `os-data/presences/<id>/memory/`.
+
+## Three layers
+
+### 1. Sessions
+
+`server/memory/sessions.js` persists each conversation: the messages, the tools run, and the surfaces touched. Sessions back the **History** view in the bubble header — you can reopen a past conversation. They're also what a background "dream" reads to learn patterns.
+
+### 2. Long-term memory (explicit)
+
+The AI writes durable facts with three tools:
+
+| Tool | Purpose |
+|---|---|
+| `remember` | Store a durable fact (a preference, a name, a recurring detail). |
+| `recall` | Retrieve relevant remembered facts. |
+| `forget` | Delete a fact that's wrong or no longer true. |
+
+This is the memory you can *direct*: "remember that I'm vegetarian", "forget my old address". The AI also remembers on its own when it learns something durable enough to bake in.
+
+### 3. The profile (learned)
+
+`server/memory/profile.js` holds a long-term profile of *who you are* — role, preferences, working style — distilled from your activity, not from a single message.
+
+## Dreams (consolidation)
+
+`server/memory/dream.js` + `dream-worker.js` run a background **dream cycle** — two phases:
+
+1. **Consolidation** — re-read recent session activity and extract durable patterns into the long-term profile.
+2. **Action (optional)** — take 1–2 small creative actions to make the OS feel more like home: append CSS to a theme's `user-extras` (a sticker, a top clock, a decorative shape), build a small widget you might want, set a tasteful accent or font drift, or remember a fact consolidation missed. *Wallpaper changes are not allowed in the action phase.*
+
+Dreams run on a six-hour cron cadence by default and only while the interactive chat is idle. Each dream costs two LLM round-trips (consolidation + action). The AI can also queue a dream manually after learning something durable — but not more than once per chat.
+
+> Dreams are currently gated/disabled in some builds; check `server/index.js` for the active state.
+
+## How memory is recalled
+
+Relevant memories surface into context as background. A recalled memory reflects *what was true when written* — if it names a file, function, or flag, the AI verifies that still exists before acting on it. Memory informs; it doesn't override the current code or your current instruction.
+
+## Where it lives
+
+```
+os-data/presences/<id>/memory/
+  sessions/        per-conversation history
+  profile…         the learned long-term profile
+  (long-term facts from remember/recall/forget)
+```
+
+Like everything in `os-data/`, it's git-ignored and yours. Deleting the `memory/` folder gives that presence amnesia without touching its surfaces or config.
+
+## Resetting
+
+- `forget` removes a specific fact.
+- `reset_chat` clears the current conversation.
+- Removing `os-data/presences/<id>/memory/` wipes all memory for that presence.
+- Deleting the presence (see [Multi-presence](multi-presence.md)) removes everything.

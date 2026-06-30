@@ -1,0 +1,64 @@
+---
+title: "Bed of Roses"
+description: "BOR is not a chatbot with a few plugins bolted on. It is a small operating-system layer built around one idea: a conversation should be able to produce durable software and take real action, not…"
+---
+
+**Bed of Roses (BOR) is an AI-native macOS companion.** Instead of living in a browser tab or an editor sidebar, a small draggable **presence** floats above your real desktop. You talk to it, and each turn of the conversation can do real work on your machine: generate a full app, drop a live widget into the conversation, write and run code, change your wallpaper and theme, control other Mac apps, browse the web, schedule tasks, or just answer a question.
+
+BOR is not a chatbot with a few plugins bolted on. It is a small **operating-system layer** built around one idea: *a conversation should be able to produce durable software and take real action, not just text.*
+
+---
+
+## What makes it different
+
+| Most AI assistants | Bed of Roses |
+|---|---|
+| Live in a tab / sidebar | A presence that floats over your actual desktop |
+| Return text | Return **apps, widgets, files, theme changes, real actions** |
+| One model, one vendor | **Provider parity** — Anthropic, OpenAI, Gemini, OpenAI-compatible, or BOR credits |
+| Chat history | **Persistent memory**, generated apps you keep, multiple isolated "presences" |
+| Fixed UI | **Themeable** down to fonts, wallpaper, and the look of every generated surface |
+
+---
+
+## A 30-second mental model
+
+1. You type a message to the presence.
+2. The **Node runtime** ("the brain") builds a system prompt, streams it to your chosen LLM, and parses the model's reply.
+3. The model replies in a small **XML tool protocol** — `<say>`, `<create_app>`, `<write_file>`, `<execute_command>`, `<set_theme>`, `<browser_action>`, and dozens more.
+4. The runtime **executes** each tool: it writes the app to disk, runs the command, changes the theme, opens the browser.
+5. Results stream back into the **thought bubble** as live cards (a code editor, a terminal, a browser session, a generated image), and durable results (apps, files, themes) persist.
+
+Everything the AI creates is yours, lives on your disk, and survives restarts.
+
+---
+
+## The two surfaces
+
+BOR ships as two cooperating front-ends over the **same Node runtime**:
+
+- **v2 Mac host** (`v2/host/`) — the product. An Electron app that owns a frameless, always-on-top **presence window**, opens generated apps as native Mac windows, and applies macOS wallpapers. This is what you use day to day.
+- **Classic browser shell** (`shell/` + `server/`) — the original browser-hosted "empty OS" served at `http://localhost:7777`. Still used for onboarding and as a development surface.
+
+See [Architecture](concepts/architecture.md) for the full picture.
+
+---
+
+## What it can do (at a glance)
+
+- **Build software** — generate complete apps and widgets, or write and run real projects (React/Vite/Next/Python/Rust/…) in a workspace. See [Apps](features/apps.md), [Shortcuts](features/shortcuts.md), [Running commands](features/running-commands.md).
+- **Use your computer** — read the screen, click and type in other apps, open applications. See [Computer use](features/computer-use.md).
+- **Browse the web** — drive a real headless browser, search, fetch and read pages. See [The browser](features/the-browser.md) and [Web & media](features/web-and-media.md).
+- **Edit files** — read, write, and surgically patch files anywhere you allow. See [File editing](features/file-editing.md).
+- **Remember** — durable long-term memory and a learned profile. See [Memory](features/memory.md).
+- **Extend itself** — MCP servers (install from a marketplace), skills, custom themes. See [MCP](mcp/overview.md), [Skills](features/skills.md), [Themes](features/themes.md).
+- **Run on a schedule** — cron jobs and a notification inbox. See [Cron & notifications](features/cron-and-notifications.md).
+- **Be many** — run several isolated presences, each with its own data, memory, and personality. See [Multi-presence](features/multi-presence.md).
+
+---
+
+## Where to go next
+
+- New here? Start with [What is Bed of Roses](getting-started/what-is-bor.md), then [Installation](getting-started/installation.md) and the [Quickstart](getting-started/quickstart.md).
+- Want the internals? Read [Architecture](concepts/architecture.md) and [The protocol](concepts/the-protocol.md).
+- Looking for one tool? Jump to the [Tool reference](reference/tool-reference.md).

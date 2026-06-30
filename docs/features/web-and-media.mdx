@@ -1,0 +1,54 @@
+---
+title: "Web & Media"
+description: "Beyond the full browser, BOR has focused tools for searching the web, reading pages, viewing images, and generating images. These power sourced answers, research, and visual output. They live in…"
+---
+
+Beyond the full browser, BOR has focused tools for searching the web, reading pages, viewing images, and generating images. These power sourced answers, research, and visual output. They live in `server/protocol/handlers/tools.js` (with `server/tools/web-search.js`, `web-fetch.js`, `images.js`).
+
+## Web search & fetch
+
+| Tool | Purpose |
+|---|---|
+| `web_search` | Search the web; returns ranked results (source, title, snippet). |
+| `web_fetch` | Fetch and read a specific URL's content. |
+
+These are how BOR gives **sourced** answers and **researches before building**. When you ask "build me a calorie tracker app", BOR first searches and reads what good calorie trackers do, then builds the complete workflow rather than a dumb form.
+
+In the bubble, `web_search` renders a **web card** showing the sources being read. BOR is told not to dump entire pages back — it extracts the IDs, facts, or URLs it needs and moves on.
+
+### Use cases
+
+- *"What's $AAPL doing today?"* → finance sources, then a concise `<say>` summary (a shortcut or app only if you want it persistent).
+- *"Plan a weekend hike near me."* → search trails + weather, fetch details, answer with sources.
+- *"Research competitors for my SaaS."* → search + fetch, synthesize into a brief (often via the marketing-research skill).
+
+## Images
+
+| Tool | Purpose |
+|---|---|
+| `generate_image` | Generate an image with the configured provider; returns a `/api/images/…` URL. |
+| `view_image` | Read/understand an external image by URL. |
+| `create_svg` | Place a vector graphic (used for decorative OS items, wallpaper elements). |
+
+`generate_image` is provider-backed (the same provider onboarding configured, if it supports image generation — e.g. for wallpapers via `set_theme from_prompt`). Generated images are saved under `os-data/.../images/` and shown as an **image card** in the bubble. The footer offers actions like "Use as wallpaper", "Save", "Insert", "Regenerate".
+
+`view_image` lets BOR look at an external image URL and reason about it (useful when you share a link to a picture rather than attaching a file).
+
+### Use cases
+
+- *"Generate a hero image for my landing page."* → `generate_image`, then insert the URL into the project.
+- *"Make me an aqua wallpaper."* → `set_theme` with `<wallpaper from_prompt="…">`, which generates and applies it.
+- *"What's in this image?"* (with a URL) → `view_image` and describe it.
+
+## Display tools
+
+BOR can surface media it found or made directly in the bubble:
+
+- `display_media` — show media URLs BOR chose (e.g. images/video it scraped or generated). BOR picks the URLs explicitly rather than auto-previewing every URL a tool returns.
+- `display_tweet` — render a tweet/embed.
+
+These keep the bubble clean: search and command output don't auto-embed media — BOR decides what's worth showing.
+
+## How media reaches the model
+
+When a tool produces an image the model needs to *reason about* (a screenshot, a captured screen, a generated image), it's attached to the model's next turn as an image block (`llmMedia`). That's how BOR can "look at" what it just produced and decide what to do next — the same mechanism the [browser](the-browser.md) and [computer use](computer-use.md) tools use.

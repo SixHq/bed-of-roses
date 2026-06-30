@@ -1,0 +1,30 @@
+---
+title: "Bed of Roses Credits"
+description: "The Bed of Roses credits provider (bor) lets you use BOR without bringing your own model key. You use BOR's metered credits, and the runtime proxies your turns through a managed backend."
+---
+
+The **Bed of Roses credits** provider (`bor`) lets you use BOR without bringing your own model key. You use BOR's metered credits, and the runtime proxies your turns through a managed backend.
+
+## When to use it
+
+- You don't have (or don't want to manage) a provider API key.
+- You want the simplest possible onboarding — pick BOR credits and go.
+- You want a single, predictable billing surface instead of juggling vendor keys.
+
+## How it works
+
+The `bor` provider (`server/providers/bor.js`) speaks to a metered proxy. Your turns are billed against your BOR credit balance. The provider exposes the same `stream()` interface as every other provider, so the rest of BOR behaves identically — tools, surfaces, the bridge, and the chat loop all work the same.
+
+## Onboarding
+
+Pick **Bed of Roses credits** in [onboarding](../getting-started/onboarding.md). No key entry is required for the credits path; you authenticate to your BOR account and your balance funds your usage.
+
+## Balance & usage
+
+Your credit balance and usage are tracked server-side. The proxy meters input tokens, output tokens, and cached input tokens, and deducts from your balance accordingly.
+
+## Switching away
+
+You can switch to your own provider key any time (re-run onboarding or edit `config.json`) — and back again. With [multi-presence](../features/multi-presence.md) you can even run one presence on BOR credits and another on your own Anthropic/OpenAI/Gemini key.
+
+> The exact pricing, top-up flow, and dashboard live with the Bed of Roses account/billing system; this page covers how the provider behaves inside BOR.

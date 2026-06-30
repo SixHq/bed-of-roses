@@ -1,0 +1,90 @@
+---
+title: "Configuration"
+description: "BOR is configured two ways: config.json (per-presence settings written by onboarding and the AI) and environment variables (runtime tuning and overrides). This page is a practical guide; the full…"
+---
+
+BOR is configured two ways: **`config.json`** (per-presence settings written by onboarding and the AI) and **environment variables** (runtime tuning and overrides). This page is a practical guide; the full field list is in the [Configuration reference](../reference/configuration-reference.md).
+
+## `config.json`
+
+Each presence has a `config.json` at its data root (`os-data/presences/<id>/config.json`, or `os-data/config.json` in single-tenant mode). It holds:
+
+- `defaultProvider` — the active provider id (`bor`, `anthropic`, `openai`, `gemini`, `openai-compatible`).
+- `providers` — a map of `providerId → { apiKey, model, baseUrl }`.
+- `aiName` — what the presence calls itself.
+- `personality` — the persona string injected into the system prompt.
+- `baseTheme` — the active theme.
+- `avatar` — DiceBear avatar config.
+- `onboarded` — whether onboarding completed.
+
+> **Note on secrets.** API keys currently live in `config.json` until the planned macOS Keychain migration. Treat `os-data/` as sensitive.
+
+You rarely edit this by hand — onboarding writes it, and the AI can change most fields (`set_ai_name`, `set_theme`, provider settings) on request.
+
+## Environment variables
+
+Set these before launching (`PORT=8080 npm start`, or in your shell profile).
+
+### Networking & data
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `7777` | Runtime HTTP port. |
+| `BOR_DATA_DIR` | `os-data/` | Per-presence data root. The v2 host sets this to `os-data/presences/<id>/`. |
+| `BOR_RUNTIME_URL` | — | Attach the v2 host to an **already-running** runtime instead of spawning one: `BOR_RUNTIME_URL=http://127.0.0.1:7777 npm run v2`. |
+| `BOR_PRESENCE_ID` | — | The presence id this runtime serves. |
+
+### Chat loop tuning
+
+These govern the multi-pass [chat loop](../concepts/chat-loop.md):
+
+| Variable | Purpose |
+|---|---|
+| `BOR_CHAT_MAX_PASSES` | Safety ceiling on tool-use passes per turn. |
+| `BOR_CHAT_STREAM_ATTEMPTS` | Stream retry attempts. |
+| `BOR_TOOL_MAX_ATTEMPTS` | Per-tool retry attempts on transient failure. |
+| `BOR_STREAM_IDLE_TIMEOUT_MS` | How long to wait on a stalled stream before retrying. |
+
+### Browser
+
+For the user-facing Browser app and `browser_action`:
+
+| Variable | Purpose |
+|---|---|
+| `BOR_BROWSER_HEADLESS=1` | Run the user-facing Browser app headless. |
+| `BOR_BROWSER_EXECUTABLE_PATH=…` | Point at a specific Chrome/Chromium binary. |
+| `BOR_BROWSER_CHANNEL=chrome` | Use a Chrome channel. |
+| `BOR_BROWSER_DATA_DIR`, `BOR_BROWSER_USER_DATA_DIR` | Browser profile locations. |
+
+### MCP
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `BOR_MCP_MARKETPLACE_URL` | `https://api.cline.bot/v1/mcp` | Override the MCP marketplace catalog source. |
+
+### LLM harness toggle
+
+BOR has two LLM harnesses during a migration. The legacy XML-tool harness (`server/ai.js`) is the one in use; a native-tool-calling harness lives in `server/llm/`.
+
+| Variable | Purpose |
+|---|---|
+| `BOR_LEGACY_LLM=1` | Force the legacy harness (default behavior). |
+| `BOR_NEW_LLM=1` | Opt into the native-tool-calling harness (experimental). |
+
+### Host control (v2)
+
+The runtime can call back into the Electron host (e.g. to open a window):
+
+| Variable | Purpose |
+|---|---|
+| `BOR_HOST_CONTROL_URL`, `BOR_HOST_CONTROL_TOKEN` | The host's local control server URL and auth token. |
+
+## Skills & MCP config files
+
+- **Skills** — Markdown files in `.bed-of-roses/skills/` (project) and `~/.bed-of-roses/skills/` (global). See [Skills](../features/skills.md).
+- **MCP servers** — `.bor/mcp.json` (per-presence, written by the marketplace) plus the shared `.bed-of-roses/mcp/servers.json`. See [Configuring MCP servers](../mcp/configuring-servers.md).
+
+## Next
+
+- [Storage & data](../concepts/storage-and-data.md) — where everything lives.
+- [Configuration reference](../reference/configuration-reference.md) — every field and variable.

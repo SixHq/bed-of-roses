@@ -1,0 +1,56 @@
+---
+title: "The Runtime"
+description: "The runtime (server/) is BOR's brain: a single, stdlib-only Node process that serves the UI, proxies the LLM, persists everything, and executes every tool. One runtime serves exactly one presence."
+---
+
+The runtime (`server/`) is BOR's brain: a single, stdlib-only Node process that serves the UI, proxies the LLM, persists everything, and executes every tool. One runtime serves exactly one **presence**.
+
+## Responsibilities
+
+1. **Serve the UI** — the classic shell (HTML/CSS/JS) and the per-surface assets.
+2. **Proxy the LLM** — build the system prompt, stream to the provider, parse the reply.
+3. **Execute tools** — run the handler for every tool the model emits.
+4. **Persist state** — surfaces, files, memory, config, sessions, and an append-only audit log.
+5. **Bridge surfaces** — answer the sandboxed `postMessage` calls apps and shortcuts make.
+
+## The HTTP server
+
+`server/index.js` is a plain `http` server. Notable route families (full list in [HTTP API](../reference/http-api.md)):
+
+- **`POST /api/chat`** — the main chat endpoint, Server-Sent Events. Dispatches into the harness.
+- **`/api/surfaces`, `/api/widgets/:id/state`** — surface listing and state CRUD.
+- **`/api/surface-llm`, `/api/surface-search`, `/api/surface-fetch`, `/api/surface-image-gen`** — the server side of the [bridge](../features/the-bridge.md) (the `askAI`/`webSearch`/`webFetch`/`generateImage` an app calls).
+- **`/api/files*`** — the BOR Home file explorer (list, raw, upload, move, rename, folder).
+- **`/api/config`** — read/update the presence config.
+- **`/api/mcp/*`** — the [MCP marketplace](../mcp/marketplace.md): catalog, install, installed, ask.
+- **`/api/cron`, `/api/notifications`** — [scheduled tasks and the inbox](../features/cron-and-notifications.md).
+- **`/api/system-apps`, `/api/system/permissions`** — system app layout and macOS permission probes.
+- **`/api/images/…`** — serves generated/captured images.
+
+Every filesystem path is validated through `validateSurfaceId` and JSON-pointer helpers before use. **Preserve these guards when adding routes.**
+
+## Per-presence isolation
+
+The runtime resolves its data root from `BOR_DATA_DIR` (see [paths](storage-and-data.md)). With no env set, it uses the legacy single-tenant `os-data/`. The v2 host launches **one runtime process per presence**, each with its own `BOR_DATA_DIR` pointing at `os-data/presences/<id>/`, its own port, its own config, memory, and cron. They never share state. The source tree (`PROJECT_ROOT`) stays the anchor for write-protection and the served shell — only *user data* is relocated.
+
+## The validator
+
+`server/validator.js` enforces a security floor:
+
+- **AI-generated surface HTML** — blocks `eval`, `Function`, `parent.*` (except `parent.postMessage`), `localStorage`, external `<script src>`, and other escapes. This runs *in addition* to the iframe sandbox.
+- **Shell commands** — refuses heredocs, host-restart commands (`npm run v2`, `electron`, `npx bor`), and catastrophic patterns (`rm -rf /`, fork bombs, `curl | bash`, `dd` to a device).
+
+The validator is belt-and-suspenders, not the only defense — see [Surfaces](surfaces.md) for the sandbox model and [Running commands](../features/running-commands.md) for the shell.
+
+## Connectivity & retries
+
+- `server/connectivity.js` monitors network status (it pings lightweight endpoints) so the runtime can tell "the model is slow" from "you're offline".
+- `server/retry.js` provides retry/backoff shared by the chat loop and the tool executor. Transient tool failures retry up to `BOR_TOOL_MAX_ATTEMPTS`.
+
+## The audit log
+
+Every state mutation is appended to `os-data/logs/audit.jsonl`. Handlers call `ctx.audit({ kind, … })` from the per-request context. This is your record of everything BOR did — file writes, command runs, theme changes, MCP installs, image generations, and more.
+
+## The API registry
+
+`server/api-registry.md` is a Markdown reference of public web APIs the runtime tells the model about, loaded into the system prompt. It's how BOR knows which free APIs it can wire into an app without a key.

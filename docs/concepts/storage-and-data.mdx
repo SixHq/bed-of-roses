@@ -1,0 +1,77 @@
+---
+title: "Storage & Data"
+description: "Everything BOR generates lives on your disk and is git-ignored. There are three roots, plus a global one. This page is the map."
+---
+
+Everything BOR generates lives on your disk and is **git-ignored**. There are three roots, plus a global one. This page is the map.
+
+## The roots
+
+```
+open-source-os/
+├── os-data/                         ← per-presence USER DATA (the brain's memory)
+│   ├── config.json                  (single-tenant) provider keys, name, theme…
+│   ├── presences.json               the presence registry (multi-presence)
+│   ├── presences/<id>/              one folder per presence:
+│   │   ├── config.json              its provider, name, persona, theme, avatar
+│   │   ├── surfaces/<surface-id>/   generated apps & shortcuts
+│   │   ├── memory/                  sessions + long-term profile
+│   │   ├── files/                   "BOR Home" (the desktop files surface)
+│   │   ├── logs/audit.jsonl         append-only audit log
+│   │   ├── cron/, notifications/    scheduled jobs + inbox
+│   │   └── .bor/                     this presence's agent working dir
+│   ├── images/                      generated/captured images
+│   └── v2-wallpaper/                the applied macOS wallpaper
+│
+├── .bor/                            ← AGENT WORKING DIR (files BOR creates)
+│   ├── workspaces/<slug>/           real projects BOR scaffolds & runs
+│   ├── files/, images/, downloads/, reports/, exports/, scratch/
+│   └── mcp.json                     this presence's MCP servers
+│
+└── .bed-of-roses/                   ← LOCAL CONFIG & CACHES
+    ├── skills/                      project skills (Markdown)
+    ├── mcp/servers.json             shared MCP config
+    ├── browser/                     browser profiles (automation + user-facing)
+    └── v2-electron/                 Electron cache, cookies, saved state
+```
+
+Plus a **global** root at `~/.bed-of-roses/` (global skills, the native-app wrapper registry, host-control) and `~/Applications/` (the `.app` wrappers for BOR apps and the host).
+
+## `os-data/` — user data
+
+The presence's memory. One subfolder per presence under `presences/`. Contains the generated **surfaces**, the **memory** store, **BOR Home** files, the **audit log**, **cron** jobs, the **notification** inbox, and the presence **config** (including API keys, until the Keychain migration).
+
+## `.bor/` — the agent working directory
+
+The default destination for files BOR creates when you don't supply a path. Its layout is intentional:
+
+- `workspaces/<slug>/` — **new real projects** (a React app, a Python service). Each gets its own folder.
+- `files/<slug>.<ext>` — individual scripts/documents.
+- `images/`, `downloads/`, `reports/`, `exports/`, `scratch/` — by kind.
+- `mcp.json` — the [MCP servers](../mcp/configuring-servers.md) installed for this presence.
+
+> The default file root is `.bor/`, **not** the project source tree. BOR will only write into the source tree for the narrow, allowed carve-outs (e.g. a theme's `user-extras.css`).
+
+## `.bed-of-roses/` — local config & caches
+
+- `skills/` — project [skills](../features/skills.md).
+- `mcp/servers.json` — the shared MCP config (the `browserbase` automation browser is configured here by default).
+- `browser/profile` (automation) and `browser/user-profile` (the user-facing Browser app).
+- `v2-electron/` — Electron's cache, cookies, and saved window state.
+
+## Path resolution & write protection
+
+`server/protocol/paths.js` resolves paths and enforces writes:
+
+- **Relative paths** resolve against the source-tree `PROJECT_ROOT`. **Absolute paths** are used as-is.
+- **`DATA_DIR`** = `BOR_DATA_DIR` (the presence's `os-data/presences/<id>/`) or the legacy `os-data/`.
+- **Reads** are unrestricted (any path Node can read).
+- **Writes** refuse: anything in the running OS source tree (`server/`, `shell/`, `node_modules/`, `.git/`, lockfiles), and absolute paths outside `$HOME` (except `/tmp`, `/var/folders`). Narrow carve-outs allow the AI to extend its own theme (`shell/themes/<t>/user-extras.css`, theme assets).
+
+## The audit log
+
+`os-data/.../logs/audit.jsonl` is append-only. Every mutating handler records what it did (`fs.write`, `shell.exec`, `image.generate`, `mcp.install.requested`, `browser.action`, …). It's your complete record of BOR's actions.
+
+## Backups & resetting
+
+To start fresh as a brand-new user, remove `os-data/`, `.bor/`, and `.bed-of-roses/` (and the `~/Applications` BOR wrappers + `~/.bed-of-roses/`). All of it regenerates on next launch. To clear just one presence's work, remove its `os-data/presences/<id>/.bor/`. See [Multi-presence](../features/multi-presence.md) for per-presence deletion via the CLI.

@@ -1,0 +1,90 @@
+---
+title: "HTTP API"
+description: "The runtime (server/index.js) is a plain HTTP server. The presence, the classic shell, surfaces, and the v2 host all talk to it over these endpoints. Every filesystem path is validated server-side."
+---
+
+The runtime (`server/index.js`) is a plain HTTP server. The presence, the classic shell, surfaces, and the v2 host all talk to it over these endpoints. Every filesystem path is validated server-side.
+
+## Chat
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/chat` | The main chat endpoint (Server-Sent Events). Runs the [chat loop](../concepts/chat-loop.md) and streams tool events back. |
+
+## Config & providers
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/config` | Read the presence's public config (provider, name, theme, …). |
+| `POST` | `/api/config` | Update config (merge). |
+| `GET` | `/api/providers` | The public provider catalog for onboarding. |
+| `GET` | `/api/connectivity` | Network/connectivity status. |
+
+## Surfaces
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/surfaces` | List apps & shortcuts. |
+| `GET/POST` | `/api/widgets/:id/state` | Read/write a surface's `state.json`. |
+| `POST` | `/api/surface-llm` / `/api/widget-llm` | The bridge's `askAI`. |
+| `POST` | `/api/surface-search` / `/api/widget-search` | The bridge's `webSearch`. |
+| `POST` | `/api/surface-fetch` / `/api/widget-fetch` | The bridge's `webFetch`. |
+| `POST` | `/api/surface-image-gen` / `/api/widget-image-gen` | The bridge's `generateImage`. |
+
+(`widget-*` are the legacy names of the `surface-*` bridge endpoints.) See [The bridge](../features/the-bridge.md).
+
+## Files (BOR Home)
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/files` | List BOR Home files. |
+| `GET` | `/api/files/raw` | Read a file's raw bytes. |
+| `POST` | `/api/files/upload` | Upload a file. |
+| `POST` | `/api/files/folder` | Create a folder. |
+| `POST` | `/api/files/move` / `/api/files/rename` | Move / rename. |
+| `GET` | `/api/images/…` | Serve a generated/captured image. |
+
+## MCP
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/mcp/marketplace` | The cached catalog (`?refresh=1` to force). |
+| `GET` | `/api/mcp/installed` | Installed server names + the `.bor/mcp.json` path. |
+| `POST` | `/api/mcp/install` | `{ mcpId }` → the LLM-driven install task. |
+| `POST` | `/api/mcp/ask` | `{ query }` → AI-matched server ids. |
+
+See [MCP](../mcp/overview.md).
+
+## Scheduling & notifications
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET/POST` | `/api/cron` | List / create / run cron jobs. |
+| `GET/POST` | `/api/notifications` | List / act on notifications. |
+| `POST` | `/api/memory/event` | Record a memory event. |
+
+## System & browser
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/system-apps` | System app layout. |
+| `PATCH` | `/api/system-apps/:id` | Update an app's size/layout. |
+| `GET` | `/api/system/permissions` | Probe macOS permissions (Screen Recording, Accessibility). |
+| `POST` | `/api/system/permissions/open` | Open a macOS permission pane. |
+| `GET` | `/api/browser/status` | The user-facing Browser app status. |
+| `POST` | `/api/browser/open` / `/api/browser/close` | Open / close the Browser app. |
+| `POST` | `/api/browser/reset-profile` | Reset the Browser app's profile. |
+| `GET` | `/api/browser-use/status` | `browser-use` CLI status. |
+
+## Conversations
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET/POST` | `/api/conversations` | List / save conversations (History). |
+| `GET` | `/api/conversations/:id` | Read one conversation. |
+
+## Notes
+
+- All responses are JSON unless noted (`/api/chat` is SSE; `/api/files/raw` and `/api/images` serve bytes).
+- The v2 host generally proxies these through the Electron main process (so file:// renderers don't hit CORS).
+- Adding a route? Keep the `validateSurfaceId` / JSON-pointer guards — see [The runtime](../concepts/the-runtime.md).

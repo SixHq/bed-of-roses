@@ -1,0 +1,47 @@
+---
+title: "MCP Overview"
+description: "An MCP server exposes tools (callable functions) and resources (readable data) to BOR. Install the GitHub MCP and BOR can manage your repos; install the Postgres MCP and it can query your…"
+---
+
+**MCP (Model Context Protocol)** lets BOR use external tools and data sources — a filesystem server, a GitHub server, a Postgres server, a Slack server, and hundreds more. BOR ships with first-class MCP support: a runtime that loads and calls MCP servers, a config file the AI reads and writes, and a built-in **marketplace** to discover and install servers.
+
+## What MCP gives you
+
+An MCP server exposes **tools** (callable functions) and **resources** (readable data) to BOR. Install the GitHub MCP and BOR can manage your repos; install the Postgres MCP and it can query your database; install the filesystem MCP and it can work across a directory. MCP is how you extend BOR's *reach* into your other systems.
+
+## The pieces
+
+- **The runtime** (`server/runtime/mcp.js`) — discovers configured servers, connects to them (stdio, SSE, or streamable-HTTP), and dispatches tool/resource calls.
+- **The config** (`.bor/mcp.json`, per-presence) — the `{ "mcpServers": { … } }` map of servers. The AI reads and writes this; the marketplace installs into it.
+- **The marketplace** (a window in the presence) — browse, search, AI-find, and install servers from a hosted catalog. See [Marketplace](marketplace.md).
+
+## The MCP tools
+
+BOR calls MCP through these tools (`server/protocol/handlers/agent.js`):
+
+| Tool | Purpose |
+|---|---|
+| `list_mcp_servers` | List configured MCP servers and their status. |
+| `list_mcp_tools` | List the tools a given server exposes. |
+| `use_mcp_tool` | Call a tool on a server with arguments. |
+| `access_mcp_resource` | Read a resource (by URI) from a server. |
+
+So a typical flow is: `list_mcp_servers` → `list_mcp_tools` (on the one you want) → `use_mcp_tool` with the right arguments.
+
+## Transports
+
+`server/runtime/mcp.js` supports the standard MCP transports:
+
+- **stdio** — BOR spawns the server as a subprocess and talks over stdin/stdout (the most common; e.g. an `npx` server).
+- **SSE** — connect to a server over Server-Sent Events.
+- **streamable-http** — connect over streamable HTTP (e.g. a hosted/cloud server with an `Authorization` header).
+
+## Per-presence
+
+MCP config is **per-presence**: each presence has its own `.bor/mcp.json` and its own set of servers. Your "work" presence can have the GitHub + Jira servers while your "home" presence has none. See [Multi-presence](../features/multi-presence.md).
+
+## Where to go next
+
+- [Marketplace](marketplace.md) — discover and install servers.
+- [Ask AI](ask-ai.md) — describe a need and let the AI pick matching servers.
+- [Configuring servers](configuring-servers.md) — the `.bor/mcp.json` format and manual setup.

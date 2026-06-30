@@ -1,0 +1,84 @@
+---
+title: "Troubleshooting"
+description: "Common issues and how to resolve them."
+---
+
+Common issues and how to resolve them.
+
+## Setup & launch
+
+**The app won't start / the runtime isn't reachable.**
+- Make sure Node ≥ 20 and `npm install` completed.
+- Check the port — another process may hold `:7777`. Set `PORT=8080`.
+- Attach the host to a running runtime with `BOR_RUNTIME_URL=http://127.0.0.1:7777 npm run v2` if you started the runtime separately.
+
+**Changes to code don't take effect.**
+- The Node runtime doesn't hot-reload. **Restart** the app (or use `npm run dev` for `--watch` on the classic runtime). A running v2 session keeps the old code until you relaunch.
+
+## Provider & models
+
+**"No AI provider is configured."**
+- Finish [onboarding](getting-started/onboarding.md), or set `defaultProvider` + the matching `providers` entry in `config.json`.
+
+**401 / invalid key.**
+- Re-check the key in onboarding or `config.json`. For OpenAI-compatible, also check the base URL.
+
+**404 model.**
+- The model id retired. Pick a **current** model from the provider's live docs — ids rotate every few months.
+
+**Vision features don't work (`locate_screen_element`, browser screenshots).**
+- Your chosen model must be vision-capable. Switch to one that is.
+
+## Commands & the browser
+
+**A command "hangs" or seems to never finish.**
+- It doesn't — `execute_command` returns within 60 seconds. If a command is still running, it keeps running in the background and BOR follows it with `wait_until` + `read_command_tail`. For a dev server, use `background="true"`.
+
+**`cd X && npm …` does the wrong thing.**
+- Commands run through a real bash shell now, so `&&`, `cd`, pipes, and redirects all work. If you're on an old build where they didn't, restart on the latest code.
+
+**`browser_action` fails to launch.**
+- Install the bundled Chromium: `npm run browser:install`. BOR falls back to system Chrome (the `chrome` channel) when possible, otherwise it tells you to install.
+
+**A dev server I started is gone.**
+- Background commands keep running but are killed on chat cancel or runtime exit. Restart it; or check for it with `lsof -i :PORT`.
+
+## Computer use
+
+**Screen capture is black / clicks do nothing.**
+- Grant macOS permissions: **Screen Recording** (for capture/locate) and **Accessibility** (for click/type/key) to the Electron/Terminal host. BOR can open the right pane via `/api/system/permissions/open`.
+
+## Surfaces
+
+**A generated app shows raw `${…}` or looks broken.**
+- That's usually a generated-code issue, not the parser — ask BOR to fix it. The file-write parser is hardened so internal tags and CDATA quirks never corrupt a write; if you ever *do* see BOR's internal tags (`<tool_results>` etc.) in a file, that's stripped now — restart on the latest code.
+
+**An app needs an API key and silently fails.**
+- BOR builds a settings screen *inside* the surface for any required value. If one's missing, ask BOR to add the settings UI.
+
+## MCP
+
+**The marketplace is empty.**
+- It serves a cached catalog and falls back to stale-on-error, so this usually means the very first fetch failed. Click refresh, check connectivity, or override the source with `BOR_MCP_MARKETPLACE_URL`.
+
+**Ask AI returns nothing.**
+- Needs a configured provider. If the model genuinely found no match, rephrase the need or browse by category.
+
+**An installed MCP server isn't available.**
+- Check `.bor/mcp.json` (its path is in `GET /api/mcp/installed`), confirm the server entry, and that it isn't `disabled`. Restart the presence if a hand-edit didn't take.
+
+## Data & resetting
+
+**Start completely fresh (new-user state).**
+- Remove `os-data/`, `.bor/`, `.bed-of-roses/`, the `~/Applications` BOR `.app` wrappers, and `~/.bed-of-roses/`. Everything regenerates on next launch.
+
+**Clear one presence's projects.**
+- Remove `os-data/presences/<id>/.bor/`.
+
+**Delete a presence entirely.**
+- `bor delete <presence_id>` (removes its whole data dir).
+
+## Still stuck?
+
+- Check the **audit log** at `os-data/.../logs/audit.jsonl` — it records every action BOR took.
+- Read the relevant concept page: [The runtime](concepts/the-runtime.md), [Chat loop](concepts/chat-loop.md), [Storage & data](concepts/storage-and-data.md).

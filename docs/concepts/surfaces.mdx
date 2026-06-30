@@ -1,0 +1,64 @@
+---
+title: "Surfaces (Apps & Shortcuts)"
+description: "A surface is any UI BOR generates: an app (a full Mac window) or a shortcut (a card inside the bubble). Both are sandboxed iframes that talk to the runtime through a single message bridge. This…"
+---
+
+A **surface** is any UI BOR generates: an **app** (a full Mac window) or a **shortcut** (a card inside the bubble). Both are sandboxed iframes that talk to the runtime through a single message bridge. This page covers the shared model; see [Apps](../features/apps.md) and [Shortcuts](../features/shortcuts.md) for each kind.
+
+## App vs. shortcut
+
+| | **App** | **Shortcut** |
+|---|---|---|
+| Tool | `create_app` / `update_app` | `create_shortcut` / `update_shortcut` |
+| Where it lives | Its own native Mac window | A live iframe card inside the thought bubble |
+| Best for | Multi-screen, long-lived products you return to | Small, conversation-adjacent, stateful interactions |
+| Examples | Calorie tracker, CRM, dashboard, journal | Pay button, translator, Pomodoro, weather glance |
+| Launch later | App Library, `~/Applications`, `launch_app` | `launch_shortcut` (re-renders in the bubble) |
+
+Capability is **identical** across both — a shortcut can call APIs, ask its own AI, generate images, persist state, schedule cron, send notifications, and launch an app. Only the presentation differs.
+
+> Surfaces are **not** for shipping real software. If you ask BOR to "build a React app I can deploy", that's a [real project](../features/running-commands.md) written to `.bor/workspaces/`, not a surface. BOR is trained to ask when the platform is ambiguous.
+
+## The sandbox model
+
+Every surface is a sandboxed iframe with **no DOM access outside its frame**. All I/O goes through `parent.postMessage` → the runtime, validated server-side. Surfaces:
+
+- Cannot read or write your disk directly.
+- Cannot make arbitrary network calls except through the bridge.
+- Cannot escape the iframe (the [validator](the-runtime.md#the-validator) blocks `eval`, `Function`, external scripts, `localStorage`, `parent.*` except `postMessage`).
+
+The bridge gives them everything they legitimately need — state, AI, web, images — through audited server endpoints. See [The bridge](../features/the-bridge.md).
+
+## Anatomy of a surface
+
+Each surface is a folder under the presence's data dir:
+
+```
+os-data/presences/<id>/surfaces/<surface-id>/
+  index.html      (or widget.html)   — the surface code
+  surface.md                          — the surface's documentation (source of truth)
+  state.json                          — persisted state (survives HTML updates)
+  thumbnail / manifest                — icon + metadata for the launcher
+```
+
+Surface ids are `app-…` or `widget-…` (shortcuts use the `widget-` prefix for historical reasons).
+
+### The doc (`surface.md`)
+
+Every surface has a Markdown **doc** describing its purpose, features, views, data schema, bridge calls, design notes, and a changelog. This is not decoration — it's how BOR safely *updates* a surface later without destroying what exists. Before `update_app`/`update_shortcut`, BOR must read the doc.
+
+### State persistence
+
+`state.json` survives across HTML rewrites. When BOR updates a surface, it preserves and migrates user data through the bridge's `getState`/`setState`. So you can ask BOR to "redesign my tracker" without losing your data.
+
+## The design gate
+
+Before the *first* surface create/update in a turn, BOR must call `get_ux_ui_strict_guidelines` and stop. That tool returns the strict design contract for the active theme (the shortcut-card spec, the app icon kit, the theme handbook). Only after seeing it may BOR generate a surface. This keeps every surface on-brand and Apple-grade. See [Themes](../features/themes.md).
+
+## Launching & managing
+
+- **App Library** (bubble header) — the grid of apps; click to open.
+- **`~/Applications`** — apps are mirrored as `.app` wrappers, so they're Finder- and Spotlight-launchable. See [Multi-presence](../features/multi-presence.md).
+- **`list_surfaces`** — BOR lists existing surfaces (so it updates instead of cloning).
+- **`launch_app` / `launch_shortcut`** — bring an existing surface forward.
+- **`delete_app` / `delete_shortcut` / `rename_widget`** — manage them.

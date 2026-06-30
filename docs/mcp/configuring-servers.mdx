@@ -1,0 +1,96 @@
+---
+title: "Configuring MCP Servers"
+description: "MCP servers are configured in JSON. The marketplace writes this for you, but you can also edit it by hand or ask BOR to. This page covers the format and the config locations."
+---
+
+MCP servers are configured in JSON. The marketplace writes this for you, but you can also edit it by hand or ask BOR to. This page covers the format and the config locations.
+
+## The config files
+
+`server/runtime/mcp.js` discovers servers from, in order (later wins):
+
+1. **Global** — `~/.bed-of-roses/mcp/servers.json`
+2. **Shared local** — `.bed-of-roses/mcp/servers.json` (the bundled `browserbase` automation browser is configured here by default)
+3. **Per-presence** — `.bor/mcp.json` (where the [marketplace](marketplace.md) installs, and where the AI reads/writes)
+
+The per-presence `.bor/mcp.json` is the primary place; it wins over the shared templates. Its absolute path for the current presence is shown by `/api/mcp/installed` and handed to the AI in install tasks.
+
+## The format
+
+All three files use the same shape:
+
+```json
+{
+  "mcpServers": {
+    "<server-name>": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@some/mcp-server"],
+      "cwd": ".",
+      "env": { "API_KEY": "…" },
+      "disabled": false
+    }
+  }
+}
+```
+
+### stdio server (subprocess)
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/dir"],
+      "disabled": false
+    }
+  }
+}
+```
+
+BOR spawns the command and talks MCP over stdio.
+
+### streamable-http / SSE server (remote)
+
+```json
+{
+  "mcpServers": {
+    "my-cloud-server": {
+      "type": "streamable-http",
+      "url": "https://your-server.example.com/mcp",
+      "headers": { "Authorization": "Bearer YOUR_TOKEN" },
+      "disabled": true
+    }
+  }
+}
+```
+
+Use `type: "sse"` for an SSE endpoint. Headers carry auth.
+
+## Fields
+
+| Field | Purpose |
+|---|---|
+| `type` | `stdio` (default), `sse`, or `streamable-http`. |
+| `command` / `args` / `cwd` | For stdio: the subprocess to spawn. |
+| `url` / `headers` | For SSE / streamable-http: the endpoint and auth headers. |
+| `env` | Environment variables (API keys, config) for the server. |
+| `disabled` | Skip this server without removing it. |
+
+## Editing it
+
+- **Via the marketplace** — Install does it for you (LLM-driven), reading the file first so it never clobbers existing servers.
+- **Via the AI** — ask BOR to add/configure a server; it reads `.bor/mcp.json`, writes the new entry, and can run any needed setup commands.
+- **By hand** — edit `.bor/mcp.json` directly. The runtime picks up changes (restart the presence if it doesn't).
+
+## Verifying
+
+- `list_mcp_servers` — see what's configured and connected.
+- `list_mcp_tools <server>` — see the tools a server exposes.
+- `use_mcp_tool` / `access_mcp_resource` — actually call it.
+- `GET /api/mcp/installed` — the server names in this presence's `.bor/mcp.json` plus the config path.
+
+## Secrets
+
+API keys for MCP servers live in the `env` block of `.bor/mcp.json` (under `os-data/`). Treat that file as sensitive, like `config.json`.

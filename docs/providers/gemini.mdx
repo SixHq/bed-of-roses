@@ -1,0 +1,28 @@
+---
+title: "Google Gemini"
+description: "Use Gemini models in BOR with a Google AI / Gemini API key. Adapter: server/providers/gemini.js."
+---
+
+Use Gemini models in BOR with a Google AI / Gemini API key. Adapter: `server/providers/gemini.js`.
+
+## Setup
+
+1. Get a key from Google AI Studio (linked from onboarding).
+2. In [onboarding](../getting-started/onboarding.md), pick **Google Gemini**, paste your key, and choose a model.
+3. BOR validates and you're set.
+
+## Choosing a model
+
+Pick a **current** Gemini model from Google's live docs — ids change across the 2.x/3.x lines, so avoid stale ones. A vision-capable model is recommended for the screenshot-driven features.
+
+## Notes
+
+- Gemini supports context caching via `cachedContents`; BOR's prompt-cache layer uses it where available.
+- Image blocks and streaming go through the shared multimodal utilities.
+- Change the key/model in `providers.gemini` in `config.json`, or ask BOR to switch.
+
+## Troubleshooting
+
+- **API key invalid / permission** — re-check the key and that the Generative Language API is enabled for it.
+- **404 model** — the id retired; pick a current Gemini model.
+- See [Troubleshooting](../troubleshooting.md).

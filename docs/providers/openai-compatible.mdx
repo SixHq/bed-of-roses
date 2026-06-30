@@ -1,0 +1,42 @@
+---
+title: "OpenAI-compatible"
+description: "The OpenAI-compatible provider (openai-compatible) connects BOR to any endpoint that speaks the OpenAI Chat Completions API: a local model server, a proxy, or another vendor's OpenAI-shaped API.…"
+---
+
+The **OpenAI-compatible** provider (`openai-compatible`) connects BOR to any endpoint that speaks the OpenAI Chat Completions API: a local model server, a proxy, or another vendor's OpenAI-shaped API. Adapter: `server/providers/openai-compatible.js`.
+
+## When to use it
+
+- **Local models** — Ollama, LM Studio, vLLM, llama.cpp servers, etc.
+- **Proxies / gateways** — LiteLLM, OpenRouter-style routers, your company's gateway.
+- **Other vendors** that expose an OpenAI-compatible endpoint.
+
+## Setup
+
+This provider **requires a base URL** (`needsBaseUrl: true`). In [onboarding](../getting-started/onboarding.md):
+
+1. Pick **OpenAI-compatible**.
+2. Enter the **base URL** of your endpoint (e.g. `http://localhost:11434/v1` for Ollama, or your proxy URL).
+3. Enter an **API key** if the endpoint needs one (local servers often accept any value).
+4. Enter the **model name** exactly as your endpoint expects it.
+
+## Notes
+
+- The model name is whatever your endpoint serves — there's no fixed catalog, so type it exactly.
+- Vision/image support depends on the underlying model; if it's text-only, screenshot-driven features won't work.
+- Streaming and image blocks use the shared multimodal utilities, assuming the endpoint follows the OpenAI streaming format.
+
+## Examples
+
+| Backend | Base URL | Notes |
+|---|---|---|
+| Ollama | `http://localhost:11434/v1` | Run a local model; key can be anything. |
+| LM Studio | `http://localhost:1234/v1` | Local server with an OpenAI-compatible API. |
+| A proxy/gateway | your gateway URL | Point at the gateway; it routes to the real model. |
+
+## Troubleshooting
+
+- **Connection refused** — the local server isn't running or the base URL/port is wrong.
+- **404 / unknown model** — the model name doesn't match what the endpoint serves.
+- **No streaming** — the endpoint must support OpenAI-style streamed responses.
+- See [Troubleshooting](../troubleshooting.md).

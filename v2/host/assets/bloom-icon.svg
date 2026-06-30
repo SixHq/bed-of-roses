@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="aura" cx="34%" cy="26%" r="85%">
+      <stop offset="0%" stop-color="#2C2342"/>
+      <stop offset="58%" stop-color="#1A1525"/>
+      <stop offset="100%" stop-color="#120D1A"/>
+    </radialGradient>
+  </defs>
+  <rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" fill="url(#aura)"/>
+  <!-- Bed of Roses rose mark (source viewBox -110..110), centered + scaled -->
+  <g transform="translate(512,512) scale(3.0)">
+    <g fill="#FFFFFF" fill-opacity="0.06" stroke="#FFFFFF" stroke-width="1.2">
+      <path d="M0,-95 C30,-95 55,-70 55,-40 C55,-10 30,10 0,10 C-30,10 -55,-10 -55,-40 C-55,-70 -30,-95 0,-95Z"/>
+      <path d="M95,0 C95,30 70,55 40,55 C10,55 -10,30 -10,0 C-10,-30 10,-55 40,-55 C70,-55 95,-30 95,0Z"/>
+      <path d="M0,95 C-30,95 -55,70 -55,40 C-55,10 -30,-10 0,-10 C30,-10 55,10 55,40 C55,70 30,95 0,95Z"/>
+      <path d="M-95,0 C-95,-30 -70,-55 -40,-55 C-10,-55 10,-30 10,0 C10,30 -10,55 -40,55 C-70,55 -95,30 -95,0Z"/>
+    </g>
+    <g fill="#FFFFFF" fill-opacity="0.10" stroke="#FFFFFF" stroke-width="1" transform="rotate(45)">
+      <path d="M0,-70 C22,-70 40,-52 40,-30 C40,-8 22,8 0,8 C-22,8 -40,-8 -40,-30 C-40,-52 -22,-70 0,-70Z"/>
+      <path d="M70,0 C70,22 52,40 30,40 C8,40 -8,22 -8,0 C-8,-22 8,-40 30,-40 C52,-40 70,-22 70,0Z"/>
+      <path d="M0,70 C-22,70 -40,52 -40,30 C-40,8 -22,-8 0,-8 C22,-8 40,8 40,30 C40,52 22,70 0,70Z"/>
+      <path d="M-70,0 C-70,-22 -52,-40 -30,-40 C-8,-40 8,-22 8,0 C8,22 -8,40 -30,40 C-52,40 -70,22 -70,0Z"/>
+    </g>
+    <g fill="#FFFFFF" fill-opacity="0.20">
+      <path d="M0,-42 C12,-42 22,-32 22,-18 C22,-4 12,4 0,4 C-12,4 -22,-4 -22,-18 C-22,-32 -12,-42 0,-42Z"/>
+      <path d="M42,0 C42,12 32,22 18,22 C4,22 -4,12 -4,0 C-4,-12 4,-22 18,-22 C32,-22 42,-12 42,0Z"/>
+      <path d="M0,42 C-12,42 -22,32 -22,18 C-22,4 -12,-4 0,-4 C12,-4 22,4 22,18 C22,32 12,42 0,42Z"/>
+      <path d="M-42,0 C-42,-12 -32,-22 -18,-22 C-4,-22 4,-12 4,0 C4,12 -4,22 -18,22 C-32,22 -42,12 -42,0Z"/>
+    </g>
+    <circle cx="0" cy="0" r="10" fill="#FFFFFF" fill-opacity="0.35" stroke="#FFFFFF" stroke-width="0.8"/>
+    <circle cx="0" cy="0" r="4" fill="#FFFFFF" fill-opacity="0.7"/>
+  </g>
+</svg>

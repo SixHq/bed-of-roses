@@ -20,9 +20,11 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 
+import { DATA_DIR } from '../protocol/paths.js';
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const PROJECT_ROOT = resolve(HERE, '..', '..');
-const SESSIONS_DIR = join(PROJECT_ROOT, 'os-data', 'memory', 'sessions');
+const SESSIONS_DIR = join(DATA_DIR, 'memory', 'sessions');
 
 const IDLE_BOUNDARY_MS = 30 * 60_000;
 

@@ -85,6 +85,18 @@ const SHELL_DANGER_PATTERNS = [
   { pattern: /\bmkfs\.\w+\s/, reason: 'refused: filesystem format' },
   { pattern: /\bdd\s+if=\/dev\/(zero|random|urandom)\s+of=\//, reason: 'refused: dd to root device' },
   { pattern: /\b(curl|wget)\s[^|]*\|\s*(sudo\s+)?(bash|sh|zsh)\b/, reason: 'refused: pipe-to-shell from network' },
+  // Refuse commands that (re)start the BOR host/runtime itself. The agent runs
+  // INSIDE this host; launching another one restarts the process tree and
+  // closes every open surface window mid-task. To reload a surface, use
+  // <launch_app>/<launch_shortcut> (reopens the window) and <screen_capture>
+  // to verify — never restart the host.
+  {
+    pattern: /\b(npm|pnpm|yarn)\s+(run\s+)?(v2(:host|:cli)?|start|dev)\b/,
+    reason: 'refused: that starts/restarts the Bed of Roses host, which closes every open surface window. To reload a surface use <launch_app id="..."/> (it reopens the window), then <screen_capture> to verify — do not restart the host.',
+  },
+  { pattern: /(^|[\s;&|])electron(\s|$)/, reason: 'refused: launching Electron restarts the host and closes open surfaces. Use <launch_app>/<launch_shortcut> to reopen a surface instead.' },
+  { pattern: /\bnpx\s+bor\b/, reason: 'refused: npx bor starts another host instance, closing open surfaces. Use <launch_app>/<launch_shortcut> instead.' },
+  { pattern: /bin\/bed-of-roses(\.cjs)?\b/, reason: 'refused: that starts another host instance, closing open surfaces. Use <launch_app>/<launch_shortcut> instead.' },
 ];
 
 export function validateShellCommand(cmd) {

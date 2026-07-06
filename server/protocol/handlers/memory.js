@@ -33,7 +33,10 @@ export async function executeRemember(block, ctx) {
 }
 
 export async function executeRecall(block, ctx) {
-  const query = (block.attrs?.query || '').trim().toLowerCase();
+  // Accept the query from the `query` attribute (canonical) OR the body —
+  // the model often conflates this with <remember>fact</remember> and emits
+  // <recall>fact</recall>. Be liberal so either shape works.
+  const query = (block.attrs?.query || block.body || '').trim().toLowerCase();
   if (!query) {
     return { ok: false, event: 'tool_error', payload: { tag: 'recall', reason: 'query required' }, llmEcho: 'recall failed: missing query' };
   }
@@ -68,7 +71,8 @@ export async function executeRecall(block, ctx) {
 }
 
 export async function executeForget(block, ctx) {
-  const query = (block.attrs?.query || '').trim();
+  // Same liberal parsing as recall: attribute OR body.
+  const query = (block.attrs?.query || block.body || '').trim();
   if (!query) {
     return { ok: false, event: 'tool_error', payload: { tag: 'forget', reason: 'query required' }, llmEcho: 'forget failed: missing query' };
   }

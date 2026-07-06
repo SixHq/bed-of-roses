@@ -50,6 +50,11 @@
   box-shadow: 2px 2px 0 0 var(--ink);
 }
 .btn-primary { background: var(--ink); color: var(--canvas); }
+/* Keep the primary button readable on hover: the shell's base
+   .btn-primary:hover flips the background to near-white, which would leave our
+   cream text invisible. Re-assert the inked fill — the .btn:hover above still
+   supplies the offset-shadow "thunk" for feedback. */
+.btn-primary:hover:not(:disabled) { background: var(--ink); color: var(--canvas); }
 .btn-secondary { background: var(--surface-1); color: var(--ink); }
 .btn:disabled, .btn[disabled] {
   background: var(--surface-1);

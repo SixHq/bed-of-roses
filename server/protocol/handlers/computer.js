@@ -15,6 +15,7 @@ import { randomBytes } from 'node:crypto';
 
 import { saveGeneratedImage } from '../../tools/images.js';
 import { getProvider } from '../../providers/index.js';
+import { anthropicReasoningParams } from '../../providers/reasoning.js';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -55,6 +56,49 @@ async function runAppleScript(lines) {
   const result = await runFile('osascript', args);
   if (!result.ok) throw new Error(result.stderr || 'osascript failed');
   return result.stdout.trim();
+}
+
+// cliclick drives mouse/keyboard via CoreGraphics CGEvents — NOT Apple Events.
+// That means it needs ONLY the Accessibility permission (not Automation), so it
+// avoids the -1743 "not authorized to send Apple events to System Events" error
+// that blocks the osascript -> System Events path on dev/unsigned builds. We use
+// it when present and fall back to osascript otherwise.
+let _cliclickPath; // undefined = unprobed, string = path, null = absent
+async function getCliclick() {
+  if (_cliclickPath !== undefined) return _cliclickPath;
+  for (const p of ['/opt/homebrew/bin/cliclick', '/usr/local/bin/cliclick']) {
+    const probe = await runFile(p, ['-V']).catch(() => ({ ok: false }));
+    if (probe.ok) { _cliclickPath = p; return p; }
+  }
+  const which = await runFile('which', ['cliclick']);
+  _cliclickPath = which.ok && which.stdout.trim() ? which.stdout.trim() : null;
+  return _cliclickPath;
+}
+
+// Run cliclick with the given action args. Returns true on success, false if
+// cliclick isn't installed (so callers can fall back), throws on real failure.
+async function cliclick(args) {
+  const bin = await getCliclick();
+  if (!bin) return false;
+  const result = await runFile(bin, args);
+  if (!result.ok) throw new Error(result.stderr || 'cliclick failed');
+  return true;
+}
+
+// macOS key name -> cliclick `kp:` key name.
+const CLICLICK_KP = {
+  return: 'return', enter: 'return', tab: 'tab', escape: 'esc', esc: 'esc',
+  delete: 'delete', backspace: 'delete', forwarddelete: 'fwd-delete', space: 'space',
+  up: 'arrow-up', down: 'arrow-down', left: 'arrow-left', right: 'arrow-right',
+  home: 'home', end: 'end', pageup: 'page-up', pagedown: 'page-down',
+};
+function cliclickModifier(part) {
+  const p = part.toLowerCase();
+  if (p === 'cmd' || p === 'command' || p === 'meta') return 'cmd';
+  if (p === 'ctrl' || p === 'control') return 'ctrl';
+  if (p === 'alt' || p === 'option' || p === 'opt') return 'alt';
+  if (p === 'shift') return 'shift';
+  return null;
 }
 
 function appleString(value) {
@@ -355,6 +399,7 @@ async function callAnthropicComputer({ config, capture, prompt, maxTokens = 512 
   const body = {
     model: computerCfg.model,
     max_tokens: maxTokens,
+    ...anthropicReasoningParams(),
     tools: [{
       type: 'computer_20251124',
       name: 'computer',
@@ -458,19 +503,29 @@ function normalizePlannerAction(plan = {}) {
 }
 
 async function clickAt(x, y) {
-  await runAppleScript(`tell application "System Events" to click at {${Math.round(Number(x))}, ${Math.round(Number(y))}}`);
+  const X = Math.round(Number(x));
+  const Y = Math.round(Number(y));
+  if (await cliclick([`c:${X},${Y}`])) return;
+  await runAppleScript(`tell application "System Events" to click at {${X}, ${Y}}`);
 }
 
 async function doubleClickAt(x, y) {
-  await clickAt(x, y);
+  const X = Math.round(Number(x));
+  const Y = Math.round(Number(y));
+  if (await cliclick([`dc:${X},${Y}`])) return;
+  await clickAt(X, Y);
   await new Promise((resolve) => setTimeout(resolve, 90));
-  await clickAt(x, y);
+  await clickAt(X, Y);
 }
 
 async function typeText(text) {
+  const value = String(text ?? '');
+  // cliclick types the literal text via CGEvents (Accessibility only).
+  if (await cliclick([`t:${value}`])) return;
+  // Fallback: clipboard + Cmd+V via System Events (needs Automation).
   await runAppleScript([
     'set oldClipboard to the clipboard',
-    `set the clipboard to ${appleString(text)}`,
+    `set the clipboard to ${appleString(value)}`,
     'tell application "System Events" to keystroke "v" using command down',
     'delay 0.12',
     'set the clipboard to oldClipboard',
@@ -510,6 +565,21 @@ async function pressKey(combo) {
   const parts = String(combo || '').split(/[+\s]+/).map((p) => p.trim()).filter(Boolean);
   if (!parts.length) throw new Error('key required');
   const key = parts.at(-1).toLowerCase();
+
+  // Prefer cliclick (CGEvents, Accessibility-only — no -1743).
+  const cliMods = parts.slice(0, -1).map(cliclickModifier).filter(Boolean);
+  const kpName = CLICLICK_KP[key];
+  const keyAction = kpName ? `kp:${kpName}` : (key.length === 1 ? `t:${key}` : null);
+  if (keyAction) {
+    const args = [
+      ...cliMods.map((m) => `kd:${m}`),
+      keyAction,
+      ...cliMods.slice().reverse().map((m) => `ku:${m}`),
+    ];
+    if (await cliclick(args)) return;
+  }
+
+  // Fallback: osascript -> System Events (needs Automation permission).
   const modifiers = parts.slice(0, -1).map(modifierName).filter(Boolean);
   const using = modifiers.length ? ` using {${modifiers.join(', ')}}` : '';
   if (KEY_CODES[key] !== undefined) {

@@ -22,11 +22,24 @@ allowed-tools: Bash(browser-use:*)
 
 # Browser Automation With browser-use CLI
 
-Run \`browser-use\` through the \`execute_command\` tool. The harness gives you up to 30 minutes per command via \`timeout_seconds\` and surfaces the full stdout buffer (64 KB); if a state dump or screenshot listing gets truncated, the tool_result includes a \`run_id\` — call \`read_command_tail\` with it to read the rest.
+Run \`browser-use\` through the \`execute_command\` tool. The harness gives you up to 30 minutes per command via \`timeout_seconds\` and captures stdout up to 64 KB for the terminal UI and recent-command buffer. The model-facing tool_result is a compact preview; if a state dump omits relevant lines, call \`read_command_tail\` with the \`run_id\` and offset shown in the preview.
+
+## Visible browser requirement
+
+The user must be able to see what you are doing. Every \`browser-use open\` command MUST include \`--headed\`, including clean/profileless sessions and managed profile sessions. Never use \`--headless\`. The shell executor also enforces this by rewriting \`browser-use open\` to a headed launch if the flag is missing.
 
 ## First-touch setup
 
 Before the first browser action in a session, run \`browser-use doctor\` once so you know which features are available. Treat tunnel-only failures as non-blocking.
+
+## Ground truth — no visual guessing
+
+The headed browser is the user's source of truth, but your source of truth is the latest \`browser-use state\`, \`browser-use get\`, or \`browser-use screenshot\` result.
+
+- A \`click\`, \`input\`, \`type\`, \`keys\`, \`scroll\`, or \`wait\` result only means the command was dispatched. It does NOT prove navigation, success, an OTP/email, a created API key, or that a button is visible.
+- Never say you are on a page, see a button, created a key, sent a message, or triggered an email unless the latest post-action \`state\`/\`get\`/\`screenshot\` proves it.
+- If the target element or confirmation is missing from the latest state preview, do not infer it from memory or the website's usual layout. Inspect again, scroll, navigate deliberately, call \`read_command_tail\` if the compact preview omitted needed state lines, or fall back to visible Chrome computer-use after a real attempt.
+- When the visible headed browser and browser-use output disagree, trust the latest visible inspection path: use \`browser-use screenshot\` or switch to computer-use.
 
 ## Profile choice — MANDATORY GATE
 
@@ -42,23 +55,23 @@ You MUST do this, in this exact order:
 
 1. Run \`execute_command\` with body \`browser-use profile list\` (no other flags).
 2. Read the output. It returns a list of available Chrome profiles on this machine.
-3. Emit a single \`<say>\` that:
+3. Emit one \`<wait_for_human_input kind="profile_choice">\` whose body:
    - Names every profile from the list, one per line, with whatever identifying info \`profile list\` returned (account email, profile label, last-used date, etc.).
    - Asks the user which one to use.
    - Mentions that a profileless/clean session is also an option for tasks that don't need an account.
 4. **STOP. End the turn. Emit no more tool calls.** Do not pick a default for the user. Do not "guess the most plausible one." The turn ends here. The user replies with their choice in their next message, and you continue from there.
 
-This gate exists because using the wrong account is a real harm (sent from wrong identity, logged in to wrong session, leaked context). The chat loop ends naturally when you stop emitting tool calls, so asking and waiting is the correct flow — not a stall.
+This gate exists because using the wrong account is a real harm (sent from wrong identity, logged in to wrong session, leaked context). \`<wait_for_human_input>\` is the explicit stop signal; use it instead of \`<attempt_completion>\` whenever the next step depends on the user.
 
 ### Branch 3 — the task explicitly doesn't need an account
 
-User says "open Wikipedia", "check if this URL is alive", "scrape this public page". Use \`browser-use open <url>\` (no profile flag) — clean profileless browser.
+User says "open Wikipedia", "check if this URL is alive", "scrape this public page". Use \`browser-use --headed open <url>\` (no profile flag) — visible clean profileless browser.
 
 ### Acceptable invocation shapes
 
-- \`browser-use --profile "ProfileName" open <url>\` — managed Chromium with the named profile.
+- \`browser-use --headed --profile "ProfileName" open <url>\` — visible managed Chromium with the named profile.
 - \`browser-use connect\` — attach to a real Chrome with remote debugging enabled.
-- \`browser-use open <url>\` — clean profileless browser (Branch 3 only).
+- \`browser-use --headed open <url>\` — visible clean profileless browser (Branch 3 only).
 
 ## Core workflow — STEP BY STEP ONLY
 
@@ -66,7 +79,7 @@ You drive browser-use yourself, one atomic command at a time. **Never invoke \`b
 
 Allowed commands (this is the WHOLE surface):
 
-- \`browser-use [--profile "..."] open <url>\` — open a page
+- \`browser-use --headed [--profile "..."] open <url>\` — open a visible page
 - \`browser-use state\` — get the current element-index map (read this before clicking/typing)
 - \`browser-use click <index>\` — click element by index from the last \`state\`
 - \`browser-use input <index> "text"\` — type into the input element at index
@@ -85,9 +98,11 @@ Loop pattern:
 3. Read the tool_result. Index references come from \`state\` output, not guesses.
 4. Repeat.
 
+Do not copy browser-use page/state output into \`<say>\` or restate the full page before acting. Extract the needed URL, text, confirmation, or element index, then emit the next XML action. Fetch more captured output only when the preview omits an index or line required for the next action.
+
 For email specifically: open Gmail → \`state\` → click Compose by index → \`state\` → input recipient index → \`keys "Tab"\` → input subject index → \`keys "Tab"\` → input body index → click Send by index → \`state\` to verify the Sent confirmation. Six to ten atomic steps. Each preceded by a one-sentence \`<say>\`.
 
-If a command fails, run \`browser-use close\` once, then retry the minimal next command. If you genuinely cannot make progress (MFA prompt, CAPTCHA, blocked automation, missing credentials), say so in a \`<say>\` and stop — don't loop on setup, don't fall through to NL prompt mode.
+If a command fails, run \`browser-use close\` once, then retry the minimal next command. If you genuinely cannot make progress without the user (MFA prompt, CAPTCHA, blocked automation, missing credentials), use \`<wait_for_human_input>\` with a clear request — don't loop on setup, don't fall through to NL prompt mode.
 
 ## Rules
 
@@ -95,7 +110,7 @@ If a command fails, run \`browser-use close\` once, then retry the minimal next 
 - **Completion = outcome verified, then call \`attempt_completion\`.** For any task tied to an outcome (send, post, submit, reply, create, purchase, save), call \`attempt_completion\` ONLY after you have run \`browser-use state\` or \`browser-use screenshot\` AFTER the final action and confirmed the outcome — sent-confirmation banner, redirect to /sent or /inbox, success toast, or the recorded value present where it should be. "I typed the recipient" is NOT done. "The Send button was clicked and the URL changed to /sent" IS done. When verified, call \`attempt_completion\` with a \`result\` summary.
 - For email specifically: typing recipient → typing subject → typing body → clicking Send → verifying the message is in Sent (or the compose window closed with a success indicator). Skipping any step before the verification is half-done — do NOT call \`attempt_completion\`.
 - Narrate every action briefly in a \`<say>\` before each tool call. The user sees nothing during \`browser-use\` execution — short narrations keep them oriented.
-- Pause for MFA, real CAPTCHAs, missing credentials, or genuinely ambiguous account choice. Emit a \`<say>\` describing what you need from the user, then call \`attempt_completion\` with a \`result\` describing the blocker.
+- Pause for MFA, real CAPTCHAs, missing credentials, or genuinely ambiguous account choice. Use \`<wait_for_human_input>\` describing what you need from the user, then stop.
 - When the user only asks for setup ("open Gmail in Chrome"), opening the page IS the completion. Call \`attempt_completion\`.
 - Use Browserbase only if the user explicitly asks for it.
 `;

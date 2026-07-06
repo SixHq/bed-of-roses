@@ -781,7 +781,7 @@ function startHudClock() {
 }
 
 // --- Onboarding pane router ------------------------------------------------
-const PANES = ['welcome', 'name', 'theme', 'presence', 'tools', 'connect'];
+const PANES = ['welcome', 'name', 'theme', 'presence', 'tools', 'permissions', 'connect'];
 let currentPaneIdx = 0;
 
 function gotoPane(idx) {
@@ -807,6 +807,10 @@ function gotoPane(idx) {
 
   // Probe browser-use status when the user lands on the tools pane.
   if (next === 'tools') refreshBrowserUseStatus(false);
+
+  // Probe macOS computer-use permissions when landing on the permissions pane
+  // (the probe also triggers the first-run macOS permission prompts).
+  if (next === 'permissions') refreshComputerUsePermissions();
 
   // Re-trigger headline reveal on each pane entry
   const nextPane = qs(`.pane[data-pane="${next}"]`);
@@ -3207,6 +3211,15 @@ async function sendChat(text) {
 
         // Completed <say> block
         say: (p) => speakOne(p),
+        task_done: (p) => {
+          if (p?.hasResult && typeof p.message === 'string' && p.message.trim()) {
+            speakOne({
+              tone: p.status === 'blocked' ? 'apologetic' : (p.status === 'waiting' ? 'thoughtful' : 'warm'),
+              text: p.message,
+            });
+          }
+          setAvatarState('success', 1200);
+        },
 
         // Widgets
         create_widget: ({ manifest }) => {
@@ -3348,6 +3361,61 @@ async function refreshBrowserUseStatus(force = false) {
   }
 }
 
+// Probe + render the two macOS computer-use permissions (Accessibility +
+// Screen Recording). Hitting the endpoint also triggers the first-run macOS
+// permission prompts the very first time.
+async function refreshComputerUsePermissions() {
+  const setBadge = (id, cls, text) => {
+    const badge = $(id);
+    if (!badge) return;
+    badge.className = 'tool-badge' + (cls ? ` ${cls}` : '');
+    badge.textContent = text;
+  };
+  const setCard = (id, status) => { const c = $(id); if (c) c.dataset.status = status; };
+  const hint = $('perm-control-hint');
+  setBadge('perm-control-badge', '', 'checking…');
+  setBadge('perm-screen-badge', '', 'checking…');
+  if (hint) hint.textContent = '';
+  try {
+    const res = await fetch('/api/system/permissions');
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    const p = await res.json();
+    if (p.platform && p.platform !== 'darwin') {
+      setBadge('perm-control-badge', 'ok', 'not needed');
+      setBadge('perm-screen-badge', 'ok', 'not needed');
+      setCard('perm-control', 'installed');
+      setCard('perm-screen', 'installed');
+      return;
+    }
+    if (p.cliclick) {
+      // Primary input path is cliclick (CGEvents) — needs ONLY Accessibility.
+      const ready = p.control; // osascript-ok implies Accessibility is on too
+      setBadge('perm-control-badge', ready ? 'ok' : 'warn', ready ? '✓ ready' : 'grant Accessibility');
+      setCard('perm-control', ready ? 'installed' : 'missing');
+      if (hint) {
+        hint.textContent = ready
+          ? 'Ready (using cliclick). Automation is not required.'
+          : 'Computer-use uses cliclick (CGEvents) and needs ONLY Accessibility — not Automation. Toggle Bed of Roses (or Electron) ON under Accessibility, then quit & reopen BOR. If clicks do nothing, that grant isn\'t active yet.';
+      }
+    } else {
+      setBadge('perm-control-badge', p.control ? 'ok' : 'warn', p.control ? '✓ granted' : 'not granted');
+      setCard('perm-control', p.control ? 'installed' : 'missing');
+      if (hint) {
+        hint.textContent = p.control
+          ? ''
+          : p.controlNeeds === 'accessibility'
+            ? 'Missing: Accessibility. Toggle Bed of Roses (or Electron) on, then quit & reopen BOR.'
+            : 'Missing: Automation → "System Events" (or install cliclick to avoid it). Enable it for Bed of Roses (or Electron), then quit & reopen BOR.';
+      }
+    }
+    setBadge('perm-screen-badge', p.screenRecording ? 'ok' : 'warn', p.screenRecording ? '✓ granted' : 'not granted');
+    setCard('perm-screen', p.screenRecording ? 'installed' : 'missing');
+  } catch {
+    setBadge('perm-control-badge', 'err', 'check failed');
+    setBadge('perm-screen-badge', 'err', 'check failed');
+  }
+}
+
 function showOnboardingError(msg) {
   const el = $('onboarding-error');
   el.textContent = msg;
@@ -3363,6 +3431,35 @@ function drawerHtml(prov, status) {
   const connected = !!status?.configured;
 
   const parts = [];
+
+  // Bed of Roses credits — no API key to paste. The user buys credits + signs
+  // in on the web app (opens in their browser); the returned account token is
+  // pasted (or delivered via the bor:// deep-link) and saved as this provider's
+  // key. Streaming is metered + deducted server-side.
+  if (prov.isBorCredits) {
+    parts.push(`
+      <p class="drawer-hint">20% cheaper than going direct, every model unlocked, pay only for the tokens you use. Sign in and buy credits, then paste your account token below.</p>
+      <div class="credits-buy-row">
+        <button type="button" class="btn btn-primary credits-buy-btn" data-act="open-credits">Buy BOR credits →</button>
+      </div>
+      <label class="field-label">Account token</label>
+      <input class="field-input" type="password" data-field="apiKey" placeholder="${status?.hasApiKey ? '••••••••' : 'Paste your BOR token after signing in'}" autocomplete="off" spellcheck="false" />
+      <div class="provider-model-row">
+        <label class="field-label">Model</label>
+        <select class="field-input" data-field="model">
+          ${(prov.models || []).map((mm) => `<option value="${escapeAttr(mm.id)}"${status?.model === mm.id ? ' selected' : ''}>${escapeHtml(mm.label)}${mm.note ? ` — ${escapeHtml(mm.note)}` : ''}</option>`).join('')}
+        </select>
+      </div>
+    `);
+    const actions = [];
+    if (connected && state.config?.defaultProvider !== prov.id) {
+      actions.push(`<button type="button" class="btn btn-ghost" data-act="set-default">Make default</button>`);
+    }
+    if (connected) actions.push(`<button type="button" class="btn btn-ghost" data-act="remove">Sign out</button>`);
+    actions.push(`<button type="button" class="btn btn-primary" data-act="save">${connected ? 'Update' : 'Connect'}</button>`);
+    parts.push(`<div class="provider-actions">${actions.join('')}</div>`);
+    return parts.join('\n');
+  }
 
   if (prov.id === 'openai') {
     parts.push(`
@@ -3518,6 +3615,15 @@ function wireDrawer(card, prov) {
   const drawer = card.querySelector('.provider-drawer-content');
   if (!drawer) return;
 
+  // BOR credits: open the web buy-credits / sign-in flow in the browser.
+  drawer.querySelector('[data-act="open-credits"]')?.addEventListener('click', () => {
+    const url = prov.signupUrl || 'https://app.bedofroses.os/credits';
+    // In the v2 Electron host, borHost routes this to the system browser;
+    // in the classic shell, window.open opens a new tab.
+    if (window.borHost?.openExternal) window.borHost.openExternal(url);
+    else window.open(url, '_blank', 'noopener');
+  });
+
   drawer.querySelectorAll('.preset-chip').forEach((chip) => {
     chip.addEventListener('click', () => {
       try {
@@ -3634,7 +3740,7 @@ function wireOnboarding() {
 
   // Tools pane — detection-driven status for browser-use (and future CLIs).
   $('tools-back').addEventListener('click', () => gotoPane(3));
-  $('tools-next').addEventListener('click', () => gotoPane(5));
+  $('tools-next').addEventListener('click', () => gotoPane(5)); // -> permissions
   $('browser-use-recheck').addEventListener('click', () => refreshBrowserUseStatus(true));
   $('browser-use-copy').addEventListener('click', () => {
     const cmd = $('browser-use-cmd').textContent || '';
@@ -3645,7 +3751,26 @@ function wireOnboarding() {
     setTimeout(() => { btn.textContent = orig; }, 1200);
   });
 
-  $('connect-back').addEventListener('click', () => gotoPane(4));
+  // Permissions pane (computer-use macOS perms).
+  $('permissions-back').addEventListener('click', () => gotoPane(4)); // -> tools
+  $('permissions-next').addEventListener('click', () => gotoPane(6)); // -> connect
+  $('permissions-recheck').addEventListener('click', () => refreshComputerUsePermissions());
+  qsa('[data-perm-open]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const pane = btn.getAttribute('data-perm-open');
+      try {
+        await fetch('/api/system/permissions/open', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ pane }),
+        });
+      } catch { /* ignore */ }
+      // Re-check shortly after, in case they toggle it immediately.
+      setTimeout(() => refreshComputerUsePermissions(), 1500);
+    });
+  });
+
+  $('connect-back').addEventListener('click', () => gotoPane(5)); // -> permissions
 
   $('connect-finish').addEventListener('click', async () => {
     if (!isConnected(state.config)) {

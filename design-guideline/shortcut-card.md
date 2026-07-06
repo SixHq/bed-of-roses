@@ -134,8 +134,13 @@ const searchWeb    = (query, limit = 5)       => _bridge({type:'web-search', que
 const fetchUrl     = (url)                    => _bridge({type:'web-fetch', url}).then(r => ({title: r.title, text: r.text, truncated: r.truncated}));
 const generateImage = (prompt, size = '1024x1024') => _bridge({type:'image-generate', prompt, size}).then(r => ({url: r.url, model: r.model, bytes: r.bytes}));
 const launchApp    = (appId)                  => _bridge({type:'launch-app', appId});
+const cron         = (action)                 => _bridge({type:'cron', ...action});
+const pushNotification = ({subject, title, body, level = 'info', source = 'shortcut'}) => _bridge({type:'notification-push', subject, title, body, level, source});
+const listNotifications = ()                  => _bridge({type:'notifications-list'}).then(r => ({notifications: r.notifications || [], unread: r.unread || 0}));
 </script>
 ```
+
+When you call `pushNotification`, include a short `subject` for the collapsed presence chip and use `body` for the full detail text.
 
 `launchApp(appId)` opens an existing BOR app full-screen via the Swift
 helper. Use this when the shortcut is a launcher for a deeper experience

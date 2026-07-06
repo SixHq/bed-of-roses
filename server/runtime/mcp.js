@@ -18,9 +18,25 @@ import {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(HERE, '..', '..');
+// Per-presence data root (BOR_DATA_DIR -> os-data/presences/<id>/). The MCP
+// marketplace installs into this presence's own .bor/mcp.json.
+const DATA_DIR = resolve(process.env.BOR_DATA_DIR || join(PROJECT_ROOT, 'os-data'));
 const LOCAL_MCP_PATH = join(PROJECT_ROOT, '.bed-of-roses', 'mcp', 'servers.json');
 const GLOBAL_MCP_PATH = join(homedir(), '.bed-of-roses', 'mcp', 'servers.json');
+// The marketplace + the LLM read/write servers here, per presence.
+const BOR_MCP_PATH = join(DATA_DIR, '.bor', 'mcp.json');
 const DEFAULT_TIMEOUT_MS = 30_000;
+
+// Absolute path the install task hands to the LLM, and the marketplace shows.
+export function getBorMcpPath() {
+  return BOR_MCP_PATH;
+}
+
+// Server names currently configured in this presence's .bor/mcp.json — used by
+// the marketplace to mark catalog items as "Installed".
+export async function readBorMcpServerNames() {
+  return Object.keys(await readConfig(BOR_MCP_PATH));
+}
 
 const _connections = new Map(); // name -> { signature, client, transport }
 
@@ -64,9 +80,10 @@ async function readConfig(path) {
 
 export async function discoverMcpServers() {
   await ensureTemplates();
-  const [globalServers, localServers] = await Promise.all([
+  const [globalServers, localServers, borServers] = await Promise.all([
     readConfig(GLOBAL_MCP_PATH),
     readConfig(LOCAL_MCP_PATH),
+    readConfig(BOR_MCP_PATH),
   ]);
   const merged = new Map();
   for (const [name, config] of Object.entries(globalServers)) {
@@ -74,6 +91,10 @@ export async function discoverMcpServers() {
   }
   for (const [name, config] of Object.entries(localServers)) {
     merged.set(name, { name, config, source: 'local' });
+  }
+  // Per-presence marketplace installs win over the shared templates.
+  for (const [name, config] of Object.entries(borServers)) {
+    merged.set(name, { name, config, source: 'bor' });
   }
   return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
 }

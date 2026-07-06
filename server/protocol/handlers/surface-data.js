@@ -34,7 +34,9 @@ function cleanId(block) {
 
 function idFromStatePath(path) {
   const raw = String(path || '').trim().replace(/\\/g, '/');
-  const match = raw.match(/(?:^|\/)os-data\/widgets\/((?:app|widget)-[\w.-]+)\/state\.json$/);
+  // Match both the legacy widgets/ layout and the surfaces/ layout, anywhere in
+  // the path — under multi-presence the prefix is os-data/presences/<id>/.
+  const match = raw.match(/(?:^|\/)(?:widgets|surfaces)\/((?:app|widget)-[\w.-]+)\/state\.json$/);
   if (!match) return '';
   return match[1];
 }

@@ -15,6 +15,13 @@ import { handleChatStream, autoBannerThumbnail } from './ai.js';
 import { handleGetState, handleSetState, handleSurfaceLlm, handleSurfaceImageGen, handleSurfaceWebSearch, handleSurfaceWebFetch } from './surface-host.js';
 import { IMAGES_DIR } from './tools/images.js';
 import { logEvent as logSessionEvent } from './memory/sessions.js';
+import {
+  saveConversation,
+  listConversations,
+  getConversation,
+  deleteConversation,
+  clearConversations,
+} from './memory/conversations.js';
 import * as surfaceRegistry from './memory/surfaces.js';
 // Dreams are disabled for now because background consolidation was interrupting
 // normal chat streams. Re-enable this import with the scheduler block below.
@@ -24,11 +31,25 @@ import { ALL_PROVIDERS, getProvider, publicCatalog } from './providers/index.js'
 import { USER_DOWNLOADS_DIR, USER_PROFILE_DIR, ensureBrowserDirs, resolveBrowserExecutable } from './runtime/browser.js';
 import { getConnectivityStatus, startConnectivityMonitor } from './connectivity.js';
 import { detectBrowserUse, invalidateBrowserUseCache } from './runtime/browser-use.js';
+import { getBorMcpPath, readBorMcpServerNames } from './runtime/mcp.js';
+import { CronService } from './cron/service.js';
+import {
+  addNotification,
+  clearNotifications,
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  removeNotification,
+} from './notifications.js';
 
 const PORT = Number(process.env.PORT || 7777);
 const ROOT = resolve(fileURLToPath(import.meta.url), '../..');
 const SHELL_DIR = join(ROOT, 'shell');
-const DATA_DIR = join(ROOT, 'os-data');
+// DATA_DIR is the per-presence data root (BOR_DATA_DIR), defaulting to the
+// repo's os-data when unset. ROOT stays the source-tree anchor (shell serving,
+// reserved-path write guards, exec cwd). Imported from paths.js so every
+// module agrees on the same root.
+import { DATA_DIR } from './protocol/paths.js';
 const WIDGETS_DIR = join(DATA_DIR, 'widgets');
 // Phase 1 shortcuts refactor: new storage path. The migration step
 // (migrateWidgetsToSurfaces below) populates this on first boot from
@@ -164,6 +185,7 @@ await mkdir(join(DATA_DIR, 'memory', 'sessions'), { recursive: true });
 startConnectivityMonitor();
 
 let activeChatStreams = 0;
+let cronService = null;
 // let lastChatActivityAt = 0;
 // const DREAM_CHAT_COOLDOWN_MS = (() => {
 //   const value = Number(process.env.BOR_DREAM_CHAT_COOLDOWN_MS);
@@ -174,6 +196,84 @@ let activeChatStreams = 0;
 async function audit(entry) {
   await appendFile(AUDIT_LOG, JSON.stringify({ ts: new Date().toISOString(), ...entry }) + '\n');
 }
+
+// Spawn a command, capture output, never throw — for permission probes/opens.
+function runFileQuick(file, args, timeoutMs = 9000) {
+  return new Promise((resolve) => {
+    let stdout = '';
+    let stderr = '';
+    let child;
+    try {
+      child = spawn(file, args, { timeout: timeoutMs });
+    } catch (e) {
+      resolve({ ok: false, stdout, stderr: e?.message || 'spawn failed', code: -1 });
+      return;
+    }
+    child.stdout?.on('data', (b) => { stdout += b.toString('utf8'); });
+    child.stderr?.on('data', (b) => { stderr += b.toString('utf8'); });
+    child.on('error', (e) => resolve({ ok: false, stdout, stderr: e?.message || String(e), code: -1 }));
+    child.on('close', (code) => resolve({ ok: code === 0, stdout, stderr, code }));
+  });
+}
+
+// Computer-use needs two macOS permissions, both granted to the app that runs
+// the CLIs (osascript / screencapture): Accessibility (System Events control)
+// and Screen Recording (display capture). This probes their status — and the
+// probes themselves trigger the first-run macOS prompts / add the app to the
+// Privacy lists. Returns { accessibility, screenRecording }.
+async function probeComputerUsePermissions() {
+  if (process.platform !== 'darwin') {
+    return { accessibility: true, screenRecording: true, platform: process.platform, note: 'computer-use permissions are macOS-only' };
+  }
+  // Control probe: computer_click runs `osascript -> tell System Events to ...`.
+  // That needs BOTH Automation (authorization to send Apple events to System
+  // Events; failure = -1743) and Accessibility (assistive access; failure =
+  // -25211 / "not allowed assistive access"). This single call is the definitive
+  // "can I control the Mac?" test; parse the error to say which one is missing.
+  const ax = await runFileQuick('osascript', [
+    '-e', 'tell application "System Events" to return name of first application process whose frontmost is true',
+  ]);
+  const axErr = `${ax.stderr}${ax.stdout}`;
+  const control = ax.ok;
+  let controlNeeds = null;
+  if (!ax.ok) {
+    if (/-1743|not authorized to send apple events/i.test(axErr)) controlNeeds = 'automation';
+    else if (/-25211|assistive|accessibility|not allowed/i.test(axErr)) controlNeeds = 'accessibility';
+    else controlNeeds = 'automation';
+  }
+  // Screen Recording: capture a tiny region; without permission the capture
+  // produces no usable file (or errors). Best-effort signal.
+  let screenRecording = false;
+  const probePng = join(DATA_DIR, 'logs', `.perm-probe-${randomUUID()}.png`);
+  try {
+    const cap = await runFileQuick('screencapture', ['-x', '-R', '0,0,4,4', '-t', 'png', probePng], 12000);
+    if (cap.ok) {
+      try { const st = await stat(probePng); screenRecording = st.size > 256; } catch { screenRecording = false; }
+    }
+  } finally {
+    try { await rm(probePng, { force: true }); } catch { /* ignore */ }
+  }
+  // cliclick (CGEvents) is the primary input path — it needs only Accessibility,
+  // not Automation. If present, computer-use no longer requires the Apple-events
+  // Automation grant that causes -1743.
+  let cliclick = false;
+  for (const p of ['/opt/homebrew/bin/cliclick', '/usr/local/bin/cliclick']) {
+    const probe = await runFileQuick(p, ['-V'], 4000);
+    if (probe.ok) { cliclick = true; break; }
+  }
+  if (!cliclick) {
+    const which = await runFileQuick('which', ['cliclick'], 4000);
+    cliclick = which.ok && !!which.stdout.trim();
+  }
+
+  return { control, controlNeeds, screenRecording, cliclick, platform: 'darwin' };
+}
+
+const MAC_SETTINGS_PANES = {
+  accessibility: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
+  automation: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Automation',
+  screen: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
+};
 
 function validateSurfaceId(id) {
   const value = String(id || '');
@@ -186,12 +286,21 @@ function validateSurfaceId(id) {
   return safe;
 }
 
+// Rel-paths handed to the LLM are computed from the absolute SURFACES_DIR so
+// they stay correct under a per-presence DATA_DIR. With no BOR_DATA_DIR set
+// this yields the legacy `os-data/surfaces/<id>/...`; under a presence root it
+// yields `os-data/presences/<id>/surfaces/...`. Either resolves correctly when
+// the file handlers resolve against cwd=PROJECT_ROOT (= ROOT).
 function surfaceDocRelPath(id) {
-  return `os-data/surfaces/${validateSurfaceId(id)}/${SURFACE_DOC_FILE}`;
+  return relative(ROOT, surfaceDocAbsPath(id)).split(sep).join('/');
 }
 
 function surfaceStateRelPath(id) {
-  return `os-data/surfaces/${validateSurfaceId(id)}/${SURFACE_STATE_FILE}`;
+  return relative(ROOT, surfaceStateAbsPath(id)).split(sep).join('/');
+}
+
+function surfaceHtmlRelPath(id) {
+  return relative(ROOT, join(SURFACES_DIR, validateSurfaceId(id), 'widget.html')).split(sep).join('/');
 }
 
 function surfaceDocAbsPath(id) {
@@ -502,10 +611,108 @@ function buildHandlerCtx({ lastUserMessage, signal } = {}) {
     loadConfig, saveConfig, mergeConfig, publicConfig,
     logSessionEvent,
     audit, autoBannerThumbnail,
+    cronService,
+    addNotification,
     projectRoot: ROOT,
+    // Per-presence data root. Handlers that build absolute paths into the
+    // presence's os-data (e.g. shortcut.js reading widget.html) must use this,
+    // NOT projectRoot — under multi-presence the data lives at
+    // os-data/presences/<id>/, while projectRoot stays the source tree.
+    dataDir: DATA_DIR,
     lastUserMessage: lastUserMessage || '',
     signal,
   };
+}
+
+async function executeCronAgentTurn({ job, runId, signal }) {
+  const cfg = await loadConfig();
+  if (!cfg) throw new Error('No provider connected');
+  const payloadMessage = job?.payload?.message || '';
+  const prompt = [
+    `[cron:${job.id}] ${job.name}`,
+    '',
+    'This is a scheduled background run. Execute the task now using the normal BOR tools.',
+    'If there is a user-visible outcome, make it clear in <attempt_completion><result>...</result></attempt_completion>.',
+    'Use <push_notification> only for additional important alerts; the scheduler will also notify the final result.',
+    '',
+    payloadMessage,
+  ].join('\n');
+  const ctx = buildHandlerCtx({
+    lastUserMessage: prompt,
+    signal,
+  });
+  const events = [];
+  const recorded = await handleChatStream({
+    config: cfg,
+    messages: [{ role: 'user', content: prompt }],
+    widgets: await listWidgets(),
+    ctx,
+    hostMode: 'v2',
+    onEvent: ({ event, payload, ok }) => {
+      events.push({ event, ok: ok !== false, payload });
+      if (event === 'tool_error') {
+        logSessionEvent('cron.tool.error', { jobId: job.id, runId, reason: payload?.reason });
+      }
+    },
+  });
+  const lastTaskDone = events.filter((entry) => entry.event === 'task_done').at(-1);
+  const failed = events.find((entry) => entry.event === 'tool_error' && entry.ok === false);
+  if (failed && !lastTaskDone) {
+    throw new Error(failed.payload?.reason || 'scheduled task tool failed');
+  }
+  if (!String(recorded || '').trim()) {
+    const lastSay = events.filter((entry) => entry.event === 'say').at(-1);
+    throw new Error(lastSay?.payload?.text || 'scheduled task produced no assistant result');
+  }
+  return recorded;
+}
+
+async function handleCronAction(body = {}, sourceSurfaceId = null) {
+  if (!cronService) throw new Error('cron service is not available');
+  const action = String(body.action || '').trim().toLowerCase();
+  if (!action) throw requestError('action required', 400);
+  switch (action) {
+    case 'status':
+      return await cronService.status();
+    case 'list':
+      return { jobs: await cronService.list({ includeDisabled: body.includeDisabled === true }) };
+    case 'get': {
+      const id = String(body.id || body.jobId || '').trim();
+      if (!id) throw requestError('id required', 400);
+      const job = await cronService.get(id);
+      if (!job) throw requestError(`unknown cron job id: ${id}`, 404);
+      return { job };
+    }
+    case 'add': {
+      const job = body.job && typeof body.job === 'object' ? body.job : body;
+      return {
+        job: await cronService.add({
+          ...job,
+          source: sourceSurfaceId ? 'surface' : (job.source || 'api'),
+          sourceSurfaceId: sourceSurfaceId || job.sourceSurfaceId,
+        }),
+      };
+    }
+    case 'update': {
+      const id = String(body.id || body.jobId || '').trim();
+      if (!id) throw requestError('id required', 400);
+      const patch = body.patch && typeof body.patch === 'object' ? body.patch : body;
+      return { job: await cronService.update(id, patch) };
+    }
+    case 'remove': {
+      const id = String(body.id || body.jobId || '').trim();
+      if (!id) throw requestError('id required', 400);
+      return await cronService.remove(id);
+    }
+    case 'run': {
+      const id = String(body.id || body.jobId || '').trim();
+      if (!id) throw requestError('id required', 400);
+      const mode = body.mode === 'due' ? 'due' : 'force';
+      return await cronService.run(id, mode);
+    }
+    default:
+      throw requestError(`unknown cron action: ${action}`, 400);
+  }
 }
 
 async function readJsonBody(req) {
@@ -535,6 +742,162 @@ function messageContentText(content) {
 function sendJson(res, status, body) {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(body));
+}
+
+// --- MCP marketplace (Cline's hosted catalog — the same one Sixth uses) ------
+const MCP_BASE_URL = process.env.BOR_MCP_MARKETPLACE_URL || 'https://api.cline.bot/v1/mcp';
+const MCP_CATALOG_TTL_MS = 60 * 60 * 1000; // server-side cache so the page is instant
+let _mcpCatalogCache = { at: 0, items: null };
+
+function normalizeMcpItem(item = {}) {
+  return {
+    mcpId: item.mcpId || item.id || '',
+    name: item.name || item.mcpId || 'Untitled',
+    author: item.author || item.authorName || '',
+    description: item.description || '',
+    githubUrl: item.githubUrl || item.url || '',
+    logoUrl: item.logoUrl || '',
+    codiconIcon: item.codiconIcon || '',
+    category: item.category || 'Other',
+    tags: Array.isArray(item.tags) ? item.tags : [],
+    requiresApiKey: !!item.requiresApiKey,
+    isRecommended: !!item.isRecommended,
+    githubStars: Number(item.githubStars || item.stars || 0),
+    downloadCount: Number(item.downloadCount || item.downloads || 0),
+  };
+}
+
+async function fetchJsonWithTimeout(url, opts = {}, ms = 12000) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), ms);
+  try {
+    const resp = await fetch(url, { ...opts, signal: ac.signal });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.json();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function getMcpMarketplaceCatalog({ refresh = false } = {}) {
+  const now = Date.now();
+  if (!refresh && _mcpCatalogCache.items && now - _mcpCatalogCache.at < MCP_CATALOG_TTL_MS) {
+    return { items: _mcpCatalogCache.items, cachedAt: _mcpCatalogCache.at, stale: false };
+  }
+  try {
+    const data = await fetchJsonWithTimeout(`${MCP_BASE_URL}/marketplace`, { headers: { Accept: 'application/json' } });
+    const raw = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
+    const items = raw.map(normalizeMcpItem).filter((i) => i.mcpId);
+    _mcpCatalogCache = { at: now, items };
+    return { items, cachedAt: now, stale: false };
+  } catch (e) {
+    // Serve stale cache on a network hiccup so the page never blanks out.
+    if (_mcpCatalogCache.items) {
+      return { items: _mcpCatalogCache.items, cachedAt: _mcpCatalogCache.at, stale: true, error: e.message };
+    }
+    return { items: [], cachedAt: 0, stale: true, error: e.message };
+  }
+}
+
+// Build the LLM install task for one catalog entry (same shape Sixth kicks off),
+// pointed at THIS presence's .bor/mcp.json instead of Sixth's settings path.
+async function buildMcpInstallTask(mcpId) {
+  let details;
+  try {
+    details = await fetchJsonWithTimeout(`${MCP_BASE_URL}/download`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mcpId }),
+    });
+  } catch (e) {
+    throw new Error(`could not fetch MCP install details: ${e.message}`);
+  }
+  if (!details || !details.githubUrl) throw new Error('invalid MCP download response (missing githubUrl)');
+  const mcpPath = getBorMcpPath();
+  const task = [
+    `Install the MCP server "${details.name || mcpId}" from ${details.githubUrl}. Rules:`,
+    `- This presence's MCP settings file is ${mcpPath}, JSON shaped as { "mcpServers": { "<name>": { ... } } }.`,
+    `- FIRST read ${mcpPath} with <read_file> (if it does not exist, treat it as {"mcpServers":{}}) so you never overwrite an existing server.`,
+    `- Add the new server under the exact key "${mcpId}".`,
+    `- If it must be cloned/built/installed, make a folder under .bor/workspaces/ and run the commands with <execute_command> (git/npm/uv/pip as appropriate for this macOS bash shell).`,
+    `- If it needs an API key or config value, wire it through the server's env and tell the user exactly which value to supply and where to get it.`,
+    `- After writing ${mcpPath}, confirm the server is registered and, if possible, demonstrate one tool with <use_mcp_tool>.`,
+    details.readmeContent ? `\nProject README:\n${String(details.readmeContent).slice(0, 12000)}` : '',
+    details.llmsInstallationContent ? `\nInstallation notes:\n${String(details.llmsInstallationContent).slice(0, 8000)}` : '',
+  ].filter(Boolean).join('\n');
+  return {
+    ok: true,
+    mcpId,
+    name: details.name || mcpId,
+    githubUrl: details.githubUrl,
+    requiresApiKey: !!details.requiresApiKey,
+    configPath: mcpPath,
+    task,
+  };
+}
+
+// Pull the mcpIds the model chose out of its (possibly chatty) reply, validated
+// against the real catalog so we never surface an invented id.
+function extractMcpIds(text, items) {
+  const valid = new Set(items.map((i) => i.mcpId));
+  const tryParse = (s) => { try { return JSON.parse(s); } catch { return null; } };
+  let parsed = tryParse(String(text || '').trim());
+  if (!parsed) {
+    const m = String(text || '').match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+    if (m) parsed = tryParse(m[0]);
+  }
+  let ids = [];
+  if (parsed) {
+    const arr = Array.isArray(parsed) ? parsed
+      : (Array.isArray(parsed.matches) ? parsed.matches : (Array.isArray(parsed.ids) ? parsed.ids : []));
+    ids = arr.map((x) => (typeof x === 'string' ? x : (x && x.id))).filter(Boolean);
+  }
+  if (!ids.length) ids = [...valid].filter((id) => String(text || '').includes(id)); // fallback scan
+  const seen = new Set();
+  return ids.filter((id) => valid.has(id) && !seen.has(id) && seen.add(id)).slice(0, 30);
+}
+
+// Use the presence's configured provider to rank catalog servers for a need.
+async function mcpAskAi(query) {
+  const config = await loadConfig();
+  const providerId = config?.defaultProvider;
+  const provider = providerId ? getProvider(providerId) : null;
+  const providerCfg = config?.providers?.[providerId];
+  if (!provider || !providerCfg?.apiKey) throw new Error('No AI provider is configured — finish onboarding first.');
+
+  const { items } = await getMcpMarketplaceCatalog({});
+  if (!items.length) throw new Error('MCP catalog is unavailable right now.');
+
+  const compact = items.map((i) => ({
+    id: i.mcpId,
+    name: i.name,
+    category: i.category,
+    tags: (i.tags || []).slice(0, 6),
+    desc: String(i.description || '').slice(0, 160),
+  }));
+  const system = 'You match MCP (Model Context Protocol) servers to a user need. You are given a JSON array of servers (id, name, category, tags, desc) and the user request. Return ONLY a JSON object {"matches":["<id>", ...]} — the ids of the servers that genuinely satisfy the request, most relevant first, at most 24, and an empty array if none fit. Output JSON only: no prose, no markdown fences.';
+  const userMsg = `User need: ${query}\n\nServers (JSON):\n${JSON.stringify(compact)}`;
+
+  let text = '';
+  const ac = new AbortController();
+  const timeout = setTimeout(() => ac.abort(new Error('AI match timed out')), 30000);
+  if (typeof timeout.unref === 'function') timeout.unref();
+  try {
+    for await (const chunk of provider.stream({
+      apiKey: providerCfg.apiKey,
+      model: providerCfg.model || provider.defaultModel,
+      baseUrl: providerCfg.baseUrl,
+      system,
+      messages: [{ role: 'user', content: userMsg }],
+      signal: ac.signal,
+    })) {
+      text += chunk;
+      if (text.length > 6000) break;
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+  return { query, matches: extractMcpIds(text, items) };
 }
 
 function requestError(message, statusCode = 400) {
@@ -1163,6 +1526,7 @@ async function listWidgets() {
       }
       manifest.docPath = await ensureSurfaceDoc(manifest.id || e.name, manifest);
       manifest.statePath = surfaceStateRelPath(manifest.id || e.name);
+      manifest.htmlPath = surfaceHtmlRelPath(manifest.id || e.name);
       out.push(manifest);
     } catch { /* ignore corrupted widget */ }
   }
@@ -1349,7 +1713,10 @@ const server = http.createServer(async (req, res) => {
 
     // --- Provider catalog (no secrets) ---
     if (url === '/api/providers' && req.method === 'GET') {
-      return sendJson(res, 200, { providers: publicCatalog() });
+      // Echo the presence id this runtime serves so the v2 host can verify it
+      // reached the RIGHT runtime (not an orphan from a prior session or
+      // Electron's own network helper squatting on the port).
+      return sendJson(res, 200, { providers: publicCatalog(), presenceId: process.env.BOR_PRESENCE_ID || null });
     }
 
     // browser-use detection — used by the onboarding install step and any
@@ -1378,9 +1745,136 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { config: publicConfig(next) });
     }
 
+    // --- Notifications ---
+    if (url === '/api/notifications' && req.method === 'GET') {
+      return sendJson(res, 200, await listNotifications());
+    }
+
+    if (url === '/api/notifications' && req.method === 'POST') {
+      const body = await readJsonBody(req).catch(() => ({}));
+      const action = String(body.action || 'add').trim().toLowerCase();
+      let result;
+      if (action === 'add') {
+        result = { notification: await addNotification(body.notification || body) };
+      } else if (action === 'mark-read') {
+        result = await markNotificationRead(String(body.id || ''));
+      } else if (action === 'mark-all-read') {
+        result = await markAllNotificationsRead();
+      } else if (action === 'remove') {
+        result = await removeNotification(String(body.id || ''));
+      } else if (action === 'clear') {
+        result = await clearNotifications();
+      } else {
+        throw requestError(`unknown notification action: ${action}`, 400);
+      }
+      return sendJson(res, 200, result);
+    }
+
+    // --- Conversation history ---
+    if (url === '/api/conversations' && req.method === 'GET') {
+      return sendJson(res, 200, await listConversations());
+    }
+
+    if (url === '/api/conversations' && req.method === 'POST') {
+      const body = await readJsonBody(req).catch(() => ({}));
+      const action = String(body.action || 'save').trim().toLowerCase();
+      let result;
+      if (action === 'save') {
+        result = await saveConversation(body.conversation || body);
+      } else if (action === 'delete') {
+        result = await deleteConversation(String(body.id || ''));
+      } else if (action === 'clear') {
+        result = await clearConversations();
+      } else {
+        throw requestError(`unknown conversation action: ${action}`, 400);
+      }
+      return sendJson(res, 200, result);
+    }
+
+    {
+      const convMatch = url.match(/^\/api\/conversations\/([^/]+)$/);
+      if (convMatch && req.method === 'GET') {
+        const record = await getConversation(decodeURIComponent(convMatch[1]));
+        if (!record) return sendJson(res, 404, { error: 'conversation not found' });
+        return sendJson(res, 200, record);
+      }
+    }
+
+    // --- Cron jobs ---
+    if (url === '/api/cron' && req.method === 'GET') {
+      return sendJson(res, 200, {
+        status: await cronService.status(),
+        jobs: await cronService.list({ includeDisabled: parsedUrl.searchParams.get('includeDisabled') === 'true' }),
+      });
+    }
+
+    if (url === '/api/cron' && req.method === 'POST') {
+      const body = await readJsonBody(req).catch(() => ({}));
+      const result = await handleCronAction(body, body.surfaceId || null);
+      await audit({ kind: 'cron.action', action: body.action || 'unknown' });
+      return sendJson(res, 200, result);
+    }
+
+    // --- MCP marketplace (same catalog Sixth uses: Cline's marketplace API) ---
+    if (url === '/api/mcp/marketplace' && req.method === 'GET') {
+      const refresh = parsedUrl.searchParams.get('refresh') === '1';
+      return sendJson(res, 200, await getMcpMarketplaceCatalog({ refresh }));
+    }
+
+    if (url === '/api/mcp/installed' && req.method === 'GET') {
+      return sendJson(res, 200, { installed: await readBorMcpServerNames(), configPath: getBorMcpPath() });
+    }
+
+    if (url === '/api/mcp/install' && req.method === 'POST') {
+      const body = await readJsonBody(req).catch(() => ({}));
+      const mcpId = String(body.mcpId || '').trim();
+      if (!mcpId) return sendJson(res, 400, { error: 'mcpId required' });
+      try {
+        const result = await buildMcpInstallTask(mcpId);
+        await audit({ kind: 'mcp.install.requested', mcpId });
+        return sendJson(res, 200, result);
+      } catch (e) {
+        return sendJson(res, 502, { error: e.message });
+      }
+    }
+
+    // Natural-language MCP finder: the user describes a need, the configured
+    // provider picks matching servers from the catalog.
+    if (url === '/api/mcp/ask' && req.method === 'POST') {
+      const body = await readJsonBody(req).catch(() => ({}));
+      const query = String(body.query || '').trim();
+      if (!query) return sendJson(res, 400, { error: 'query required' });
+      try {
+        const result = await mcpAskAi(query);
+        await audit({ kind: 'mcp.ask', query: query.slice(0, 200), matches: result.matches.length });
+        return sendJson(res, 200, result);
+      } catch (e) {
+        return sendJson(res, 502, { error: e.message });
+      }
+    }
+
     // --- System apps ---
     if (url === '/api/system-apps' && req.method === 'GET') {
       return sendJson(res, 200, { apps: await listSystemApps() });
+    }
+
+    // --- Computer-use macOS permissions (onboarding) ---
+    if (url === '/api/system/permissions' && req.method === 'GET') {
+      // Probing also triggers the first-run macOS permission prompts.
+      return sendJson(res, 200, await probeComputerUsePermissions());
+    }
+    if (url === '/api/system/permissions/open' && req.method === 'POST') {
+      const body = await readJsonBody(req).catch(() => ({}));
+      const target = MAC_SETTINGS_PANES[body?.pane];
+      if (!target) return sendJson(res, 400, { error: 'pane must be "accessibility" or "screen"' });
+      if (process.platform === 'darwin') {
+        await new Promise((r) => {
+          try { spawn('open', [target], { stdio: 'ignore' }).on('close', r).on('error', r); }
+          catch { r(); }
+        });
+      }
+      await audit({ kind: 'system.permissions.open', pane: body.pane });
+      return sendJson(res, 200, { ok: true });
     }
 
     if (url.match(/^\/api\/system-apps\/[^/]+$/) && req.method === 'PATCH') {
@@ -1817,10 +2311,16 @@ const server = http.createServer(async (req, res) => {
 try { process.stdout._handle?.setBlocking?.(true); } catch { /* not all builds expose this */ }
 try { process.stderr._handle?.setBlocking?.(true); } catch { /* not all builds expose this */ }
 
+cronService = new CronService({
+  executeAgentTurn: executeCronAgentTurn,
+  log: console,
+});
+
 server.listen(PORT, () => {
   console.log(`🌹 Bed of Roses — http://localhost:${PORT}`);
   console.log(`   Providers: ${ALL_PROVIDERS.map((p) => p.label).join(', ')}`);
   console.log('   Dreams: disabled');
+  cronService.start().catch((err) => console.error('[cron] failed to start:', err.message));
   // Dreams are disabled for now because they were interrupting normal chat.
   // To re-enable, restore the dream import at the top of this file and
   // uncomment this scheduler block.

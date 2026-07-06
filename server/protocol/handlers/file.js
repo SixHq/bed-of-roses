@@ -5,7 +5,7 @@ import { readFile, writeFile, mkdir, readdir, unlink, rmdir, stat } from 'node:f
 import { spawn } from 'node:child_process';
 import { homedir } from 'node:os';
 import { dirname, relative, resolve, normalize } from 'node:path';
-import { resolvePath, resolveForWrite, assertWritable, PROJECT_ROOT } from '../paths.js';
+import { resolvePath, resolveForWrite, assertWritable, PROJECT_ROOT, DATA_DIR } from '../paths.js';
 
 const MAX_READ_BYTES = 200 * 1024;     // 200 KB hard cap
 const MAX_CHUNK_BYTES = 50 * 1024;
@@ -17,7 +17,7 @@ const MAX_SEARCH_FILE_BYTES = 512 * 1024;
 const MAX_SEARCH_FILES = 1000;
 const MAX_SEARCH_MATCHES = 120;
 const MAX_DEFINITION_FILE_BYTES = 256 * 1024;
-const FILES_ROOT = resolve(PROJECT_ROOT, 'os-data', 'files');
+const FILES_ROOT = resolve(DATA_DIR, 'files');
 const DEVICE_ROOT = homedir();
 
 function shortPath(absPath) {
@@ -506,6 +506,24 @@ export async function executeReadChunk(block, ctx) {
   }
 }
 
+// Weaker models sometimes hallucinate BOR's internal turn-structure tags — the
+// <tool_results>/<tool_result> wrapper the harness appends to each turn, or a
+// stray closing tool tag — directly INTO the file content they stream
+// (especially when a stream is cut mid-write and continued). These are never
+// legitimate source content, so strip them before writing. We only remove
+// occurrences that are alone on a line, plus a trailing run, so real code that
+// merely mentions these words is untouched.
+const PROTOCOL_TAGS = 'tool_results|tool_result|say|attempt_completion|write_to_file|write_file|replace_in_file';
+const PROTOCOL_ARTIFACT_LINE = new RegExp(`^[ \\t]*</?(?:${PROTOCOL_TAGS})\\b[^>]*>[ \\t]*\\r?$`, 'gim');
+const PROTOCOL_ARTIFACT_TRAILING = new RegExp(`(?:\\s*</?(?:${PROTOCOL_TAGS})\\b[^>]*>)+\\s*$`, 'i');
+
+export function stripProtocolArtifacts(text) {
+  if (typeof text !== 'string' || !text) return text;
+  let out = text.replace(PROTOCOL_ARTIFACT_LINE, '');
+  out = out.replace(PROTOCOL_ARTIFACT_TRAILING, '');
+  return out;
+}
+
 async function executeWriteWithTag(block, ctx, tag) {
   let abs;
   try {
@@ -514,7 +532,7 @@ async function executeWriteWithTag(block, ctx, tag) {
     await ctx.audit({ kind: 'tool.refused', tag, path: block.attrs.path, reason: e.message });
     return { ok: false, event: 'tool_error', payload: { tag, reason: e.message }, llmEcho: `${tag} refused: ${e.message}` };
   }
-  const content = block.body || '';
+  const content = stripProtocolArtifacts(block.body || '');
   try {
     await mkdir(dirname(abs), { recursive: true });
     await writeFile(abs, content, 'utf8');
@@ -552,7 +570,7 @@ export async function executeReplaceInFile(block, ctx) {
 
   let blocks;
   try {
-    blocks = parseReplaceBlocks(block.body);
+    blocks = parseReplaceBlocks(stripProtocolArtifacts(block.body));
   } catch (e) {
     return { ok: false, event: 'tool_error', payload: { tag, reason: e.message }, llmEcho: `${tag} failed: ${e.message}` };
   }

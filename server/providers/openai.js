@@ -6,6 +6,7 @@
 import { iterateSseStream } from './sse-util.js';
 import { toOpenAiContent } from './multimodal.js';
 import { providerMaxOutputTokens } from './limits.js';
+import { openAiReasoningParams } from './reasoning.js';
 
 const URL = 'https://api.openai.com/v1/chat/completions';
 const IMAGE_URL = 'https://api.openai.com/v1/images/generations';
@@ -38,8 +39,10 @@ export default {
     for (const m of messages) {
       nativeMessages.push({ role: m.role, content: await toOpenAiContent(m.content) });
     }
+    const selectedModel = model || 'gpt-5.4';
     const body = {
-      model: model || 'gpt-5.4',
+      model: selectedModel,
+      ...openAiReasoningParams(selectedModel),
       max_tokens: providerMaxOutputTokens(),
       stream: true,
       messages: nativeMessages,

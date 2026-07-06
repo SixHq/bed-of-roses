@@ -18,7 +18,10 @@ import { logEvent as logSessionEvent } from './sessions.js';
 
 const ROOT = resolve(workerData?.cwd || process.cwd());
 
-const DATA_DIR = join(ROOT, 'os-data');
+// Worker threads inherit the parent process env, so BOR_DATA_DIR (set when the
+// host spawns a per-presence runtime) propagates here and keeps dream writes in
+// the right presence root.
+const DATA_DIR = process.env.BOR_DATA_DIR ? resolve(process.env.BOR_DATA_DIR) : join(ROOT, 'os-data');
 const WIDGETS_DIR = join(DATA_DIR, 'widgets');
 const CONFIG_PATH = join(DATA_DIR, 'config.json');
 const AUDIT_LOG = join(DATA_DIR, 'logs', 'audit.jsonl');

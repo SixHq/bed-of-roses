@@ -5,6 +5,7 @@
 //   content: string | Array<ContentBlock>
 //   ContentBlock = { type: 'text', text: string }
 //                | { type: 'image_url', url: string, mediaType?: string }
+//                | { type: 'document', url: string, mediaType?: string, name?: string }
 //
 // Each provider translates the canonical form to its native API shape via
 // the helpers below. Providers may also need base64-encoded image bytes —
@@ -12,12 +13,11 @@
 // same URL across messages isn't fetched twice.
 
 import { readFile } from 'node:fs/promises';
-import { join, dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = resolve(HERE, '..', '..');
-const IMAGES_DIR = join(PROJECT_ROOT, 'os-data', 'images');
+import { DATA_DIR } from '../protocol/paths.js';
+
+const IMAGES_DIR = join(DATA_DIR, 'images');
 const _b64Cache = new Map(); // url → { mediaType, data }
 const CACHE_MAX = 32;
 const IMAGE_FETCH_TIMEOUT_MS = Math.max(1000, Number(process.env.BOR_IMAGE_FETCH_TIMEOUT_MS) || 30_000);
@@ -102,6 +102,18 @@ async function imageDataUrl(url) {
   return `data:${mediaType};base64,${data}`;
 }
 
+/**
+ * Base64-decode an inline attachment (document or image). Attachments dragged
+ * onto the presence arrive as data URLs, so this is a cheap parse; for any
+ * non-data URL we fall back to fetching the bytes.
+ */
+async function inlineBase64(url, fallbackMediaType) {
+  const parsed = parseDataUrl(url);
+  if (parsed) return parsed;
+  const { mediaType, data } = await fetchImageAsBase64(url);
+  return { mediaType: mediaType || fallbackMediaType, data };
+}
+
 function shouldInlineImage(url) {
   return Boolean(parseDataUrl(url) || localImageName(url));
 }
@@ -114,6 +126,7 @@ export function normalizeContent(content) {
       if (typeof b === 'string') return { type: 'text', text: b };
       if (b?.type === 'text') return { type: 'text', text: String(b.text || '') };
       if (b?.type === 'image_url') return { type: 'image_url', url: String(b.url || ''), mediaType: b.mediaType };
+      if (b?.type === 'document') return { type: 'document', url: String(b.url || ''), mediaType: b.mediaType, name: b.name };
       return null;
     }).filter(Boolean);
   }
@@ -135,13 +148,22 @@ export async function toAnthropicContent(content) {
         // Anthropic accepts {source: {type:'url', url}} for externally reachable image URLs.
         out.push({ type: 'image', source: { type: 'url', url: b.url } });
       }
+    } else if (b.type === 'document') {
+      // PDFs go as base64 document blocks (GA — no beta header needed).
+      const { mediaType, data } = await inlineBase64(b.url, 'application/pdf');
+      out.push({ type: 'document', source: { type: 'base64', media_type: b.mediaType || mediaType || 'application/pdf', data } });
     }
   }
   return out;
 }
 
-/** Convert canonical content → OpenAI native blocks. */
-export async function toOpenAiContent(content) {
+/**
+ * Convert canonical content → OpenAI native blocks. `supportsDocuments` gates
+ * the `type:'file'` PDF part: real OpenAI (and the metered bor proxy) accept it,
+ * but arbitrary OpenAI-compatible endpoints often don't, so they pass false and
+ * get a text placeholder instead of a 400.
+ */
+export async function toOpenAiContent(content, { supportsDocuments = true } = {}) {
   const blocks = normalizeContent(content);
   if (blocks.length === 1 && blocks[0].type === 'text') return blocks[0].text;
   const out = [];
@@ -152,6 +174,19 @@ export async function toOpenAiContent(content) {
     }
     if (b.type === 'image_url') {
       out.push({ type: 'image_url', image_url: { url: shouldInlineImage(b.url) ? await imageDataUrl(b.url) : b.url } });
+      continue;
+    }
+    if (b.type === 'document') {
+      if (supportsDocuments) {
+        let fileData = b.url;
+        if (!parseDataUrl(b.url)) {
+          const { mediaType, data } = await inlineBase64(b.url, b.mediaType || 'application/pdf');
+          fileData = `data:${b.mediaType || mediaType || 'application/pdf'};base64,${data}`;
+        }
+        out.push({ type: 'file', file: { filename: b.name || 'document.pdf', file_data: fileData } });
+      } else {
+        out.push({ type: 'text', text: `[Attachment "${b.name || 'document.pdf'}" (${b.mediaType || 'application/pdf'}) was provided but this model cannot read it directly.]` });
+      }
     }
   }
   return out;
@@ -167,6 +202,9 @@ export async function toGeminiParts(content) {
     } else if (b.type === 'image_url') {
       const { mediaType, data } = await fetchImageAsBase64(b.url);
       parts.push({ inlineData: { mimeType: mediaType, data } });
+    } else if (b.type === 'document') {
+      const { mediaType, data } = await inlineBase64(b.url, 'application/pdf');
+      parts.push({ inlineData: { mimeType: b.mediaType || mediaType || 'application/pdf', data } });
     }
   }
   return parts;

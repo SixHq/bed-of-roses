@@ -9,8 +9,11 @@ import anthropic from './anthropic.js';
 import openai from './openai.js';
 import gemini from './gemini.js';
 import openaiCompatible from './openai-compatible.js';
+import bor from './bor.js';
 
-export const ALL_PROVIDERS = [anthropic, openai, gemini, openaiCompatible];
+// `bor` (Bed of Roses credits) is first-class alongside the BYO providers
+// (provider-parity rule). Onboarding surfaces it first as the credits option.
+export const ALL_PROVIDERS = [bor, anthropic, openai, gemini, openaiCompatible];
 
 const BY_ID = Object.fromEntries(ALL_PROVIDERS.map((p) => [p.id, p]));
 
@@ -33,5 +36,6 @@ export function publicCatalog() {
     needsBaseUrl: !!p.needsBaseUrl,
     keyHint: p.keyHint,
     presets: p.presets || null,
+    isBorCredits: !!p.isBorCredits,
   }));
 }

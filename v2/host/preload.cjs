@@ -11,8 +11,29 @@ contextBridge.exposeInMainWorld('borHost', {
   setPresenceBounds: (bounds) => ipcRenderer.invoke('bor:set-presence-bounds', bounds),
   listSurfaces: () => ipcRenderer.invoke('bor:list-surfaces'),
   openSurface: (surfaceOrId) => ipcRenderer.invoke('bor:open-surface', surfaceOrId),
+  listNotifications: () => ipcRenderer.invoke('bor:list-notifications'),
+  notificationAction: (payload) => ipcRenderer.invoke('bor:notification-action', payload),
+  playNotificationSound: () => ipcRenderer.invoke('bor:notification-sound'),
+  listConversations: () => ipcRenderer.invoke('bor:list-conversations'),
+  getConversation: (id) => ipcRenderer.invoke('bor:get-conversation', id),
+  saveConversation: (conversation) => ipcRenderer.invoke('bor:save-conversation', conversation),
+  conversationAction: (payload) => ipcRenderer.invoke('bor:conversation-action', payload),
+  cronAction: (payload) => ipcRenderer.invoke('bor:cron-action', payload),
   pickContextItems: () => ipcRenderer.invoke('bor:pick-context-items'),
   openOnboarding: () => ipcRenderer.invoke('bor:open-onboarding'),
+  openExternal: (url) => ipcRenderer.invoke('bor:open-external', url),
+  openMainApp: () => ipcRenderer.invoke('bor:open-main-app'),
+  openMcpMarketplace: () => ipcRenderer.invoke('bor:open-mcp-marketplace'),
+  onSubmitPrompt: (callback) => {
+    const listener = (_event, text) => callback(text);
+    ipcRenderer.on('bor:submit-prompt', listener);
+    return () => ipcRenderer.removeListener('bor:submit-prompt', listener);
+  },
+  setMouseIgnore: (ignore) => ipcRenderer.send('bor:set-mouse-ignore', ignore),
+  /** Main polls the global cursor and pushes window-relative coords here so the
+   *  renderer's hit-test can run during native drags (when no mousemove fires).
+   *  Payload is {x,y} while inside the window, or null when the cursor leaves. */
+  onCursorPoll: (cb) => ipcRenderer.on('bor:cursor-poll', (_e, pt) => cb(pt)),
   setPresenceMode: (mode) => ipcRenderer.invoke('bor:presence-mode', mode),
   startChat: (requestId, messages) => ipcRenderer.send('bor:chat-start', { requestId, messages }),
   cancelChat: (requestId) => ipcRenderer.send('bor:chat-cancel', { requestId }),
@@ -56,5 +77,10 @@ contextBridge.exposeInMainWorld('borHost', {
     }
     if (!paths.length) return { items: [] };
     return ipcRenderer.invoke('bor:describe-context-paths', paths);
+  },
+  /** Recover a single dragged File's absolute path (for dedup/display when the
+   *  renderer reads the bytes itself). Returns '' for promise-only drags. */
+  getPathForFile: (file) => {
+    try { return webUtils.getPathForFile(file) || ''; } catch { return ''; }
   },
 });

@@ -90,24 +90,27 @@ function findNextOpen(buf, from, allowed) {
   return null;
 }
 
-// Find matching `</name>`, accounting for CDATA. Returns position of the `<`
-// that begins `</name>`, or -1 if not yet present in the buffer.
+// Tags whose body may itself legitimately contain their OWN close tag — an HTML
+// document ends with `</html>`. For these the wrapper close is the LAST
+// occurrence within the (already-bounded) parent body, not the first.
+const LAST_CLOSE_TAGS = new Set(['html']);
+
+// Find matching `</name>`. Returns position of the `<` that begins `</name>`, or
+// -1 if not yet present in the buffer.
+//
+// We DELIBERATELY do not skip CDATA here. Tool/param close tags (`</write_file>`,
+// `</create_app>`, `</content>`, …) never appear inside file content, so the
+// first `</name>` is always the real close. Skipping CDATA was the bug: when the
+// model emitted a malformed CDATA close (`]]` without `>`, stray text), the old
+// code would jump to the NEXT file's `]]>` and swallow every following file into
+// this one's body. The single tag whose close DOES collide with content (`html`)
+// is handled separately via last-occurrence (see parseTagBody / LAST_CLOSE_TAGS).
 function findMatchingClose(buf, from, name) {
   const closeNeedle = `</${name}`;
   let i = from;
   while (i < buf.length) {
-    if (buf.startsWith('<![CDATA[', i)) {
-      const end = buf.indexOf(']]>', i + 9);
-      if (end === -1) return -1;
-      i = end + 3;
-      continue;
-    }
     const lt = buf.indexOf('<', i);
     if (lt === -1) return -1;
-    if (buf.startsWith('<![CDATA[', lt)) {
-      i = lt;
-      continue;
-    }
     if (buf.startsWith(closeNeedle, lt)) {
       const after = lt + closeNeedle.length;
       // Confirm it's actually `</name>` and not `</name2>`.
@@ -122,11 +125,35 @@ function findMatchingClose(buf, from, name) {
   return -1;
 }
 
-// Strip a single CDATA wrapper if the body is pure CDATA, otherwise unwrap any
-// CDATA segments embedded inside the body. Idempotent on plain text.
+// Last-occurrence close finder for collision-prone tags (html). Operates on the
+// already-bounded parent body, so the wrapper `</html>` is the last one.
+function findLastClose(buf, from, name) {
+  const needle = `</${name}>`;
+  const idx = buf.lastIndexOf(needle);
+  if (idx < from) return -1;
+  return { closeStart: idx, closeGt: idx + needle.length - 1 };
+}
+
+// Unwrap a CDATA-wrapped body. We anchor on the OUTER markers — the first
+// `<![CDATA[` and the LAST `]]>` — instead of a non-greedy per-segment regex.
+// This mirrors Sixth's "lastIndexOf the close tag" robustness: file content that
+// legitimately contains `]]>` (e.g. `arr[i[j]]> 0`) or even `<![CDATA[` survives
+// verbatim instead of terminating the body early. Content with no CDATA at all
+// is returned as-is, so the model may also emit raw content between the tags.
 function unwrapCdata(text) {
   if (!text) return text;
-  return text.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, (_m, inner) => inner);
+  const first = text.indexOf('<![CDATA[');
+  if (first === -1) return text; // no CDATA — raw content, leave untouched
+  const bodyStart = first + 9;
+  const last = text.lastIndexOf(']]>');
+  if (last >= bodyStart) {
+    // Outer wrapper: keep anything before the open, the verbatim inner, and
+    // anything after the close (the last two are normally empty).
+    return text.slice(0, first) + text.slice(bodyStart, last) + text.slice(last + 3);
+  }
+  // `<![CDATA[` opened but no proper `]]>` close (malformed/streaming). Drop the
+  // marker and strip a trailing bare `]]` plus any same-line junk after it.
+  return text.slice(0, first) + text.slice(bodyStart).replace(/\]\][^\n]*$/, '');
 }
 
 function escapeRegExp(text) {
@@ -168,10 +195,19 @@ function parseTagBody(body, allowed) {
       continue;
     }
 
-    const closeStart = findMatchingClose(body, open.openEnd, open.name);
+    let closeStart;
+    let closeGt;
+    if (LAST_CLOSE_TAGS.has(open.name)) {
+      // e.g. an HTML doc's own `</html>` precedes the wrapper's — take the last.
+      const found = findLastClose(body, open.openEnd, open.name);
+      closeStart = found ? found.closeStart : -1;
+      closeGt = found ? found.closeGt : -1;
+    } else {
+      closeStart = findMatchingClose(body, open.openEnd, open.name);
+      closeGt = closeStart === -1 ? -1 : body.indexOf('>', closeStart);
+    }
     if (closeStart === -1) break; // shouldn't happen for fully-buffered body
     const inner = body.slice(open.openEnd, closeStart);
-    const closeGt = body.indexOf('>', closeStart);
 
     children.push({
       kind: 'tag',
@@ -187,8 +223,9 @@ function parseTagBody(body, allowed) {
 }
 
 export class ProtocolParser {
-  constructor({ allowedTags }) {
+  constructor({ allowedTags, shouldAutoCloseTag = null }) {
     this.allowed = new Set(allowedTags.map((t) => t.toLowerCase()));
+    this.shouldAutoCloseTag = typeof shouldAutoCloseTag === 'function' ? shouldAutoCloseTag : null;
     this.buf = '';
     this.consumed = 0;     // bytes already emitted as text or as a tag
     this.queue = [];       // ready blocks waiting for drain()
@@ -225,6 +262,23 @@ export class ProtocolParser {
     }
     this.partial = null;
     return this.drain();
+  }
+
+  closeRecoverablePartial() {
+    if (!this.partial || !this.shouldAutoCloseTag) return false;
+    const body = String(this.partial.body || '');
+    if (!this.shouldAutoCloseTag(this.partial, body)) return false;
+    this.queue.push({
+      kind: 'tag',
+      name: this.partial.name,
+      attrs: this.partial.attrs || {},
+      body: unwrapCdata(body).trim(),
+      children: parseTagBody(body, this.allowed),
+      partial: false,
+    });
+    this.consumed = this.buf.length;
+    this.partial = null;
+    return true;
   }
 
   _advance() {
@@ -265,6 +319,37 @@ export class ProtocolParser {
       // Look for the matching close tag.
       const closeStart = findMatchingClose(this.buf, open.openEnd, open.name);
       if (closeStart === -1) {
+        const nextOpen = findNextOpen(this.buf, open.openEnd, this.allowed);
+        const bodyBeforeNext = nextOpen && nextOpen.incompleteAt === undefined
+          ? this.buf.slice(open.openEnd, nextOpen.openStart)
+          : '';
+        const autoCloseBlock = {
+          kind: 'tag',
+          name: open.name,
+          attrs: open.attrs,
+          body: unwrapCdata(bodyBeforeNext).trim(),
+          children: [],
+          partial: true,
+        };
+        if (
+          this.shouldAutoCloseTag
+          && nextOpen
+          && nextOpen.incompleteAt === undefined
+          && this.shouldAutoCloseTag(autoCloseBlock, autoCloseBlock.body)
+        ) {
+          this.queue.push({
+            kind: 'tag',
+            name: open.name,
+            attrs: open.attrs,
+            body: autoCloseBlock.body,
+            children: parseTagBody(bodyBeforeNext, this.allowed),
+            partial: false,
+          });
+          this.consumed = nextOpen.openStart;
+          this.partial = null;
+          continue;
+        }
+
         // Tag is still streaming. Surface a partial block for UI hints, then
         // wait for more data.
         const partialInner = stripIncompleteClose(this.buf.slice(open.openEnd), open.name);

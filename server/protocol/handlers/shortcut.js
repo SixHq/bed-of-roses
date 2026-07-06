@@ -146,12 +146,12 @@ export async function executeUpdateShortcut(block, ctx) {
     // the iframe node when possible).
     let html = patch.html || '';
     if (!html) {
-      try { html = await readFile(join(ctx.projectRoot, 'os-data/surfaces', id, 'widget.html'), 'utf8'); }
+      try { html = await readFile(join(ctx.dataDir || ctx.projectRoot, 'surfaces', id, 'widget.html'), 'utf8'); }
       catch { html = ''; }
     }
     let state = {};
     try {
-      const raw = await readFile(join(ctx.projectRoot, 'os-data/surfaces', id, 'state.json'), 'utf8');
+      const raw = await readFile(join(ctx.dataDir || ctx.projectRoot, 'surfaces', id, 'state.json'), 'utf8');
       state = raw.trim() ? JSON.parse(raw) : {};
     } catch { /* state may be empty */ }
     return {
@@ -183,7 +183,7 @@ export async function executeLaunchShortcut(block, ctx) {
   if (!id || !id.startsWith('widget-')) {
     return { ok: false, event: 'tool_error', payload: { tag, reason: 'expected a shortcut id (widget-…)' }, llmEcho: `${tag} failed: missing/invalid id` };
   }
-  const dir = join(ctx.projectRoot, 'os-data/surfaces', id);
+  const dir = join(ctx.dataDir || ctx.projectRoot, 'surfaces', id);
   const manifestPath = join(dir, 'manifest.json');
   if (!existsSync(manifestPath)) {
     return { ok: false, event: 'tool_error', payload: { tag, reason: 'shortcut not found' }, llmEcho: `${tag} failed: ${id} not found` };

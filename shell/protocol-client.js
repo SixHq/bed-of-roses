@@ -17,7 +17,7 @@ const ENDPOINT = '/api/chat';
  *     say_delta, say, create_app, update_app, delete_app,
  *     create_widget, update_widget, delete_widget,
  *     set_theme, reset_chat, read_file, write_file, delete_file, list_files,
- *     execute_command, tool_error, tag_start, done.
+ *     execute_command, tool_error, tag_start, task_done, done.
  *   Extra handlers are invoked verbatim.
  * @returns {Promise<{recorded:string}>}  resolves when the server emits `done`.
  */

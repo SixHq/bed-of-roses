@@ -14,12 +14,11 @@
 //   • dream cycle — merges a structured patch from the LLM consolidation prompt
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { join, dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, dirname } from 'node:path';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = resolve(HERE, '..', '..');
-const PROFILE_PATH = join(PROJECT_ROOT, 'os-data', 'memory', 'user_profile.json');
+import { DATA_DIR } from '../protocol/paths.js';
+
+const PROFILE_PATH = join(DATA_DIR, 'memory', 'user_profile.json');
 
 const PREF_CAP = 50;
 const TOPIC_CAP = 30;

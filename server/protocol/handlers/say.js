@@ -40,23 +40,42 @@ export async function execute(block /* , ctx */) {
 
 function childBody(block, name) {
   const child = block.children?.find((item) => item.name === name);
-  return String(child?.body || '').trim();
+  return child ? String(child.body || '').trim() : '';
 }
 
 export async function executeAttemptCompletion(block /* , ctx */) {
-  const result = childBody(block, 'result') || String(block.body || '').trim();
+  const result = childBody(block, 'result');
   const command = childBody(block, 'command');
-  const safeResult = result || 'All set.';
+  const hasResult = Boolean(result);
 
   return {
     ok: true,
     event: 'task_done',
     payload: {
       status: 'complete',
-      message: safeResult,
+      message: hasResult ? result : '',
+      hasResult,
       command: command || null,
     },
     // This is a loop stop signal, not a tool result the model should consume.
+    llmEcho: null,
+  };
+}
+
+export async function executeWaitForHumanInput(block /* , ctx */) {
+  const message = (block.body || childBody(block, 'prompt') || '').trim();
+
+  return {
+    ok: true,
+    event: 'task_done',
+    payload: {
+      status: 'waiting',
+      message,
+      hasResult: Boolean(message),
+      command: null,
+      waitKind: block.attrs?.kind || 'input',
+    },
+    // This deliberately stops the current agent loop until the user replies.
     llmEcho: null,
   };
 }

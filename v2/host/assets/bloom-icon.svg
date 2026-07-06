@@ -6,9 +6,11 @@
       <stop offset="100%" stop-color="#120D1A"/>
     </radialGradient>
   </defs>
-  <rect x="0" y="0" width="1024" height="1024" rx="229" ry="229" fill="url(#aura)"/>
-  <!-- Bed of Roses rose mark (source viewBox -110..110), centered + scaled -->
-  <g transform="translate(512,512) scale(3.0)">
+  <!-- Inset squircle: ~824px art on a 1024 canvas (100px transparent margin) so it
+       sits at the standard macOS dock size with breathing room. -->
+  <rect x="100" y="100" width="824" height="824" rx="185" ry="185" fill="url(#aura)"/>
+  <!-- Bed of Roses rose mark (source viewBox -110..110), centered, sized to fit -->
+  <g transform="translate(512,512) scale(2.15)">
     <g fill="#FFFFFF" fill-opacity="0.06" stroke="#FFFFFF" stroke-width="1.2">
       <path d="M0,-95 C30,-95 55,-70 55,-40 C55,-10 30,10 0,10 C-30,10 -55,-10 -55,-40 C-55,-70 -30,-95 0,-95Z"/>
       <path d="M95,0 C95,30 70,55 40,55 C10,55 -10,30 -10,0 C-10,-30 10,-55 40,-55 C70,-55 95,-30 95,0Z"/>

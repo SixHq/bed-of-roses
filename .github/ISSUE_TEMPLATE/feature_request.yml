@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest an idea or improvement for Bed of Roses
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the motivation. What are you trying to do that's hard or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What would you like to see happen?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any other approaches or workarounds you've thought about.
+    validations:
+      required: false
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Area
+      options:
+        - label: Presence / UI
+        - label: LLM runtime / providers
+        - label: Tools / protocol
+        - label: CLI (bor)
+        - label: Docs

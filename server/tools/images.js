@@ -11,14 +11,13 @@
 // so URLs don't leak guessable patterns but stay copy-pasteable.
 
 import { writeFile, mkdir } from 'node:fs/promises';
-import { join, dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { makeEmptyResponseError } from '../retry.js';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = resolve(HERE, '..', '..');
-export const IMAGES_DIR = join(PROJECT_ROOT, 'os-data', 'images');
+import { DATA_DIR } from '../protocol/paths.js';
+
+export const IMAGES_DIR = join(DATA_DIR, 'images');
 const IMAGE_GEN_TIMEOUT_MS = Math.max(1000, Number(process.env.BOR_IMAGE_GEN_TIMEOUT_MS) || 120_000);
 const VISION_IDLE_TIMEOUT_MS = Math.max(1000, Number(process.env.BOR_VISION_IDLE_TIMEOUT_MS || process.env.BOR_STREAM_IDLE_TIMEOUT_MS) || 60_000);
 

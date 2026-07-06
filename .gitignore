@@ -23,3 +23,6 @@ notes/
 # Compiled Python
 __pycache__/
 *.pyc
+# Local state backups / reset snapshots (never publish)
+.bor-state-backup-*/
+.reset-backups/

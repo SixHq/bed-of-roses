@@ -3,12 +3,11 @@
 // the system prompt so it knows which apps the user lives inside.
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, dirname } from 'node:path';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = resolve(HERE, '..', '..');
-const REGISTRY_PATH = join(PROJECT_ROOT, 'os-data', 'memory', 'surface_registry.json');
+import { DATA_DIR } from '../protocol/paths.js';
+
+const REGISTRY_PATH = join(DATA_DIR, 'memory', 'surface_registry.json');
 
 export async function read() {
   try {

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MCP Marketplace</title>
+    <link rel="stylesheet" href="mcp-marketplace.css" />
+  </head>
+  <body>
+    <header class="mkt-head">
+      <div class="mkt-title">MCP&nbsp;Marketplace</div>
+      <div class="mkt-search-wrap">
+        <span class="mkt-search-icon">⌕</span>
+        <input id="search" class="mkt-search" type="search" placeholder="Search servers, or describe what you need and Ask AI…" autocomplete="off" spellcheck="false" />
+      </div>
+      <button id="ask" class="mkt-ask-btn" type="button" title="Describe what you need — AI finds matching servers"><span class="mkt-ask-spark">✦</span> Ask&nbsp;AI</button>
+      <button id="refresh" class="mkt-icon-btn" type="button" title="Refresh catalog" aria-label="Refresh">↻</button>
+      <button id="close" class="mkt-icon-btn" type="button" title="Close" aria-label="Close">×</button>
+    </header>
+
+    <nav id="cats" class="mkt-cats" aria-label="Categories"></nav>
+    <div id="ai-banner" class="mkt-ai-banner" hidden></div>
+
+    <main id="grid" class="mkt-grid" aria-live="polite"></main>
+
+    <div id="status" class="mkt-status" role="status"></div>
+    <div id="toast" class="mkt-toast" hidden></div>
+
+    <script src="mcp-marketplace.js"></script>
+  </body>
+</html>

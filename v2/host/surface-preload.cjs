@@ -67,6 +67,18 @@ async function bridgeResponse(message) {
         method: 'POST',
         body: JSON.stringify({ surfaceId, prompt: message.prompt, size: message.size }),
       });
+    case 'cron':
+      return jsonFetch('/api/cron', {
+        method: 'POST',
+        body: JSON.stringify({ ...message, surfaceId }),
+      });
+    case 'notification-push':
+      return jsonFetch('/api/notifications', {
+        method: 'POST',
+        body: JSON.stringify({ ...message, action: 'add', source: message.source || 'surface', surfaceId }),
+      });
+    case 'notifications-list':
+      return jsonFetch('/api/notifications');
     default:
       return null;
   }
@@ -77,7 +89,7 @@ window.__BOR_V2_SURFACE__ = { runtimeUrl, surfaceId };
 window.addEventListener('message', async (event) => {
   const message = event.data;
   if (!message || typeof message !== 'object' || !message.requestId || typeof message.type !== 'string') return;
-  if (!['state-get', 'state-set', 'llm-request', 'web-search', 'web-fetch', 'image-generate'].includes(message.type)) return;
+  if (!['state-get', 'state-set', 'llm-request', 'web-search', 'web-fetch', 'image-generate', 'cron', 'notification-push', 'notifications-list'].includes(message.type)) return;
 
   event.stopImmediatePropagation();
   const result = await bridgeResponse(message).catch((error) => ({ error: error.message }));

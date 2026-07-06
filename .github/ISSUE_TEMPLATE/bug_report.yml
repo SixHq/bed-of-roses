@@ -1,0 +1,65 @@
+name: Bug report
+description: Report a problem with Bed of Roses
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to file a bug. Please fill in as much as you can.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, including what you expected to happen instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: How can a maintainer reproduce this?
+      placeholder: |
+        1. Run `bor onboard`
+        2. ...
+        3. See error
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which surface?
+      options:
+        - v2 Mac host (npm run v2 / bor)
+        - Classic browser shell (npm start, localhost:7777)
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: LLM provider
+      description: Which provider were you using? (Anthropic, OpenAI, Gemini, OpenAI-compatible, BOR credits…)
+    validations:
+      required: false
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: e.g. 14.6 (Sonoma)
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      description: Output of `node --version`
+      placeholder: e.g. v20.11.0
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Relevant console output, audit log lines, or screenshots. Redact any API keys.
+      render: shell
+    validations:
+      required: false

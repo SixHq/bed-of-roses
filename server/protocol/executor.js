@@ -39,6 +39,18 @@ export async function executeBlock(block, ctx) {
     return null; // ignore text blocks and structural-only tags
   }
   const def = TAGS[block.name];
+
+  // Browser-session safety (mirrors Sixth): any non-browser tool auto-closes an
+  // open browser, so the model can never operate other tools "inside" a live
+  // browser session. Gated on a cheap globalThis flag so Playwright is only
+  // imported once a browser has actually been opened.
+  if (block.name !== 'browser_action' && globalThis.__borBrowserOpen) {
+    try {
+      const session = await import('../runtime/browser-session.js');
+      await session.close();
+    } catch { /* best-effort */ }
+  }
+
   let lastError = null;
   for (let attempt = 0; attempt < TOOL_MAX_ATTEMPTS; attempt += 1) {
     try {

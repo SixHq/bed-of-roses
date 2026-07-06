@@ -242,6 +242,17 @@ button {
   min-height: 0;
 }
 
+.presence[data-mode="collapsed-notification"] .composer {
+  inset: 6.25px;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 0;
+}
+
+.presence[data-mode="collapsed-notification"][data-anchor$="right"] .composer {
+  flex-direction: row-reverse;
+}
+
 .presence[data-mode="minimized"] .composer {
   left: 6.25px;
   right: auto;
@@ -361,21 +372,40 @@ button {
 
 .orb-badge {
   position: absolute;
-  top: -1.25px;
-  right: -2.5px;
-  width: 11.25px;
-  height: 11.25px;
-  border: 1.25px solid #07060B;
-  border-radius: 50%;
+  top: -5px;
+  right: -7px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border: 1.5px solid #07060B;
+  border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgb(var(--presence-aura));
   color: #1a0e2a;
-  box-shadow: 0 0 12px rgba(var(--presence-aura), 0.6);
+  box-shadow: 0 0 0 2px rgba(var(--presence-aura), 0.18), 0 0 15px rgba(var(--presence-aura), 0.74);
   font-family: var(--mono);
-  font-size: 6.25px;
-  font-weight: 700;
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1;
+  z-index: 4;
+}
+
+.presence[data-has-notifications="true"] .orb-wrap::before {
+  position: absolute;
+  inset: -8px;
+  border: 1.5px solid rgba(var(--presence-aura), 0.58);
+  border-radius: 50%;
+  animation: notification-pulse 1.8s ease-out infinite;
+  content: "";
+  pointer-events: none;
+}
+
+@keyframes notification-pulse {
+  0% { opacity: 0.7; transform: scale(0.86); }
+  70% { opacity: 0; transform: scale(1.34); }
+  100% { opacity: 0; transform: scale(1.34); }
 }
 
 .zzz {
@@ -437,7 +467,8 @@ button {
   transition: opacity 160ms var(--ease-snap), transform 160ms var(--ease-snap);
 }
 
-.presence[data-mode="collapsed"] .orb-control:hover .hover-hint {
+.presence[data-mode="collapsed"] .orb-control:hover .hover-hint,
+.presence[data-mode="collapsed-notification"] .orb-control:hover .hover-hint {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
@@ -457,7 +488,56 @@ button {
 }
 
 .presence[data-mode="collapsed"] .prompt-stack,
+.presence[data-mode="collapsed-notification"] .prompt-stack,
 .presence[data-mode="minimized"] .prompt-stack {
+  display: none;
+}
+
+.notification-chip {
+  display: grid;
+  max-width: 210px;
+  min-width: 178px;
+  height: 43px;
+  padding: 7px 10px;
+  border: 1px solid rgba(var(--presence-aura), 0.34);
+  border-radius: 14px;
+  background: rgba(18, 15, 27, 0.72);
+  color: var(--label);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 12px 34px rgba(0,0,0,0.34), 0 0 18px rgba(var(--presence-aura),0.16);
+  backdrop-filter: blur(24px) saturate(1.45);
+  -webkit-backdrop-filter: blur(24px) saturate(1.45);
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
+}
+
+.presence[data-anchor$="right"] .notification-chip {
+  text-align: right;
+}
+
+.notification-chip-kicker {
+  color: rgb(var(--presence-aura));
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.notification-chip-subject {
+  overflow: hidden;
+  color: var(--label);
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.presence[data-mode="collapsed"] .notification-chip,
+.presence[data-mode="expanded"] .notification-chip,
+.presence[data-mode="thinking"] .notification-chip,
+.presence[data-mode="minimized"] .notification-chip {
   display: none;
 }
 
@@ -532,16 +612,18 @@ button {
   -webkit-app-region: no-drag;
 }
 
-/* Image-kind chips get a tinted backing so the user can see at a glance
- * which attachments will reach the model as vision blocks vs which will
- * be referenced by path. */
-.context-image {
+/* Image- and PDF-kind chips get a tinted backing so the user can see at a
+ * glance which attachments will reach the model as content blocks vs which
+ * will be referenced by path. */
+.context-image,
+.context-pdf {
   border-color: rgba(196, 168, 240, 0.5);
   background: rgba(196, 168, 240, 0.16);
   color: rgba(244, 240, 255, 0.92);
 }
 
-.context-image .context-kind { color: rgb(196, 168, 240); opacity: 1; }
+.context-image .context-kind,
+.context-pdf .context-kind { color: rgb(196, 168, 240); opacity: 1; }
 .context-error {
   border-color: rgba(245, 120, 130, 0.55);
   background: rgba(245, 120, 130, 0.14);
@@ -711,6 +793,51 @@ button {
   stroke-width: 1.26px !important;
 }
 
+/* Voice input is not shipped yet. Blur the mic and reveal a "Coming soon"
+   tooltip on hover. The button stays inert (click handler swallows the event). */
+#voice.coming-soon {
+  position: relative;
+  cursor: default;
+}
+
+#voice.coming-soon svg {
+  filter: blur(1.4px);
+  opacity: 0.45;
+}
+
+#voice.coming-soon:hover {
+  border-color: var(--hairline);
+  color: var(--label-2);
+}
+
+#voice.coming-soon::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  padding: 4px 8px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 7px;
+  background: rgba(20, 16, 30, 0.96);
+  color: var(--label);
+  font-family: var(--mono);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms var(--ease-standard), transform 140ms var(--ease-standard);
+  z-index: 50;
+}
+
+#voice.coming-soon:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 /* Bubble shell */
 .bubble {
   position: absolute;
@@ -878,6 +1005,53 @@ button {
 .head-btn:hover {
   border-color: var(--hairline-strong);
   color: var(--label);
+}
+
+.apps-btn .apps-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.apps-btn:hover {
+  color: var(--label);
+}
+
+.notify-btn {
+  position: relative;
+  border-color: rgba(var(--presence-aura), 0.3);
+  background: rgba(var(--presence-aura), 0.08);
+  color: var(--label);
+}
+
+.notify-btn .notify-icon {
+  width: 15px;
+  height: 15px;
+  filter: drop-shadow(0 0 6px rgba(var(--presence-aura), 0.4));
+}
+
+.notify-btn:hover {
+  border-color: rgba(var(--presence-aura), 0.55);
+  background: rgba(var(--presence-aura), 0.14);
+}
+
+.head-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border: 1.5px solid #07060B;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgb(var(--presence-aura));
+  color: #140f1d;
+  font-family: var(--mono);
+  font-size: 7px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 0 10px rgba(var(--presence-aura), 0.58);
 }
 
 .bubble-body {
@@ -1473,6 +1647,251 @@ button {
   color: rgb(var(--magenta-warn));
 }
 
+/* Browser session card — mirrors Sixth's BrowserSessionRow: address bar, a
+ * screenshot with a mouse-cursor dot, expandable console logs, and step
+ * pagination across actions. Theme-token driven so it adapts to every theme. */
+.browser-card {
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  background: rgba(7, 8, 12, 0.82);
+}
+
+.browser-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--hairline-soft);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.browser-glyph {
+  display: inline-flex;
+  width: 16px;
+  justify-content: center;
+  color: rgb(var(--aura));
+  font-size: 12px;
+}
+
+.browser-glyph.spin {
+  animation: spin 1.1s linear infinite;
+}
+
+.browser-title {
+  color: rgb(var(--aura));
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.browser-action-label {
+  flex: 1;
+  overflow: hidden;
+  color: var(--label-2);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-urlbar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 8px 10px 0;
+  padding: 5px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.browser-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: rgb(var(--aurora));
+  box-shadow: 0 0 8px rgba(var(--aurora), 0.55);
+}
+
+.browser-url {
+  overflow: hidden;
+  color: var(--label-2);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-screen {
+  position: relative;
+  height: 0;
+  margin: 8px 10px;
+  overflow: hidden;
+  border: 1px solid var(--hairline-soft);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.browser-shot {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: top center;
+}
+
+.browser-noshot {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--label-3);
+  font-size: 28px;
+}
+
+.browser-cursor {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: rgba(var(--aura), 0.85);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), 0 1px 4px rgba(0, 0, 0, 0.5);
+  transition: top 0.3s ease-out, left 0.3s ease-out;
+  pointer-events: none;
+}
+
+.browser-console {
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.browser-console-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--label-3);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.browser-console-toggle:hover {
+  color: var(--label-2);
+}
+
+.browser-console-toggle .chev {
+  display: inline-flex;
+  width: 10px;
+  justify-content: center;
+}
+
+.browser-logs {
+  max-height: 140px;
+  margin: 0;
+  overflow: auto;
+  padding: 0 12px 10px;
+  color: var(--label-2);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.browser-steps {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--hairline-soft);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.browser-step {
+  padding: 4px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--label-2);
+  font-family: var(--mono);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.browser-step:hover:not([disabled]) {
+  border-color: var(--hairline-strong);
+  color: var(--label);
+}
+
+.browser-step[disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.browser-step-count {
+  color: var(--label-3);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+/* wait_until — a small countdown card while the model pauses. */
+.wait-card { gap: 10px; }
+.wait-head { display: flex; align-items: center; gap: 8px; }
+.wait-glyph {
+  display: inline-flex;
+  width: 16px;
+  justify-content: center;
+  color: rgb(var(--aura));
+  font-size: 13px;
+}
+.wait-card:not(.is-done) .wait-glyph { animation: spin 3s linear infinite; }
+.wait-label {
+  color: var(--label);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+}
+.wait-reason {
+  flex: 1;
+  overflow: hidden;
+  color: var(--label-3);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wait-bar {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--hairline-soft);
+}
+.wait-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(var(--aura), 0.9), rgba(var(--aurora), 0.85));
+  animation: wait-fill linear forwards;
+}
+.wait-fill.is-done { width: 100%; animation: none; }
+@keyframes wait-fill { from { width: 0; } to { width: 100%; } }
+
 .progress {
   position: relative;
   height: 6px;
@@ -1930,43 +2349,106 @@ button {
   border-bottom: 1px solid var(--hairline-soft);
 }
 
-.surface-list {
-  max-height: 248px;
-  overflow: auto;
-  padding: 6px;
-}
-
-.surface-row {
-  display: grid;
-  width: 100%;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  border: 0;
-  border-radius: 12px;
-  background: transparent;
-  color: var(--label);
-  cursor: pointer;
-  text-align: left;
-}
-
-.surface-row:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.surface-row span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.surface-row small {
+.surface-count {
+  margin-left: 7px;
   color: var(--label-3);
   font-family: var(--mono);
   font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+/* App Library — squircle icon grid, iOS App Library / Android home-screen feel. */
+.surface-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px 4px;
+  max-height: 252px;
+  overflow: auto;
+  padding: 14px 10px;
+}
+
+.surface-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 2px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--label);
+  cursor: pointer;
+  text-align: center;
+  -webkit-app-region: no-drag;
+}
+
+.surface-tile-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border: 1px solid var(--hairline);
+  /* Superellipse-ish squircle to read as a native app icon. */
+  border-radius: 16px;
+  background: var(--surface-2);
+  color: var(--label);
+  font-family: var(--sans);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  overflow: hidden;
+  transition: transform 0.18s var(--ease-snap), border-color 0.18s var(--ease-standard), background 0.18s var(--ease-standard);
+}
+
+.surface-tile-icon svg,
+.surface-tile-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Apps get a faint accent ring so they read as full surfaces; shortcuts stay plain. */
+.surface-tile[data-kind="app"] .surface-tile-icon {
+  border-color: rgba(var(--presence-aura), 0.42);
+}
+
+.surface-tile:hover .surface-tile-icon {
+  transform: translateY(-2px);
+  border-color: var(--hairline-strong);
+  background: var(--surface-3);
+}
+
+.surface-tile[data-kind="app"]:hover .surface-tile-icon {
+  border-color: rgba(var(--presence-aura), 0.7);
+}
+
+.surface-tile:active .surface-tile-icon {
+  transform: translateY(0) scale(0.96);
+}
+
+.surface-tile-name {
+  display: -webkit-box;
+  width: 100%;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--label-2);
+  font-family: var(--sans);
+  font-size: 10.5px;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.surface-empty {
+  grid-column: 1 / -1;
+  padding: 26px 10px;
+  color: var(--label-3);
+  font-family: var(--sans);
+  font-size: 12px;
+  text-align: center;
 }
 
 /* Theme variants from the lifecycle spec */
@@ -2877,12 +3359,18 @@ button {
 .presence[data-theme="y2k-frutiger"] .bubble,
 .presence[data-theme="y2k-frutiger"] .surface-drawer,
 .presence[data-theme="y2k-frutiger"] .task-chip {
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.50));
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  /* Blue Frutiger-Aero glass. The old white glass dropped to 50% at the
+   * bottom, washing out to near-transparent over a wallpaper — tint it
+   * sky→aqua and keep it opaque so the dark-blue text stays legible. */
+  background: linear-gradient(180deg, rgba(220, 242, 255, 0.99), rgba(120, 194, 255, 0.98));
   color: #0A2A4D;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 24px 48px rgba(0, 40, 120, 0.35);
-  backdrop-filter: blur(28px) saturate(1.6);
-  -webkit-backdrop-filter: blur(28px) saturate(1.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 24px 48px rgba(0, 40, 120, 0.38),
+    0 0 36px rgba(90, 184, 255, 0.3);
+  backdrop-filter: blur(28px) saturate(1.7);
+  -webkit-backdrop-filter: blur(28px) saturate(1.7);
 }
 
 .presence[data-theme="y2k-frutiger"] .prompt-shell {
@@ -3288,11 +3776,17 @@ button {
 .presence[data-theme="liquid-glass"] .bubble,
 .presence[data-theme="liquid-glass"] .surface-drawer,
 .presence[data-theme="liquid-glass"] .task-chip {
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 190, 222, 0.6);
   border-radius: 24px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08));
+  /* Pink liquid glass. The old white glass at 8–22% opacity was effectively
+   * invisible under white text over a wallpaper — tint it rose→magenta and
+   * lift the opacity so the glass reads as a coloured pane, not a clear one. */
+  background: linear-gradient(180deg, rgba(255, 122, 182, 0.97), rgba(126, 31, 136, 0.99));
   color: #FFFFFF;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 30px 60px rgba(0, 0, 0, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 30px 60px rgba(70, 10, 55, 0.5),
+    0 0 40px rgba(255, 122, 182, 0.25);
   backdrop-filter: blur(40px) saturate(1.8);
   -webkit-backdrop-filter: blur(40px) saturate(1.8);
 }
@@ -4242,14 +4736,32 @@ button {
 }
 
 .presence .actions {
-  gap: 4px;
+  gap: 3px;
 }
 
 .presence .head-btn {
-  width: 18px;
-  height: 18px;
-  border-radius: 6px;
-  font-size: 10px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+/* Uniform, slightly smaller glyphs so more options fit on the header row. */
+.presence .head-btn svg,
+.presence .head-btn .apps-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.presence .head-btn.notify-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+}
+
+.presence .notify-btn .notify-icon {
+  width: 15px;
+  height: 15px;
 }
 
 .presence .bubble-body {
@@ -4315,6 +4827,18 @@ button {
   letter-spacing: 0;
   line-height: 1.48;
   white-space: pre-wrap;
+  /* The window-wide `user-select: none` (drag ergonomics) otherwise blocks
+     selecting chat + AI response text. Re-enable it on transcript text only. */
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+/* Completion summaries are part of the conversation too — keep them copyable. */
+.presence .thread-completion b,
+.presence .thread-completion small {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .presence .stream em {
@@ -4386,6 +4910,240 @@ button {
   font-family: var(--sans);
   font-size: 10.4px;
   line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.presence .notification-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.presence .notification-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.presence .notification-top b {
+  display: block;
+  color: var(--label);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.presence .notification-top small,
+.presence .notification-copy small,
+.presence .notification-empty small {
+  color: var(--label-3);
+  font-family: var(--mono);
+  font-size: 9px;
+}
+
+.presence .notification-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.presence .notification-actions button,
+.presence .notification-mark {
+  height: 22px;
+  border: 1px solid var(--hairline);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--label-2);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 9px;
+}
+
+.presence .notification-actions button {
+  padding: 0 7px;
+}
+
+.presence .notification-actions .notification-back {
+  border-color: rgba(var(--presence-aura), 0.38);
+  color: var(--label);
+  background: rgba(var(--presence-aura), 0.1);
+}
+
+.presence .notification-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.presence .notification-item {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  padding: 9px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+}
+
+.presence .notification-item:hover {
+  border-color: rgba(var(--presence-aura), 0.32);
+  background: rgba(var(--presence-aura), 0.07);
+}
+
+.presence .notification-item.unread {
+  border-color: rgba(var(--presence-aura), 0.34);
+  background: rgba(var(--presence-aura), 0.08);
+}
+
+.presence .notification-dot {
+  width: 7px;
+  height: 7px;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: rgb(var(--presence-aura));
+}
+
+.presence .notification-dot.level-success { background: rgb(var(--aurora)); }
+.presence .notification-dot.level-warning { background: rgb(var(--ember)); }
+.presence .notification-dot.level-error { background: rgb(var(--magenta-warn)); }
+
+.presence .notification-copy {
+  min-width: 0;
+}
+
+.presence .notification-subject {
+  display: block;
+  margin-bottom: 3px;
+  color: rgb(var(--presence-aura));
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.presence .notification-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.presence .notification-title b {
+  overflow: hidden;
+  color: var(--label);
+  font-size: 11.5px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.presence .notification-title time {
+  flex: 0 0 auto;
+  color: var(--label-3);
+  font-family: var(--mono);
+  font-size: 8.5px;
+}
+
+.presence .notification-copy p {
+  margin: 3px 0 4px;
+  color: var(--label-2);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.presence .notification-mark {
+  width: 22px;
+  padding: 0;
+}
+
+.presence .notification-empty {
+  display: grid;
+  gap: 4px;
+  padding: 18px 8px;
+  place-items: center;
+  color: var(--label-2);
+  text-align: center;
+}
+
+/* History reuses the notification list styling but has no status dot — drop
+   to a two-column grid (transcript title + delete). */
+.presence .history-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.presence .history-delete {
+  width: 20px;
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.45;
+}
+
+.presence .history-item:hover .history-delete {
+  opacity: 0.9;
+}
+
+.presence .notification-detail-card {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(var(--presence-aura), 0.26);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.presence .notification-detail-head {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+}
+
+.presence .notification-detail-head h2 {
+  margin: 2px 0 0;
+  color: var(--label);
+  font-size: 16px;
+  line-height: 1.15;
+}
+
+.presence .notification-detail-section {
+  display: grid;
+  gap: 4px;
+}
+
+.presence .notification-detail-section small,
+.presence .notification-detail-head small {
+  color: var(--label-3);
+  font-family: var(--mono);
+  font-size: 8.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.presence .notification-detail-section p {
+  margin: 0;
+  color: var(--label-2);
+  font-size: 11.5px;
+  line-height: 1.45;
+  user-select: text;
+}
+
+.presence .notification-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.presence .notification-detail-meta span {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 4px 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  color: var(--label-3);
+  font-family: var(--mono);
+  font-size: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4721,6 +5479,7 @@ button {
   .thinking-dots::after,
   .caret,
   .orb-ring-spin,
+  .presence[data-has-notifications="true"] .orb-wrap::before,
   .task-chip .mini::after,
   .gen-line,
   .presence[data-complete-pulse="true"] .orb-wrap::after {
@@ -4860,6 +5619,222 @@ button {
 
 .shortcut-card[data-resizing="true"] iframe {
   pointer-events: none; /* don't let iframe steal the drag */
+}
+
+/* Collapsed notification chip + selected presence sync.
+ * These rules sit late so the chip inherits the same visual language as the
+ * active presence theme instead of keeping the default dark Bloom surface. */
+.presence .notification-chip {
+  align-content: center;
+  gap: 4px;
+  border-color: rgba(var(--presence-aura), 0.52);
+  background:
+    linear-gradient(135deg, rgba(var(--presence-aura), 0.22), rgba(var(--presence-aura), 0.07)),
+    rgba(18, 15, 27, 0.86);
+}
+
+.presence[data-mode="collapsed-notification"] .notification-chip {
+  position: absolute;
+  top: 5px;
+  right: 52px;
+  left: auto;
+  display: grid !important;
+}
+
+.presence[data-mode="collapsed-notification"] .orb-control {
+  position: absolute;
+  top: 6.25px;
+  right: 6.25px;
+  left: auto;
+}
+
+.presence[data-mode="collapsed-notification"][data-anchor$="left"] .notification-chip {
+  right: auto;
+  left: 52px;
+  text-align: left;
+}
+
+.presence[data-mode="collapsed-notification"][data-anchor$="left"] .orb-control {
+  right: auto;
+  left: 6.25px;
+}
+
+.presence .notification-chip-kicker {
+  color: rgb(var(--presence-aura));
+  letter-spacing: 0.12em;
+}
+
+.presence .notification-chip-subject {
+  color: var(--label);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.presence[data-theme="cartoon-brutalist"] .orb {
+  background: var(--presence-face, #FFD93D);
+}
+
+.presence[data-theme="warm-earthy"] .orb {
+  background:
+    radial-gradient(
+      circle at 30% 25%,
+      color-mix(in srgb, rgb(var(--presence-aura)) 22%, #FFF1CE) 0%,
+      color-mix(in srgb, rgb(var(--presence-aura)) 78%, #D4A24C) 50%,
+      color-mix(in srgb, rgb(var(--presence-aura)) 42%, #2B2018) 100%
+    );
+}
+
+.presence[data-theme="neo-brutalist"] .orb {
+  background: var(--presence-neo, #FFFFFF);
+}
+
+.presence[data-theme="y2k-frutiger"] .orb {
+  background: radial-gradient(circle at 32% 28%, #FFFFFF 0%, var(--presence-y2k-1, #9ED6FF) 22%, var(--presence-y2k-2, #3BA8FF) 55%, var(--presence-y2k-3, #003FA8) 100%);
+}
+
+.presence[data-theme="risograph"] .orb {
+  background:
+    radial-gradient(circle at 42% 36%, var(--presence-riso-b, #FFE15B) 0 18%, transparent 19%),
+    radial-gradient(circle at 52% 50%, color-mix(in srgb, var(--presence-riso-a, #FF48B0) 78%, transparent), transparent 58%),
+    var(--presence-riso-a, #FF48B0);
+}
+
+.presence[data-theme="pixel-crt"] .orb {
+  border-color: var(--presence-pixel, #33FF66);
+  box-shadow: 0 0 8.75px color-mix(in srgb, var(--presence-pixel, #33FF66) 50%, transparent), inset 0 0 11.25px color-mix(in srgb, var(--presence-pixel, #33FF66) 18%, transparent);
+}
+
+.presence[data-theme="pixel-crt"] .orb::after {
+  color: var(--presence-pixel, #33FF66);
+  text-shadow: 0 0 3.75px color-mix(in srgb, var(--presence-pixel, #33FF66) 70%, transparent);
+}
+
+.presence[data-theme="liquid-glass"] .orb {
+  background: radial-gradient(circle at 32% 28%, #fff 0%, var(--presence-liquid-1, rgba(255, 255, 255, 0.5)) 22%, var(--presence-liquid-2, rgba(255, 255, 255, 0.28)) 55%, var(--presence-liquid-3, rgba(255, 255, 255, 0.12)) 100%);
+}
+
+.presence[data-theme="cartoon-brutalist"] .notification-chip {
+  border: 3px solid #0A0A0A;
+  border-radius: 14px;
+  background: var(--presence-face, #FFD93D);
+  color: #0A0A0A;
+  box-shadow: 4px 4px 0 #0A0A0A;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.presence[data-theme="cartoon-brutalist"] .notification-chip-kicker {
+  color: #FF4FA3;
+}
+
+.presence[data-theme="cartoon-brutalist"] .notification-chip-subject {
+  color: #0A0A0A;
+  font-family: "Bricolage Grotesque", sans-serif;
+  text-transform: uppercase;
+}
+
+.presence[data-theme="warm-earthy"] .notification-chip {
+  border: 1px solid rgba(42, 31, 20, 0.18);
+  border-radius: 18px;
+  background: #F5E9D0;
+  color: #2A1F14;
+  box-shadow: 0 2px 0 rgba(42, 31, 20, 0.04), 0 16px 34px rgba(82, 55, 28, 0.16);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.presence[data-theme="warm-earthy"] .notification-chip-kicker {
+  color: #C8553D;
+}
+
+.presence[data-theme="warm-earthy"] .notification-chip-subject {
+  color: #2A1F14;
+  font-family: "Plus Jakarta Sans", sans-serif;
+}
+
+.presence[data-theme="neo-brutalist"] .notification-chip {
+  border: 1px solid #0A0A0A;
+  border-radius: 0;
+  background: #FFFFFF;
+  color: #0A0A0A;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.presence[data-theme="neo-brutalist"] .notification-chip-kicker {
+  color: #FF3B00;
+}
+
+.presence[data-theme="neo-brutalist"] .notification-chip-subject {
+  color: #0A0A0A;
+  font-family: "JetBrains Mono", monospace;
+  text-transform: uppercase;
+}
+
+.presence[data-theme="y2k-frutiger"] .notification-chip {
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(126, 200, 255, 0.62));
+  color: #0A2A4D;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 16px 34px rgba(0, 40, 120, 0.32);
+}
+
+.presence[data-theme="y2k-frutiger"] .notification-chip-kicker,
+.presence[data-theme="y2k-frutiger"] .notification-chip-subject {
+  color: #0A2A4D;
+}
+
+.presence[data-theme="risograph"] .notification-chip {
+  border: 2px solid #1A1F3D;
+  border-radius: 10px;
+  background: #FAF3E0;
+  color: #1A1F3D;
+  box-shadow: 4px 4px 0 var(--presence-riso-a, #FF48B0);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.presence[data-theme="risograph"] .notification-chip-kicker {
+  color: var(--presence-riso-a, #FF48B0);
+}
+
+.presence[data-theme="risograph"] .notification-chip-subject {
+  color: #1A1F3D;
+  font-family: "Space Grotesk", sans-serif;
+}
+
+.presence[data-theme="pixel-crt"] .notification-chip {
+  border: 1px solid var(--presence-pixel, #33FF66);
+  border-radius: 0;
+  background: #070A06;
+  color: var(--presence-pixel, #33FF66);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--presence-pixel, #33FF66) 24%, transparent), inset 0 0 18px color-mix(in srgb, var(--presence-pixel, #33FF66) 8%, transparent);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.presence[data-theme="pixel-crt"] .notification-chip-kicker,
+.presence[data-theme="pixel-crt"] .notification-chip-subject {
+  color: var(--presence-pixel, #33FF66);
+  font-family: "IBM Plex Mono", monospace;
+  text-shadow: 0 0 5px color-mix(in srgb, var(--presence-pixel, #33FF66) 55%, transparent);
+  text-transform: uppercase;
+}
+
+.presence[data-theme="liquid-glass"] .notification-chip {
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.09));
+  color: #FFFFFF;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 20px 46px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(36px) saturate(1.8);
+  -webkit-backdrop-filter: blur(36px) saturate(1.8);
+}
+
+.presence[data-theme="liquid-glass"] .notification-chip-kicker,
+.presence[data-theme="liquid-glass"] .notification-chip-subject {
+  color: #FFFFFF;
 }
 
 /* Frozen state — older shortcuts that were demoted out of the 5-live cap. */

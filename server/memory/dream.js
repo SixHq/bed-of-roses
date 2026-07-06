@@ -42,9 +42,11 @@ import { executeBlock } from '../protocol/executor.js';
 import { getConnectivityStatus, isLikelyNetworkError } from '../connectivity.js';
 import { isRetryableFailureMessage, makeEmptyResponseError, retryAttemptsEnv, retryDelayMs, sleep } from '../retry.js';
 
+import { DATA_DIR } from '../protocol/paths.js';
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(HERE, '..', '..');
-const DREAMS_DIR = join(PROJECT_ROOT, 'os-data', 'memory', 'dreams');
+const DREAMS_DIR = join(DATA_DIR, 'memory', 'dreams');
 const DREAMED_INDEX = join(DREAMS_DIR, '.index.json');     // tracks which session files have been consumed
 const SCHEDULER_INTERVAL_MS = positiveMsEnv('BOR_DREAM_INTERVAL_MS', 30_000);
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
@@ -433,7 +435,7 @@ nothing, output nothing at all.`;
 async function listWidgetsSafe(ctx) {
   // Reuses the same listWidgets path as /api/widgets — but to avoid a server
   // import we read the manifests directly here. Returns the same shape.
-  const widgetsDir = join(PROJECT_ROOT, 'os-data', 'widgets');
+  const widgetsDir = join(DATA_DIR, 'widgets');
   try {
     const entries = await readdir(widgetsDir, { withFileTypes: true });
     const out = [];

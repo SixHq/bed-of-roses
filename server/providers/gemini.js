@@ -11,6 +11,7 @@
 import { iterateSseStream } from './sse-util.js';
 import { toGeminiParts } from './multimodal.js';
 import { providerMaxOutputTokens } from './limits.js';
+import { geminiThinkingConfig } from './reasoning.js';
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 // Imagen is the image-gen model line for Google's Gemini key. Verified May
@@ -51,7 +52,11 @@ export default {
     const body = {
       systemInstruction: { parts: [{ text: system }] },
       contents,
-      generationConfig: { maxOutputTokens: providerMaxOutputTokens(), temperature: 0.7 },
+      generationConfig: {
+        maxOutputTokens: providerMaxOutputTokens(),
+        temperature: 0.7,
+        thinkingConfig: geminiThinkingConfig(m),
+      },
     };
     const res = await fetch(url, {
       method: 'POST',

@@ -2,6 +2,9 @@ const root = document.querySelector('.presence');
 const composer = document.getElementById('composer');
 const orb = document.getElementById('orb');
 const orbBadge = document.getElementById('orb-badge');
+const notificationChip = document.getElementById('notification-chip');
+const notificationChipCount = document.getElementById('notification-chip-count');
+const notificationChipSubject = document.getElementById('notification-chip-subject');
 const promptInput = document.getElementById('prompt');
 const chipRail = document.getElementById('chip-rail');
 const attachButton = document.getElementById('attach');
@@ -13,6 +16,8 @@ const thoughtFoot = document.getElementById('thought-foot');
 const minimizeButton = document.getElementById('minimize-task');
 const stopButton = document.getElementById('stop-task');
 const closeButton = document.getElementById('close-thought');
+const notificationsButton = document.getElementById('notifications');
+const notificationCount = document.getElementById('notification-count');
 const bubbleResizeZones = [...document.querySelectorAll('[data-bubble-resize]')];
 const taskChip = document.getElementById('task-chip');
 const taskChipName = document.getElementById('task-chip-name');
@@ -21,6 +26,8 @@ const surfacesButton = document.getElementById('surfaces');
 const surfaceDrawer = document.getElementById('surface-drawer');
 const surfaceList = document.getElementById('surface-list');
 const setupButton = document.getElementById('setup');
+const historyButton = document.getElementById('history');
+const voiceButton = document.getElementById('voice');
 
 let currentMode = 'collapsed';
 let currentRequestId = null;
@@ -45,6 +52,21 @@ let hostPresenceMode = currentMode;
 let composerSyncFrame = null;
 let presenceResizeInFlight = false;
 let renderedMediaUrls = new Set();
+let notificationsOpen = false;
+let notificationReturnState = null;
+let notificationsState = { notifications: [], unread: 0 };
+let selectedNotificationId = null;
+// Stable id for the conversation currently in the bubble. Set when a fresh
+// task starts, reused across turns, cleared when the thread is reset. The
+// renderer persists the running transcript under this id after every turn so
+// History can list and resume past conversations.
+let currentConversationId = null;
+let historyOpen = false;
+let historyReturnState = null;
+let historyState = { conversations: [] };
+let lastNotificationUnread = 0;
+let notificationSoundLastPlayedAt = 0;
+let presenceConfigSignature = '';
 const BUBBLE_SIZE_STORAGE_KEY = 'bor.presence.thoughtBubbleSize.v1';
 const BUBBLE_MIN_WIDTH = 238;
 const BUBBLE_MIN_HEIGHT = 150;
@@ -144,8 +166,17 @@ const PRESENCE_CHOICES = [
     preset: 'nova',
     color: 'amber',
     vars: {
-      '--presence-aura': '196, 168, 240',
       '--presence-face': '#FFD93D',
+      '--presence-neo': '#F4F2ED',
+      '--presence-riso-a': '#FF48B0',
+      '--presence-riso-b': '#3145C2',
+      '--presence-liquid-1': '#FFB6E1',
+      '--presence-liquid-2': '#FF7AB6',
+      '--presence-liquid-3': '#7E1F88',
+      '--presence-y2k-1': '#9ED6FF',
+      '--presence-y2k-2': '#3BA8FF',
+      '--presence-y2k-3': '#003FA8',
+      '--presence-pixel': '#33FF66',
     },
   },
   {
@@ -153,8 +184,17 @@ const PRESENCE_CHOICES = [
     preset: 'cipher',
     color: 'aurora',
     vars: {
-      '--presence-aura': '143, 229, 197',
-      '--presence-face': '#8FE5C5',
+      '--presence-face': '#FF4FA3',
+      '--presence-neo': '#FF3B00',
+      '--presence-riso-a': '#FFE15B',
+      '--presence-riso-b': '#FF48B0',
+      '--presence-liquid-1': '#B6FFE5',
+      '--presence-liquid-2': '#1E9F6B',
+      '--presence-liquid-3': '#0A3C26',
+      '--presence-y2k-1': '#D6FF9D',
+      '--presence-y2k-2': '#5FC92F',
+      '--presence-y2k-3': '#1F6005',
+      '--presence-pixel': '#FFB000',
     },
   },
   {
@@ -162,8 +202,17 @@ const PRESENCE_CHOICES = [
     preset: 'aria',
     color: 'frost',
     vars: {
-      '--presence-aura': '160, 203, 240',
-      '--presence-face': '#A0CBF0',
+      '--presence-face': '#5FE3A1',
+      '--presence-neo': '#D6FF3B',
+      '--presence-riso-a': '#3145C2',
+      '--presence-riso-b': '#2BAA8E',
+      '--presence-liquid-1': '#A9E0FF',
+      '--presence-liquid-2': '#3C8BFF',
+      '--presence-liquid-3': '#0E2A66',
+      '--presence-y2k-1': '#CCF5FF',
+      '--presence-y2k-2': '#00D5FF',
+      '--presence-y2k-3': '#005A78',
+      '--presence-pixel': '#00E0FF',
     },
   },
   {
@@ -171,11 +220,42 @@ const PRESENCE_CHOICES = [
     preset: 'echo',
     color: 'ember',
     vars: {
-      '--presence-aura': '255, 99, 140',
-      '--presence-face': '#FF638C',
+      '--presence-face': '#6BCEFF',
+      '--presence-neo': '#0A0A0A',
+      '--presence-riso-a': '#E53A22',
+      '--presence-riso-b': '#FFE15B',
+      '--presence-liquid-1': '#FFD58A',
+      '--presence-liquid-2': '#FF7A2A',
+      '--presence-liquid-3': '#7A2A00',
+      '--presence-y2k-1': '#FFE0A1',
+      '--presence-y2k-2': '#FF9C2E',
+      '--presence-y2k-3': '#7A3300',
+      '--presence-pixel': '#FF3B8B',
     },
   },
 ];
+
+const PRESENCE_COLOR_RGB = {
+  pearl: '232, 232, 238',
+  amber: '245, 195, 107',
+  ember: '248, 142, 102',
+  bloom: '244, 158, 186',
+  aurora: '143, 229, 197',
+  frost: '160, 203, 240',
+  lilac: '196, 168, 240',
+  onyx: '155, 155, 165',
+};
+
+const PRESENCE_COLOR_HEX = {
+  pearl: '#E8E8EE',
+  amber: '#F5C36B',
+  ember: '#F88E66',
+  bloom: '#F49EBA',
+  aurora: '#8FE5C5',
+  frost: '#A0CBF0',
+  lilac: '#C4A8F0',
+  onyx: '#9B9BA5',
+};
 
 const TOOL_META = {
   get_ux_ui_strict_guidelines: ['Check guidelines', 'theme + thumbnail spec', '✓'],
@@ -198,6 +278,7 @@ const TOOL_META = {
   replace_in_file: ['Edit a file', 'patching content', '✎'],
   execute_command: ['Run a command', 'shell executor', '⌘'],
   screen_capture: ['Read the screen', 'capturing Mac display', '⌕'],
+  browser_action: ['Use the browser', 'headless Chromium', '◍'],
   locate_screen_element: ['Locate UI element', 'computer vision', '⌖'],
   computer_click: ['Click in app', 'macOS accessibility', '⌖'],
   computer_type: ['Type in app', 'focused Mac app', '⌨'],
@@ -210,7 +291,11 @@ const TOOL_META = {
   list_surfaces: ['List surfaces', 'apps and widgets', '□'],
   read_surface_data: ['Read surface state', 'state.json', '⌕'],
   mutate_surface_data: ['Update surface state', 'state.json', '✎'],
+  cron: ['Schedule task', 'cron job', '◷'],
+  wait_until: ['Wait', 'pausing', '◴'],
+  push_notification: ['Notify', 'notification inbox', '!'],
   attempt_completion: ['All set', 'final note', '✓'],
+  wait_for_human_input: ['Waiting for you', 'human input needed', '?'],
 };
 
 const FILE_EDIT_TAGS = new Set(['write_file', 'write_to_file', 'edit_file', 'replace_in_file']);
@@ -293,18 +378,46 @@ function presenceChoice(config) {
 function applyPresenceConfig(config = {}) {
   const theme = normalizeTheme(config.baseTheme);
   const choice = presenceChoice(config);
+  const color = PRESENCE_COLOR_RGB[config.avatarColor] ? config.avatarColor : choice.color;
+  const colorRgb = PRESENCE_COLOR_RGB[color] || PRESENCE_COLOR_RGB[choice.color] || PRESENCE_COLOR_RGB.lilac;
   root.dataset.theme = theme;
   root.dataset.presenceState = choice.id;
   root.dataset.preset = choice.preset;
+  root.dataset.color = color;
+  root.style.setProperty('--presence-aura', colorRgb);
+  root.style.setProperty('--avatar-color-rgb', colorRgb);
   for (const [key, value] of Object.entries(choice.vars)) {
     root.style.setProperty(key, value);
   }
+  if (config.avatarColor && config.avatarColor !== choice.color) {
+    const colorHex = PRESENCE_COLOR_HEX[color] || PRESENCE_COLOR_HEX.lilac;
+    root.style.setProperty('--presence-face', colorHex);
+    root.style.setProperty('--presence-neo', colorHex);
+    root.style.setProperty('--presence-riso-a', colorHex);
+    root.style.setProperty('--presence-riso-b', colorHex);
+    root.style.setProperty('--presence-liquid-1', colorHex);
+    root.style.setProperty('--presence-liquid-2', colorHex);
+    root.style.setProperty('--presence-liquid-3', colorHex);
+    root.style.setProperty('--presence-y2k-1', colorHex);
+    root.style.setProperty('--presence-y2k-2', colorHex);
+    root.style.setProperty('--presence-y2k-3', colorHex);
+    root.style.setProperty('--presence-pixel', colorHex);
+  }
 }
 
-async function hydratePresenceConfig() {
+async function refreshPresenceConfig() {
   const config = await window.borHost.getConfig().catch(() => null);
+  const signature = JSON.stringify({
+    baseTheme: config?.baseTheme || '',
+    avatarStyle: config?.avatarStyle || '',
+    avatarColor: config?.avatarColor || '',
+  });
+  if (signature === presenceConfigSignature) return;
+  presenceConfigSignature = signature;
   applyPresenceConfig(config || {});
 }
+
+const hydratePresenceConfig = refreshPresenceConfig;
 
 function applyPresenceLayout(layout = {}) {
   if (
@@ -330,6 +443,7 @@ function applyPresenceLayout(layout = {}) {
     root.dataset.mode = layout.mode;
   }
   scheduleComposerSync();
+  updateNotificationBadges();
 }
 
 function setMode(mode) {
@@ -347,6 +461,10 @@ function setMode(mode) {
       resizePrompt();
     }, 100);
   }
+  // The window resizes on a mode change but no mousemove fires, so refresh the
+  // click-through capture state — otherwise after closing the App Library the
+  // orb can stay click-through and the next minimize click does nothing.
+  window.__borReevalMouseIgnore?.();
 }
 
 function setOrbState(state) {
@@ -364,8 +482,20 @@ function resetIdleTimer() {
   window.clearTimeout(idleTimer);
   if (root.dataset.orbState === 'sleep') setOrbState(currentRequestId ? 'busy' : 'idle');
   idleTimer = window.setTimeout(() => {
-    if (!currentRequestId && currentMode === 'collapsed') setOrbState('sleep');
+    if (!currentRequestId && isCollapsedMode()) setOrbState('sleep');
   }, 5 * 60 * 1000);
+}
+
+function isClosedMode(mode = currentMode) {
+  return mode === 'collapsed' || mode === 'collapsed-notification' || mode === 'minimized';
+}
+
+function isCollapsedMode(mode = currentMode) {
+  return mode === 'collapsed' || mode === 'collapsed-notification';
+}
+
+function collapsedModeForNotifications() {
+  return (Number(notificationsState.unread) || 0) > 0 ? 'collapsed-notification' : 'collapsed';
 }
 
 function clampNumber(value, min, max) {
@@ -556,11 +686,18 @@ function endBubbleResize(event) {
 }
 
 function dragBlocked(target) {
-  return Boolean(target.closest('#prompt, .send, .iconbtn, #setup, .surface-row, .bubble, .task-chip, .chip-rail, .context-chip'));
+  return Boolean(target.closest('#prompt, .send, .iconbtn, #setup, .surface-tile, .bubble, .task-chip, .notification-chip, .chip-rail, .context-chip'));
 }
 
 function togglePresence() {
-  if ((currentMode === 'collapsed' || currentMode === 'minimized') && hasVisibleThoughtSession()) {
+  // If the App Library drawer is open, the orb click closes it and collapses —
+  // otherwise the drawer stays visible and the click appears to do nothing.
+  if (surfaceDrawer && !surfaceDrawer.classList.contains('hidden')) {
+    surfaceDrawer.classList.add('hidden');
+    setMode(collapsedModeForNotifications());
+    return;
+  }
+  if (isClosedMode() && hasVisibleThoughtSession()) {
     restoreTask();
     return;
   }
@@ -568,7 +705,11 @@ function togglePresence() {
     minimizeThought();
     return;
   }
-  if (currentMode === 'collapsed' || currentMode === 'minimized') {
+  if (isClosedMode()) {
+    if (!hasVisibleThoughtSession() && (Number(notificationsState.unread) || 0) > 0) {
+      showNotifications().catch(() => {});
+      return;
+    }
     if (!currentRequestId && !hasThoughtSession()) hideThought();
     minimizedTask = false;
     taskChip.classList.add('hidden');
@@ -576,7 +717,7 @@ function togglePresence() {
     return;
   }
   if (!currentRequestId) hideThought();
-  setMode('collapsed');
+  setMode(collapsedModeForNotifications());
 }
 
 function startDrag(event) {
@@ -1014,6 +1155,7 @@ function dimensionsLabel(data = {}) {
 function resetTaskSession() {
   taskMessages = [];
   taskMediaRefs = [];
+  currentConversationId = null;
 }
 
 function hasThoughtSession() {
@@ -1055,9 +1197,9 @@ function rememberTaskMedia({ url = '', title = '', kind = 'image', mediaType = '
 }
 
 function attachedContextText(items = []) {
-  // Images attach via image_url vision blocks (see userContentForTask), not
+  // Images and PDFs attach as content blocks (see userContentForTask), not
   // text — skip them in the text manifest. Errors also skip.
-  const valid = items.filter((item) => item && item.path && item.kind !== 'error' && item.kind !== 'image');
+  const valid = items.filter((item) => item && item.path && item.kind !== 'error' && item.kind !== 'image' && item.kind !== 'document');
   if (!valid.length) return '';
   const blocks = valid.map((item, index) => {
     if (item.kind === 'folder') {
@@ -1092,6 +1234,17 @@ function attachedContextImageBlocks(items = []) {
     }));
 }
 
+function attachedContextDocumentBlocks(items = []) {
+  return items
+    .filter((item) => item && item.kind === 'document' && item.dataUrl)
+    .map((item) => ({
+      type: 'document',
+      url: item.dataUrl,
+      mediaType: item.mediaType || 'application/pdf',
+      name: item.name || 'document.pdf',
+    }));
+}
+
 function taskPromptWithContext(prompt, contextItems = []) {
   const context = attachedContextText(contextItems);
   if (!context) return prompt;
@@ -1100,9 +1253,11 @@ function taskPromptWithContext(prompt, contextItems = []) {
 
 function userContentForTask(prompt, contextItems = []) {
   const text = taskPromptWithContext(prompt, contextItems);
-  // Images attached via the + button: pass as vision blocks so the model
-  // actually sees them. The text manifest skips these (attachedContextText).
+  // Images/PDFs attached via the + button or drag-drop: pass as content blocks
+  // so the model actually sees them. The text manifest skips these
+  // (attachedContextText).
   const attachedImageBlocks = attachedContextImageBlocks(contextItems);
+  const documentBlocks = attachedContextDocumentBlocks(contextItems);
   // Continuity: also include recent in-bubble images from this same task.
   const continuityImages = taskMediaRefs
     .filter((item) => item?.url && isImageMedia(item.url))
@@ -1112,10 +1267,13 @@ function userContentForTask(prompt, contextItems = []) {
       url: item.url,
       mediaType: item.mediaType || mediaTypeForUrl(item.url),
     }));
-  if (!attachedImageBlocks.length && !continuityImages.length) return text;
+  if (!attachedImageBlocks.length && !documentBlocks.length && !continuityImages.length) return text;
   const annotations = [];
   if (attachedImageBlocks.length) {
     annotations.push(`[${attachedImageBlocks.length} image attachment${attachedImageBlocks.length === 1 ? '' : 's'} from the user are attached below. Refer to them when answering the request.]`);
+  }
+  if (documentBlocks.length) {
+    annotations.push(`[${documentBlocks.length} PDF document${documentBlocks.length === 1 ? '' : 's'} from the user ${documentBlocks.length === 1 ? 'is' : 'are'} attached below. Read ${documentBlocks.length === 1 ? 'it' : 'them'} directly when answering the request.]`);
   }
   if (continuityImages.length) {
     annotations.push('[Task continuity: recent thought-bubble images from this same task are also attached. Use them when the user refers to the screenshot, image, screen, visual result, "this", "that", or asks what is visible.]');
@@ -1125,6 +1283,7 @@ function userContentForTask(prompt, contextItems = []) {
       type: 'text',
       text: [text, '', ...annotations].join('\n'),
     },
+    ...documentBlocks,
     ...attachedImageBlocks,
     ...continuityImages,
   ];
@@ -1145,6 +1304,7 @@ function appendTaskAssistantMessage(recorded) {
 function contextKindLabel(item = {}) {
   if (item.kind === 'folder') return 'folder';
   if (item.kind === 'image') return 'image';
+  if (item.kind === 'document') return 'pdf';
   if (item.kind === 'file') return 'file';
   if (item.kind === 'error') return 'error';
   return 'item';
@@ -1338,9 +1498,17 @@ function editorPreviewFor(card) {
 }
 
 function ensureEditorCard({ tag = 'write_file', path = '', body = undefined, status = 'running', bytes = 0, applied = null } = {}) {
-  const existing = activeCardItem?.card?.type === 'editor' && activeCardItem.card.status !== 'done'
+  let existing = activeCardItem?.card?.type === 'editor' && activeCardItem.card.status !== 'done'
     ? activeCardItem.card
     : null;
+  // A different file means a different card — finalize the previous editor card
+  // and start a fresh one so multiple files in one turn don't merge into a
+  // single card showing everything as one file.
+  if (existing && path && existing.path && existing.path !== path) {
+    existing.status = 'done';
+    existing = null;
+    activeCardItem = null;
+  }
   const card = {
     ...(existing || {}),
     type: 'editor',
@@ -1598,6 +1766,89 @@ function setThreadCard(card) {
   return activeCardItem;
 }
 
+// --- Browser session card (mirrors Sixth's BrowserSessionRow) --------------
+// One card per launch->close session. Each non-launch result appends a "page"
+// (action label + url + screenshot + console logs + mouse position); the user
+// can step through pages and toggle the console logs.
+
+let browserCardSeq = 0;
+
+function browserActionLabel(d = {}) {
+  switch (d.action) {
+    case 'launch': return d.url ? `Launch browser at ${shortText(d.url, 64)}` : 'Launch browser';
+    case 'click': return d.coordinate ? `Click (${d.coordinate})` : 'Click';
+    case 'type': return d.text ? `Type "${shortText(String(d.text), 40)}"` : 'Type';
+    case 'scroll_down': return 'Scroll down';
+    case 'scroll_up': return 'Scroll up';
+    case 'close': return 'Close browser';
+    default: return 'Browser action';
+  }
+}
+
+function findBrowserCardById(id) {
+  if (!id) return null;
+  for (const item of bubbleState.thread) {
+    if (item.type === 'card' && item.card?.type === 'browser' && String(item.card.id) === String(id)) return item.card;
+  }
+  return null;
+}
+
+// Start (launch) or continue (other actions) the active browser card. A launch
+// always opens a NEW card, retiring any still-running one (Sixth groups one
+// session per launch).
+function ensureBrowserCard(attrs = {}, { fresh = false } = {}) {
+  if (fresh) {
+    const prior = findThreadCardItem('browser', (c) => c.status !== 'done');
+    if (prior?.card) prior.card.status = 'done';
+    const card = {
+      type: 'browser',
+      id: `b${++browserCardSeq}`,
+      status: 'running',
+      viewport: { width: 1024, height: 720 },
+      pages: [],
+      currentIndex: 0,
+      consoleExpanded: false,
+      pending: browserActionLabel(attrs),
+    };
+    activeCardItem = appendThreadItem({ type: 'card', card });
+    bubbleState.card = card;
+    return activeCardItem;
+  }
+  let item = findThreadCardItem('browser', (c) => c.status !== 'done');
+  if (!item) return ensureBrowserCard(attrs, { fresh: true });
+  item.card.pending = browserActionLabel(attrs);
+  item.card.status = 'running';
+  activeCardItem = item;
+  bubbleState.card = item.card;
+  return item;
+}
+
+// Append a completed action's result (a "page") to the active browser card.
+function pushBrowserPage(data = {}) {
+  let item = findThreadCardItem('browser', (c) => c.status !== 'done');
+  if (!item) item = ensureBrowserCard(data, { fresh: true });
+  const card = item.card;
+  if (data.viewport && data.viewport.width && data.viewport.height) card.viewport = data.viewport;
+  card.pending = null;
+  if (data.action === 'close') {
+    card.status = 'done';
+  } else {
+    card.pages.push({
+      action: data.action,
+      label: browserActionLabel(data),
+      url: data.currentUrl || data.url || '',
+      screenshot: data.screenshot || '',
+      logs: data.logs || '',
+      mousePosition: data.currentMousePosition || '',
+    });
+    card.currentIndex = card.pages.length - 1; // auto-advance to latest
+    card.status = 'running';
+  }
+  activeCardItem = item;
+  bubbleState.card = card;
+  return item;
+}
+
 function appendOrUpdateSay({ text = '', tone = 'warm', streamId = null, append = true, streaming = false }) {
   removeThinkingLine();
   if (streamId && streamId !== activeSayStreamId) {
@@ -1637,6 +1888,11 @@ function resetBubbleState() {
   minimizedTask = false;
   lastSurfaceId = null;
   currentRequestId = null;
+  notificationsOpen = false;
+  notificationReturnState = null;
+  selectedNotificationId = null;
+  historyOpen = false;
+  historyReturnState = null;
   resetTaskSession();
   stopElapsed();
 }
@@ -1793,6 +2049,8 @@ function renderCardByType(card) {
     case 'terminal': return renderTerminalCard(card);
     case 'image': return renderImageCard(card);
     case 'web': return renderWebCard(card);
+    case 'browser': return renderBrowserCard(card);
+    case 'wait': return renderWaitCard(card);
     case 'video': return renderVideoCard(card);
     case 'error': return renderErrorCard(card);
     case 'progress': return renderProgressCard(card);
@@ -2156,6 +2414,75 @@ function renderWebCard(card) {
   `;
 }
 
+function renderWaitCard(card) {
+  const done = card.status === 'done';
+  const secs = Math.max(0, Math.round(Number(card.seconds) || 0));
+  const label = done ? `Waited ${secs}s` : `Waiting ${secs}s…`;
+  const reason = card.reason ? `<span class="wait-reason">${escapeHtml(shortText(card.reason, 64))}</span>` : '';
+  const fill = done
+    ? '<span class="wait-fill is-done" style="width:100%"></span>'
+    : `<span class="wait-fill" style="animation-duration:${secs || 1}s"></span>`;
+  return `
+    <div class="card wait-card${done ? ' is-done' : ''}">
+      <div class="wait-head">
+        <span class="wait-glyph">${done ? '✓' : '◴'}</span>
+        <span class="wait-label">${escapeHtml(label)}</span>
+        ${reason}
+      </div>
+      <div class="wait-bar">${fill}</div>
+    </div>`;
+}
+
+function renderBrowserCard(card) {
+  const vp = card.viewport && card.viewport.width ? card.viewport : { width: 1024, height: 720 };
+  const pages = Array.isArray(card.pages) ? card.pages : [];
+  const total = pages.length;
+  const idx = Math.min(Math.max(card.currentIndex || 0, 0), Math.max(total - 1, 0));
+  const page = pages[idx] || {};
+  const running = card.status !== 'done';
+  const headLabel = running && card.pending ? card.pending : (page.label || 'Browser');
+  const ratio = vp.height && vp.width ? (vp.height / vp.width) * 100 : 62;
+  const url = page.url || (running ? 'loading…' : 'about:blank');
+  const expanded = Boolean(card.consoleExpanded);
+  let cursor = '';
+  if (page.mousePosition && page.mousePosition.includes(',')) {
+    const [mx, my] = page.mousePosition.split(',').map((n) => parseInt(n, 10));
+    if (Number.isFinite(mx) && Number.isFinite(my)) {
+      const top = (my / vp.height) * 100;
+      const left = (mx / vp.width) * 100;
+      cursor = `<span class="browser-cursor" style="top:${top.toFixed(2)}%;left:${left.toFixed(2)}%"></span>`;
+    }
+  }
+  return `
+    <div class="card browser-card" data-browser-card="${escapeHtml(card.id || '')}">
+      <div class="browser-head">
+        <span class="browser-glyph ${running ? 'spin' : ''}">${running ? '◐' : '⌖'}</span>
+        <span class="browser-title">${running ? 'Using the browser' : 'Browsed'}</span>
+        <span class="browser-action-label">${escapeHtml(headLabel)}</span>
+      </div>
+      <div class="browser-urlbar"><span class="browser-dot"></span><span class="browser-url">${escapeHtml(shortText(url, 84))}</span></div>
+      <div class="browser-screen" style="padding-bottom:${ratio.toFixed(2)}%">
+        ${page.screenshot
+          ? `<img class="browser-shot" src="${escapeHtml(page.screenshot)}" alt="Browser screenshot" loading="eager">`
+          : `<div class="browser-noshot">◍</div>`}
+        ${cursor}
+      </div>
+      <div class="browser-console">
+        <button class="browser-console-toggle" type="button" data-browser-console="1">
+          <span class="chev">${expanded ? '▾' : '▸'}</span> Console Logs
+        </button>
+        ${expanded ? `<pre class="browser-logs">${escapeHtml(page.logs || '(No new logs)')}</pre>` : ''}
+      </div>
+      ${total > 1 ? `
+      <div class="browser-steps">
+        <button type="button" class="browser-step" data-browser-step="prev"${idx <= 0 ? ' disabled' : ''}>‹ Prev</button>
+        <span class="browser-step-count">Step ${idx + 1} of ${total}</span>
+        <button type="button" class="browser-step" data-browser-step="next"${idx >= total - 1 ? ' disabled' : ''}>Next ›</button>
+      </div>` : ''}
+    </div>
+  `;
+}
+
 function renderVideoCard(card) {
   const src = resolveMediaUrl(card.url || card.path || '');
   const embedSrc = card.embedUrl || '';
@@ -2211,12 +2538,146 @@ function renderProgressCard(card) {
   `;
 }
 
+function formatNotificationTime(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  const diff = Date.now() - n;
+  if (diff < 60_000) return 'now';
+  if (diff < 60 * 60_000) return `${Math.floor(diff / 60_000)}m`;
+  if (diff < 24 * 60 * 60_000) return `${Math.floor(diff / (60 * 60_000))}h`;
+  return new Date(n).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function notificationSubject(item = {}) {
+  return shortText(item.subject || item.title || 'Notification', 96);
+}
+
+function notificationMeta(item = {}) {
+  return [item.source, item.jobId].filter(Boolean).join(' · ');
+}
+
+function selectedNotification() {
+  const items = Array.isArray(notificationsState.notifications) ? notificationsState.notifications : [];
+  return items.find((item) => item.id === selectedNotificationId) || null;
+}
+
+function renderNotificationDetail(item) {
+  if (!item) {
+    return `
+      <section class="notification-panel notification-detail">
+        <div class="notification-top">
+          <div>
+            <b>Notification</b>
+            <small>Not found</small>
+          </div>
+          <div class="notification-actions">
+            <button type="button" class="notification-back" data-notification-action="list">Back</button>
+          </div>
+        </div>
+        <div class="notification-empty">
+          <b>This notification is gone</b>
+          <small>It may have been cleared or removed.</small>
+        </div>
+      </section>
+    `;
+  }
+  return `
+    <section class="notification-panel notification-detail">
+      <div class="notification-top">
+        <div>
+          <b>${escapeHtml(notificationSubject(item))}</b>
+          <small>${escapeHtml([formatNotificationTime(item.createdAtMs), item.level || 'info'].filter(Boolean).join(' · '))}</small>
+        </div>
+        <div class="notification-actions">
+          <button type="button" class="notification-back" data-notification-action="list">Back</button>
+          ${item.readAtMs ? '' : `<button type="button" data-notification-action="mark-read" data-notification-id="${escapeHtml(item.id)}">Mark read</button>`}
+          <button type="button" data-notification-action="remove" data-notification-id="${escapeHtml(item.id)}">Delete</button>
+        </div>
+      </div>
+      <article class="notification-detail-card level-${escapeHtml(item.level || 'info')}">
+        <div class="notification-detail-head">
+          <span class="notification-dot level-${escapeHtml(item.level || 'info')}"></span>
+          <div>
+            <small>Subject</small>
+            <h2>${escapeHtml(notificationSubject(item))}</h2>
+          </div>
+        </div>
+        <div class="notification-detail-section">
+          <small>Title</small>
+          <p>${escapeHtml(item.title || 'Notification')}</p>
+        </div>
+        ${item.body ? `
+          <div class="notification-detail-section">
+            <small>Body</small>
+            <p>${escapeHtml(item.body)}</p>
+          </div>
+        ` : ''}
+        <div class="notification-detail-meta">
+          ${notificationMeta(item) ? `<span>${escapeHtml(notificationMeta(item))}</span>` : ''}
+          ${item.runId ? `<span>${escapeHtml(item.runId)}</span>` : ''}
+        </div>
+      </article>
+    </section>
+  `;
+}
+
+function renderNotificationsPanel() {
+  const items = Array.isArray(notificationsState.notifications) ? notificationsState.notifications : [];
+  const unread = Number(notificationsState.unread) || 0;
+  const detail = selectedNotification();
+  if (selectedNotificationId) return renderNotificationDetail(detail);
+  return `
+    <section class="notification-panel">
+      <div class="notification-top">
+        <div>
+          <b>Notifications</b>
+          <small>${escapeHtml(unread ? `${unread} unread` : 'All caught up')}</small>
+        </div>
+        <div class="notification-actions">
+          <button type="button" class="notification-back" data-notification-action="back">Back</button>
+          <button type="button" data-notification-action="mark-all-read">Mark read</button>
+          <button type="button" data-notification-action="clear">Clear</button>
+        </div>
+      </div>
+      ${items.length ? `
+        <div class="notification-list">
+          ${items.map((item) => `
+            <article class="notification-item ${item.readAtMs ? 'read' : 'unread'}" data-notification-id="${escapeHtml(item.id)}" data-notification-open="${escapeHtml(item.id)}" role="button" tabindex="0">
+              <span class="notification-dot level-${escapeHtml(item.level || 'info')}"></span>
+              <div class="notification-copy">
+                <small class="notification-subject">${escapeHtml(notificationSubject(item))}</small>
+                <div class="notification-title">
+                  <b>${escapeHtml(item.title || 'Notification')}</b>
+                  <time>${escapeHtml(formatNotificationTime(item.createdAtMs))}</time>
+                </div>
+                ${item.body ? `<p>${escapeHtml(item.body)}</p>` : ''}
+                <small>${escapeHtml(notificationMeta(item))}</small>
+              </div>
+              ${item.readAtMs ? '' : `<button type="button" class="notification-mark" data-notification-action="mark-read" data-notification-id="${escapeHtml(item.id)}">✓</button>`}
+            </article>
+          `).join('')}
+        </div>
+      ` : `
+        <div class="notification-empty">
+          <b>No notifications</b>
+          <small>Scheduled task results and agent alerts will appear here.</small>
+        </div>
+      `}
+    </section>
+  `;
+}
+
 function renderCard() {
   if (!bubbleState.card) return '';
   return renderCardByType(bubbleState.card);
 }
 
 function renderFooter() {
+  if (notificationsOpen || historyOpen) {
+    thoughtFoot.classList.add('hidden');
+    thoughtFoot.innerHTML = '';
+    return;
+  }
   if (!bubbleState.footer) {
     thoughtFoot.classList.add('hidden');
     thoughtFoot.innerHTML = '';
@@ -2241,7 +2702,11 @@ function renderBubble() {
   if (bubbleState.width) thought.classList.add(bubbleState.width);
   renderMode();
   thoughtMeta.textContent = bubbleState.done ? 'done' : elapsedText();
-  thoughtBody.innerHTML = bubbleState.thread.length
+  thoughtBody.innerHTML = notificationsOpen
+    ? renderNotificationsPanel()
+    : historyOpen
+    ? renderHistoryPanel()
+    : bubbleState.thread.length
     ? renderThread()
     : [
       renderStream(),
@@ -2255,9 +2720,26 @@ function renderBubble() {
   // survives the surrounding renderBubble re-render. Without this hook each
   // event re-mounts every iframe — disastrous for stateful shortcuts.
   hydrateShortcutMounts();
+  keepTerminalCardsAtBottom();
   renderFooter();
   keepMediaScrollAtBottom();
   scrollThoughtToBottom();
+}
+
+/**
+ * Auto-scroll every live (status="running") terminal card's body to the
+ * bottom so the latest streamed stdout/stderr is always visible. The
+ * terminal body has overflow:auto with a clamped height; without this,
+ * new output below the viewport stays hidden until the user manually
+ * scrolls, which produced the "terminal card is behind the streamed
+ * chunks" symptom. Static (done/error) cards keep their current position
+ * so the user can scroll back through completed runs.
+ */
+function keepTerminalCardsAtBottom() {
+  const liveBodies = thoughtBody.querySelectorAll('.terminal-body[data-live="true"]');
+  for (const body of liveBodies) {
+    body.scrollTop = body.scrollHeight;
+  }
 }
 
 function ensureThoughtHostMode() {
@@ -2326,6 +2808,375 @@ function hideThought({ reset = false } = {}) {
   if (!currentRequestId) setOrbState('idle');
 }
 
+function updateNotificationBadges() {
+  const unread = Math.max(0, Number(notificationsState.unread) || 0);
+  const label = unread > 99 ? '99+' : String(unread);
+  const latestUnread = (notificationsState.notifications || []).find((item) => !item.readAtMs) || null;
+  if (notificationCount) {
+    notificationCount.textContent = label;
+    notificationCount.classList.toggle('hidden', unread === 0);
+  }
+  if (notificationChip && notificationChipCount && notificationChipSubject) {
+    notificationChipCount.textContent = unread === 1 ? '1 unread' : `${label} unread`;
+    notificationChipSubject.textContent = latestUnread ? notificationSubject(latestUnread) : 'Notifications';
+    notificationChip.title = latestUnread
+      ? [notificationSubject(latestUnread), latestUnread.title, latestUnread.body].filter(Boolean).join('\n')
+      : 'Notifications';
+    notificationChip.dataset.notificationId = latestUnread?.id || '';
+    notificationChip.classList.toggle('hidden', unread === 0);
+  }
+  root.dataset.hasNotifications = unread > 0 ? 'true' : 'false';
+  if (unread > 0) {
+    orbBadge.textContent = label;
+    orbBadge.classList.remove('hidden');
+  } else if (minimizedTask) {
+    orbBadge.textContent = '1';
+    orbBadge.classList.remove('hidden');
+  } else {
+    orbBadge.classList.add('hidden');
+  }
+  if (
+    unread > 0
+    && isClosedMode()
+    && !minimizedTask
+    && thought.classList.contains('hidden')
+    && taskChip.classList.contains('hidden')
+  ) {
+    setMode('collapsed-notification');
+  } else if (unread === 0 && currentMode === 'collapsed-notification') {
+    setMode('collapsed');
+  }
+}
+
+function playNotificationSound() {
+  const now = Date.now();
+  if (now - notificationSoundLastPlayedAt < 850) return;
+  notificationSoundLastPlayedAt = now;
+  if (typeof window.borHost?.playNotificationSound === 'function') {
+    window.borHost.playNotificationSound().catch(() => {});
+  }
+}
+
+async function refreshNotifications({ render = false, sound = true } = {}) {
+  if (!window.borHost?.listNotifications) return notificationsState;
+  const data = await window.borHost.listNotifications().catch(() => null);
+  if (!data || data.error) return notificationsState;
+  const previousUnread = lastNotificationUnread;
+  notificationsState = {
+    notifications: Array.isArray(data.notifications) ? data.notifications : [],
+    unread: Number(data.unread) || 0,
+  };
+  if (sound && notificationsState.unread > previousUnread) {
+    playNotificationSound();
+  }
+  lastNotificationUnread = notificationsState.unread;
+  updateNotificationBadges();
+  if (render || notificationsOpen) renderBubble();
+  return notificationsState;
+}
+
+function captureNotificationReturnState() {
+  return {
+    mode: currentMode,
+    thoughtHidden: thought.classList.contains('hidden'),
+    taskChipHidden: taskChip.classList.contains('hidden'),
+    minimizedTask,
+    bubbleMode: bubbleState.mode,
+    bubbleSubject: bubbleState.subject,
+    bubbleWidth: bubbleState.width,
+    bubbleFooter: bubbleState.footer,
+  };
+}
+
+function closeNotifications({ render = true } = {}) {
+  const previous = notificationReturnState;
+  notificationsOpen = false;
+  notificationReturnState = null;
+  selectedNotificationId = null;
+
+  if (previous) {
+    bubbleState.mode = previous.bubbleMode;
+    bubbleState.subject = previous.bubbleSubject;
+    bubbleState.width = previous.bubbleWidth;
+    bubbleState.footer = previous.bubbleFooter;
+    minimizedTask = previous.minimizedTask;
+    thought.classList.toggle('hidden', previous.thoughtHidden);
+    taskChip.classList.toggle('hidden', previous.taskChipHidden);
+    setMode(previous.mode || (hasThoughtSession() ? 'thinking' : 'expanded'));
+  } else {
+    setMode(hasVisibleThoughtSession() ? 'thinking' : 'expanded');
+  }
+
+  updateNotificationBadges();
+  setOrbState(currentRequestId ? 'busy' : 'idle');
+  if (render && !thought.classList.contains('hidden')) renderBubble();
+}
+
+async function showNotifications({ notificationId = '', detail = false } = {}) {
+  historyOpen = false;
+  historyReturnState = null;
+  if (!notificationsOpen) notificationReturnState = captureNotificationReturnState();
+  notificationsOpen = true;
+  selectedNotificationId = notificationId || (detail
+    ? ((notificationsState.notifications || []).find((item) => !item.readAtMs)?.id || notificationsState.notifications?.[0]?.id || '')
+    : '');
+  minimizedTask = false;
+  surfaceDrawer.classList.add('hidden');
+  taskChip.classList.add('hidden');
+  thought.classList.remove('hidden');
+  bubbleState.width = 'wide';
+  setBubbleMode('Notifications', '');
+  setMode('thinking');
+  setOrbState('idle');
+  await refreshNotifications({ render: true });
+  renderBubble();
+}
+
+async function performNotificationAction(action, id = '') {
+  if (action === 'back') {
+    closeNotifications();
+    return;
+  }
+  if (action === 'list') {
+    selectedNotificationId = null;
+    renderBubble();
+    return;
+  }
+  if (action === 'open-detail') {
+    selectedNotificationId = id;
+    renderBubble();
+    return;
+  }
+  if (!window.borHost?.notificationAction || !action) return;
+  await window.borHost.notificationAction({ action, id }).catch(() => null);
+  if (action === 'remove' && selectedNotificationId === id) selectedNotificationId = null;
+  if (action === 'clear') selectedNotificationId = null;
+  await refreshNotifications({ render: true });
+}
+
+// --- Conversation history -------------------------------------------------
+
+function newConversationId() {
+  return `conv-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+// Plain text out of a stored message. User turns carry a content-block array
+// (multimodal); assistant turns are the raw recorded protocol string.
+function messageText(message) {
+  const content = message?.content;
+  if (typeof content === 'string') return content.trim();
+  if (Array.isArray(content)) {
+    const textBlock = content.find((b) => b && b.type === 'text' && typeof b.text === 'string');
+    return String(textBlock?.text || '').trim();
+  }
+  return '';
+}
+
+function unwrapCdataText(value) {
+  return String(value || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim();
+}
+
+// Pull the spoken text out of a recorded assistant turn (the <say> blocks).
+// Tool XML is dropped — History shows the conversation, not the machinery.
+function extractSayText(recorded) {
+  const raw = String(recorded || '');
+  if (!raw.trim()) return '';
+  const matches = [...raw.matchAll(/<say\b[^>]*>([\s\S]*?)<\/say>/gi)];
+  if (matches.length) {
+    return matches.map((m) => unwrapCdataText(m[1])).filter(Boolean).join('\n\n').trim();
+  }
+  // Legacy/plain turns with no tags at all — show them verbatim.
+  if (!/<[a-zA-Z]/.test(raw)) return raw.trim();
+  return '';
+}
+
+function conversationTitle() {
+  const firstUser = taskMessages.find((m) => m && m.role === 'user');
+  const text = messageText(firstUser);
+  const firstLine = text.split('\n').map((s) => s.trim()).find(Boolean) || 'Conversation';
+  return shortText(firstLine, 80);
+}
+
+// Save the running transcript under the active conversation id. Called after
+// every completed turn; cheap and best-effort.
+function persistConversation() {
+  if (!currentConversationId) return;
+  if (!Array.isArray(taskMessages) || !taskMessages.length) return;
+  if (typeof window.borHost?.saveConversation !== 'function') return;
+  window.borHost.saveConversation({
+    id: currentConversationId,
+    title: conversationTitle(),
+    messages: taskMessages,
+    updatedAt: new Date().toISOString(),
+  }).catch(() => {});
+}
+
+// Rebuild a readable thread (You / BOR bubbles) from a stored transcript.
+function threadFromMessages(messages) {
+  const thread = [];
+  for (const message of messages || []) {
+    if (!message) continue;
+    if (message.role === 'user') {
+      const text = messageText(message);
+      if (text) thread.push({ type: 'user', text });
+    } else if (message.role === 'assistant') {
+      const text = extractSayText(message.content) || 'Done.';
+      thread.push({ type: 'ai', tone: 'warm', text, streaming: false, done: true });
+    }
+  }
+  return thread;
+}
+
+function formatHistoryTime(iso) {
+  if (!iso) return '';
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? formatNotificationTime(ms) : '';
+}
+
+function historyMeta(item = {}) {
+  const count = Number(item.messageCount) || 0;
+  return count ? `${count} message${count === 1 ? '' : 's'}` : '';
+}
+
+function renderHistoryPanel() {
+  const items = Array.isArray(historyState.conversations) ? historyState.conversations : [];
+  return `
+    <section class="notification-panel history-panel">
+      <div class="notification-top">
+        <div>
+          <b>History</b>
+          <small>${escapeHtml(items.length ? `${items.length} conversation${items.length === 1 ? '' : 's'}` : 'No conversations yet')}</small>
+        </div>
+        <div class="notification-actions">
+          <button type="button" class="notification-back" data-history-action="back">Back</button>
+          ${items.length ? '<button type="button" data-history-action="clear">Clear</button>' : ''}
+        </div>
+      </div>
+      ${items.length ? `
+        <div class="notification-list history-list">
+          ${items.map((item) => `
+            <article class="notification-item history-item" data-history-open="${escapeHtml(item.id)}" role="button" tabindex="0">
+              <div class="notification-copy">
+                <div class="notification-title">
+                  <b>${escapeHtml(item.title || 'Conversation')}</b>
+                  <time>${escapeHtml(formatHistoryTime(item.updatedAt))}</time>
+                </div>
+                <small>${escapeHtml(historyMeta(item))}</small>
+              </div>
+              <button type="button" class="notification-mark history-delete" data-history-action="delete" data-history-id="${escapeHtml(item.id)}" title="Delete conversation" aria-label="Delete conversation">×</button>
+            </article>
+          `).join('')}
+        </div>
+      ` : `
+        <div class="notification-empty">
+          <b>No conversations yet</b>
+          <small>Chats you have with the presence show up here so you can pick them back up.</small>
+        </div>
+      `}
+    </section>
+  `;
+}
+
+async function refreshHistory({ render = false } = {}) {
+  if (typeof window.borHost?.listConversations !== 'function') return historyState;
+  const data = await window.borHost.listConversations().catch(() => null);
+  if (data && Array.isArray(data.conversations)) {
+    historyState = { conversations: data.conversations };
+  }
+  if (render || historyOpen) renderBubble();
+  return historyState;
+}
+
+async function showHistory() {
+  if (notificationsOpen) closeNotifications({ render: false });
+  if (!historyOpen) historyReturnState = captureNotificationReturnState();
+  historyOpen = true;
+  minimizedTask = false;
+  surfaceDrawer.classList.add('hidden');
+  taskChip.classList.add('hidden');
+  thought.classList.remove('hidden');
+  bubbleState.width = 'wide';
+  setBubbleMode('History', '');
+  setMode('thinking');
+  setOrbState('idle');
+  renderBubble();
+  await refreshHistory({ render: true });
+}
+
+function closeHistory({ render = true } = {}) {
+  const previous = historyReturnState;
+  historyOpen = false;
+  historyReturnState = null;
+  if (previous) {
+    bubbleState.mode = previous.bubbleMode;
+    bubbleState.subject = previous.bubbleSubject;
+    bubbleState.width = previous.bubbleWidth;
+    bubbleState.footer = previous.bubbleFooter;
+    minimizedTask = previous.minimizedTask;
+    thought.classList.toggle('hidden', previous.thoughtHidden);
+    taskChip.classList.toggle('hidden', previous.taskChipHidden);
+    setMode(previous.mode || (hasThoughtSession() ? 'thinking' : 'expanded'));
+  } else {
+    setMode(hasVisibleThoughtSession() ? 'thinking' : 'expanded');
+  }
+  setOrbState(currentRequestId ? 'busy' : 'idle');
+  if (render && !thought.classList.contains('hidden')) renderBubble();
+}
+
+async function resumeConversation(id) {
+  if (!id || typeof window.borHost?.getConversation !== 'function') return;
+  const record = await window.borHost.getConversation(id).catch(() => null);
+  if (!record || !Array.isArray(record.messages) || !record.messages.length) {
+    await refreshHistory({ render: true });
+    return;
+  }
+  historyOpen = false;
+  historyReturnState = null;
+  resetBubbleState(); // clears thread, taskMessages and the conversation id
+  taskMessages = record.messages.slice();
+  currentConversationId = record.id;
+  bubbleState.thread = threadFromMessages(record.messages);
+  bubbleState.done = true;
+  bubbleState.mode = 'Done.';
+  bubbleState.subject = '';
+  bubbleState.width = 'wide';
+  bubbleState.footer = null;
+  minimizedTask = false;
+  surfaceDrawer.classList.add('hidden');
+  taskChip.classList.add('hidden');
+  thought.classList.remove('hidden');
+  setMode('thinking');
+  setOrbState('idle');
+  renderBubble();
+  if (promptInput) promptInput.focus();
+}
+
+async function performHistoryAction(action, id = '') {
+  if (action === 'back') {
+    closeHistory();
+    return;
+  }
+  if (action === 'open') {
+    await resumeConversation(id);
+    return;
+  }
+  if (action === 'delete') {
+    if (typeof window.borHost?.conversationAction === 'function') {
+      await window.borHost.conversationAction({ action: 'delete', id }).catch(() => null);
+    }
+    if (currentConversationId === id) currentConversationId = null;
+    await refreshHistory({ render: true });
+    return;
+  }
+  if (action === 'clear') {
+    if (typeof window.borHost?.conversationAction === 'function') {
+      await window.borHost.conversationAction({ action: 'clear' }).catch(() => null);
+    }
+    currentConversationId = null;
+    await refreshHistory({ render: true });
+  }
+}
+
 function closeThoughtSession() {
   const request = currentRequestId;
   if (request && typeof window.borHost.cancelChat === 'function') {
@@ -2334,6 +3185,7 @@ function closeThoughtSession() {
   hideThought({ reset: true });
   setMode('expanded');
   setOrbState('idle');
+  updateNotificationBadges();
 }
 
 function stopGeneration({ reason = 'Stopped.' } = {}) {
@@ -2345,6 +3197,7 @@ function stopGeneration({ reason = 'Stopped.' } = {}) {
   bubbleState.done = true;
   removeThinkingLine();
   markRunningDone();
+  persistConversation();
   if (activeSayItem) {
     activeSayItem.streaming = false;
     activeSayItem.done = true;
@@ -2367,8 +3220,7 @@ function minimizeThought() {
   taskChipName.textContent = bubbleState.subject || bubbleState.mode || 'Task';
   taskChipPct.textContent = bubbleState.done ? 'done' : 'running';
   taskChip.classList.remove('hidden');
-  orbBadge.textContent = '1';
-  orbBadge.classList.remove('hidden');
+  updateNotificationBadges();
   setMode('minimized');
   setOrbState(currentRequestId ? 'busy' : 'idle');
 }
@@ -2376,7 +3228,7 @@ function minimizeThought() {
 function restoreTask() {
   minimizedTask = false;
   taskChip.classList.add('hidden');
-  orbBadge.classList.add('hidden');
+  updateNotificationBadges();
   thought.classList.remove('hidden');
   setMode('thinking');
   renderBubble();
@@ -2397,8 +3249,13 @@ function startTask(prompt) {
   // see the bubble again — clear any prior minimize intent so showThought
   // is allowed to open it.
   minimizedTask = false;
+  notificationsOpen = false;
+  notificationReturnState = null;
+  historyOpen = false;
+  historyReturnState = null;
   startElapsed();
   currentRequestId = requestId();
+  if (!currentConversationId) currentConversationId = newConversationId();
   activeSayStreamId = null;
   activeSayText = '';
   activeSayItem = null;
@@ -2424,24 +3281,42 @@ function safeHost(url) {
   try { return new URL(url).host; } catch { return ''; }
 }
 
+// Derive a 1–2 char monogram from a surface name for its App Library icon.
+// Uniform monogram tiles (rather than the raw manifest thumbnail, which is
+// usually a full HTML doc and often carries color/gradients) keep the grid
+// consistent and on-brand with the strict B&W aesthetic.
+function surfaceMonogram(name) {
+  const words = String(name || '').trim().split(/[\s\-_]+/).filter(Boolean);
+  if (!words.length) return '?';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
+const surfaceCount = document.getElementById('surface-count');
+
 async function refreshSurfaces() {
   const surfaces = await window.borHost.listSurfaces();
   surfaceList.innerHTML = '';
+  if (surfaceCount) surfaceCount.textContent = surfaces.length ? String(surfaces.length) : '';
   if (!surfaces.length) {
-    surfaceList.innerHTML = '<div class="surface-row"><span>No apps or widgets yet</span><small>empty</small></div>';
+    surfaceList.innerHTML = '<div class="surface-empty">No apps yet — ask me to build one.</div>';
     return;
   }
   for (const surface of [...surfaces].reverse()) {
-    const button = document.createElement('button');
-    button.className = 'surface-row';
-    button.type = 'button';
-    button.innerHTML = `<span>${escapeHtml(surface.name || 'Untitled')}</span><small>${escapeHtml(compactKind(surface))}</small>`;
-    button.addEventListener('click', () => {
+    const tile = document.createElement('button');
+    tile.className = 'surface-tile';
+    tile.type = 'button';
+    tile.dataset.kind = surface.kind === 'app' ? 'app' : 'shortcut';
+    tile.title = `${surface.name || 'Untitled'} · ${compactKind(surface)}`;
+    tile.innerHTML =
+      `<span class="surface-tile-icon">${escapeHtml(surfaceMonogram(surface.name))}</span>` +
+      `<span class="surface-tile-name">${escapeHtml(surface.name || 'Untitled')}</span>`;
+    tile.addEventListener('click', () => {
       window.borHost.openSurface(surface.id);
       surfaceDrawer.classList.add('hidden');
       if (!currentRequestId) setMode('expanded');
     });
-    surfaceList.append(button);
+    surfaceList.append(tile);
   }
 }
 
@@ -2539,6 +3414,14 @@ function handleChatEvent(payload) {
     } else if (data.name === 'screen_capture') {
       setBubbleMode('Reading screen', '');
       setThreadCard({ type: 'image', status: 'running', meta: 'capturing screen', kind: 'screen' });
+    } else if (data.name === 'browser_action') {
+      const action = String(data.attrs?.action || '').toLowerCase();
+      setBubbleMode('Using the browser', data.attrs?.url || '');
+      bubbleState.width = 'wide';
+      ensureBrowserCard(data.attrs || {}, { fresh: action === 'launch' });
+    } else if (data.name === 'wait_until') {
+      setBubbleMode('Waiting', data.attrs?.reason || '');
+      setThreadCard({ type: 'wait', status: 'running', seconds: Number(data.attrs?.duration) || 0, reason: data.attrs?.reason || '' });
     } else if (data.name === 'web_search' || data.name === 'web_fetch') {
       setBubbleMode(data.name === 'web_search' ? 'Searching' : 'Reading the web', '');
     } else {
@@ -2549,6 +3432,7 @@ function handleChatEvent(payload) {
   }
 
   if (event === 'say_delta') {
+    removeThinkingLine();
     appendOrUpdateSay({
       streamId: data.streamId,
       tone: data.tone || 'warm',
@@ -2562,6 +3446,7 @@ function handleChatEvent(payload) {
   }
 
   if (event === 'tag_delta' && FILE_EDIT_TAGS.has(data?.name)) {
+    removeThinkingLine();
     appendEditorDelta(data);
     setBubbleMode('Editing', data.attrs?.path || bubbleState.subject || '');
     if (!minimizedTask) {
@@ -2580,6 +3465,7 @@ function handleChatEvent(payload) {
   }
 
   if (event === 'tag_delta' && SURFACE_BUILD_TAGS.has(data?.name)) {
+    removeThinkingLine();
     appendSurfaceEditorDelta(data);
     setBubbleMode(data.name.includes('shortcut') ? 'Building shortcut' : 'Building app', data.attrs?.name || bubbleState.subject || '');
     if (!minimizedTask) {
@@ -2593,6 +3479,7 @@ function handleChatEvent(payload) {
   }
 
   if (event === 'tag_delta' && COMMAND_TAGS.has(data?.name)) {
+    removeThinkingLine();
     appendTerminalDelta(data);
     setBubbleMode('Running command', data.attrs?.cwd || bubbleState.subject || '');
     if (!minimizedTask) {
@@ -2614,7 +3501,13 @@ function handleChatEvent(payload) {
       if (currentMode !== 'thinking') setMode('thinking');
     }
     setOrbState(minimizedTask ? 'busy' : 'thinking');
-    scheduleBubbleRender(40);
+    // Streaming chunks — hide the thinking line and render SYNC. Previous
+    // scheduleBubbleRender(40) introduced visible lag where the card fell
+    // behind the actual streamed bytes (user complaint: "terminal card is
+    // behind the streamed chunks"). Sync render + bottom-scroll keeps the
+    // card current with the actual output.
+    removeThinkingLine();
+    renderBubble();
     return;
   }
 
@@ -2648,8 +3541,9 @@ function handleChatEvent(payload) {
     if (appended > 0) {
       bubbleState.width = 'wide';
       showThought('Showing media');
-      renderBubble();
     }
+    showWaitingForModel();
+    renderBubble();
     return;
   }
 
@@ -2662,6 +3556,7 @@ function handleChatEvent(payload) {
     refreshSurfaces().catch(() => {});
     pulseComplete();
     showThought(bubbleState.mode);
+    showWaitingForModel();
     return;
   }
 
@@ -2693,6 +3588,7 @@ function handleChatEvent(payload) {
       thought.classList.remove('hidden');
       taskChip.classList.add('hidden');
     }
+    showWaitingForModel();
     renderBubble();
     return;
   }
@@ -2701,6 +3597,7 @@ function handleChatEvent(payload) {
     finishActivity('delete_shortcut', data || {});
     removeShortcutFromThread(data?.id);
     refreshSurfaces().catch(() => {});
+    showWaitingForModel();
     renderBubble();
     return;
   }
@@ -2728,6 +3625,7 @@ function handleChatEvent(payload) {
       });
     }
     setBubbleMode('Theme updated.', '');
+    showWaitingForModel();
     renderBubble();
     return;
   }
@@ -2738,6 +3636,7 @@ function handleChatEvent(payload) {
     // No auto-media-preview from search results. The model picks the URLs
     // it wants to show and calls `display_media` explicitly.
     bubbleState.width = 'wide';
+    showWaitingForModel();
     renderBubble();
     return;
   }
@@ -2745,6 +3644,21 @@ function handleChatEvent(payload) {
   if (event === 'web_fetch') {
     finishActivity('web_fetch', data || {});
     // No auto-preview — see web_search.
+    showWaitingForModel();
+    renderBubble();
+    return;
+  }
+
+  if (event === 'cron') {
+    finishActivity('cron', data || {});
+    showWaitingForModel();
+    renderBubble();
+    return;
+  }
+
+  if (event === 'push_notification') {
+    finishActivity('push_notification', data?.notification || {});
+    refreshNotifications({ render: notificationsOpen }).catch(() => {});
     showWaitingForModel();
     renderBubble();
     return;
@@ -2759,6 +3673,26 @@ function handleChatEvent(payload) {
       meta: [dimensionsLabel(data || {}), data?.url || 'screen capture'].filter(Boolean).join(' · '),
     });
     setBubbleMode('Screen captured.', '');
+    showWaitingForModel();
+    renderBubble();
+    return;
+  }
+
+  if (event === 'wait_until') {
+    finishActivity('wait_until', data || {});
+    setThreadCard({ type: 'wait', status: 'done', seconds: Number(data?.seconds ?? data?.waited) || 0, reason: data?.reason || '' });
+    setBubbleMode(data?.aborted ? 'Wait interrupted.' : 'Done waiting.', '');
+    showWaitingForModel();
+    renderBubble();
+    return;
+  }
+
+  if (event === 'browser_action') {
+    finishActivity('browser_action', data || {});
+    pushBrowserPage(data || {});
+    const closed = data?.action === 'close';
+    bubbleState.width = 'wide';
+    setBubbleMode(closed ? 'Closed the browser.' : 'Using the browser', closed ? '' : (data?.currentUrl || ''));
     showWaitingForModel();
     renderBubble();
     return;
@@ -2810,11 +3744,27 @@ function handleChatEvent(payload) {
 
   if (event === 'execute_command') {
     finishActivity('execute_command', data || {});
-    completeTerminalCard(data || {});
-    // No auto-media-preview from command output. If the command produced
-    // media URLs the model wants to show (browser-use scraping reels etc),
-    // it should call `display_media` next with the URLs it picked.
-    setBubbleMode(data?.ok === false ? 'Command failed.' : 'Command finished.', '');
+    if (data?.background && data?.running) {
+      // Background process that's still alive — keep the terminal card in a
+      // live "running" state rather than marking it complete.
+      ensureTerminalCard({
+        cmd: data.cmd || '',
+        cwd: data.cwd || '',
+        status: 'running',
+        stdout: data.stdout || '',
+        stderr: data.stderr || '',
+        stdoutTrunc: data.stdoutTrunc,
+        stderrTrunc: data.stderrTrunc,
+        reason: 'running in background',
+      });
+      setBubbleMode('Running in background', data.cmd ? shortText(data.cmd, 40) : '');
+    } else {
+      completeTerminalCard(data || {});
+      // No auto-media-preview from command output. If the command produced
+      // media URLs the model wants to show (browser-use scraping reels etc),
+      // it should call `display_media` next with the URLs it picked.
+      setBubbleMode(data?.ok === false ? 'Command failed.' : 'Command finished.', '');
+    }
     showWaitingForModel();
     renderBubble();
     return;
@@ -2824,6 +3774,11 @@ function handleChatEvent(payload) {
     const tag = data?.tag || data?.name || 'tool';
     const reason = data?.reason || data?.error || 'Something failed.';
     failActivity(tag, reason);
+    if (tag === 'browser_action') {
+      // Stop the spinning placeholder card a failed launch/action left behind.
+      const item = findThreadCardItem('browser', (c) => c.status !== 'done');
+      if (item?.card) { item.card.status = 'done'; item.card.pending = null; }
+    }
     if (FILE_EDIT_TAGS.has(tag)) {
       completeEditorCard({
         tag,
@@ -2882,12 +3837,21 @@ function handleChatEvent(payload) {
       activeSayItem.streaming = false;
       activeSayItem.done = true;
     }
-    appendCompletionMessage(data?.message || 'All set.', data?.status || 'complete');
+    const resultText = data?.hasResult ? String(data?.message || '').trim() : '';
+    if (resultText) {
+      appendOrUpdateSay({
+        tone: data?.status === 'blocked' ? 'apologetic' : (data?.status === 'waiting' ? 'thoughtful' : 'warm'),
+        text: resultText,
+        append: true,
+        streaming: false,
+      });
+      bubbleState.width = 'wide';
+    }
     bubbleState.done = true;
     bubbleState.footer ||= lastSurfaceId
       ? { primary: 'Open', action: 'open-surface', secondary: ['Keep visible', 'View work'] }
       : { secondary: ['Keep visible', 'View work'] };
-    setBubbleMode(data?.status === 'blocked' ? 'Blocked.' : 'Done.', bubbleState.subject);
+    setBubbleMode(data?.status === 'blocked' ? 'Blocked.' : (data?.status === 'waiting' ? 'Waiting.' : 'Done.'), bubbleState.subject);
     setOrbState('idle');
     pulseComplete();
     showThought(bubbleState.mode);
@@ -2897,15 +3861,17 @@ function handleChatEvent(payload) {
   if (event === 'done') {
     markRunningDone();
     appendTaskAssistantMessage(data?.recorded);
+    persistConversation();
     currentRequestId = null;
+    const wasAlreadyDone = bubbleState.done;
     bubbleState.done = true;
     removeThinkingLine();
     let hasCompletion = bubbleState.thread.some((item) => item.type === 'completion');
-    if (!hasCompletion) {
+    if (!wasAlreadyDone && !hasCompletion) {
       appendCompletionMessage('', 'complete');
       hasCompletion = true;
     }
-    if (!hasCompletion && !bubbleState.card && !bubbleState.stream) {
+    if (!wasAlreadyDone && !hasCompletion && !bubbleState.card && !bubbleState.stream) {
       appendOrUpdateSay({ tone: 'warm', text: 'Done.', append: true, streaming: false });
     }
     if (activeSayItem) activeSayItem.streaming = false;
@@ -3003,7 +3969,7 @@ function submitPrompt() {
 }
 
 function resizePrompt() {
-  if (currentMode === 'collapsed' || currentMode === 'minimized') {
+  if (isClosedMode()) {
     promptInput.style.height = '';
     promptInput.classList.remove('is-scrollable');
     delete root.dataset.promptMultiline;
@@ -3038,7 +4004,7 @@ promptInput.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     event.preventDefault();
     hideThought();
-    setMode('collapsed');
+    setMode(collapsedModeForNotifications());
     return;
   }
   if (event.key === 'Enter' && (event.metaKey || !event.shiftKey)) {
@@ -3057,14 +4023,14 @@ if (typeof ResizeObserver === 'function') {
 }
 
 promptInput.addEventListener('focus', () => {
-  if (currentMode === 'collapsed' || currentMode === 'minimized') setMode('expanded');
+  if (isClosedMode()) setMode('expanded');
   else resizePrompt();
 });
 
 if (attachButton) {
   attachButton.addEventListener('click', async () => {
     if (typeof window.borHost.pickContextItems !== 'function') return;
-    if (currentMode === 'collapsed' || currentMode === 'minimized') setMode('expanded');
+    if (isClosedMode()) setMode('expanded');
     attachButton.disabled = true;
     try {
       const result = await window.borHost.pickContextItems();
@@ -3086,21 +4052,108 @@ if (attachButton) {
 }
 
 // ---------- Drag-and-drop attachments ----------
-// Drop files, images, or folders from Finder onto the composer or thought
-// bubble — they attach the same way as the + button. Native drag-drop on
-// Electron exposes File objects whose absolute path we recover via
-// webUtils.getPathForFile (exposed through preload as describeDroppedFiles).
+// Drop files, images, or folders from Finder (or a screenshot) onto the
+// composer or thought bubble — they attach the same way as the + button.
+// Images and PDFs are read straight from their File objects here in the
+// renderer: macOS screenshot-thumbnail drags live in an ephemeral temp dir
+// that's deleted moments after the drop, so recovering a path and reading it
+// later in main races and loses. Folders, HEIC (needs sips transcode), oversize
+// files, and other file types still go through main via describeDroppedFiles.
 let dragDepth = 0;
+const DROP_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+const DROP_PDF_MAX_BYTES = 20 * 1024 * 1024;
+
 function isFileDrag(event) {
-  if (!event?.dataTransfer) return false;
-  const types = Array.from(event.dataTransfer.types || []);
-  return types.includes('Files');
+  const dt = event?.dataTransfer;
+  if (!dt) return false;
+  const types = Array.from(dt.types || []);
+  if (types.includes('Files')) return true;
+  // Promise-backed drags (e.g. the macOS screenshot thumbnail) can expose
+  // their files via items rather than the 'Files' type.
+  const items = dt.items ? Array.from(dt.items) : [];
+  return items.some((it) => it.kind === 'file');
+}
+
+function filesFromDrop(event) {
+  const dt = event?.dataTransfer;
+  if (!dt) return [];
+  let files = Array.from(dt.files || []);
+  if (!files.length && dt.items) {
+    files = Array.from(dt.items)
+      .filter((it) => it.kind === 'file')
+      .map((it) => it.getAsFile())
+      .filter(Boolean);
+  }
+  return files;
+}
+
+function attachBytesLabel(n) {
+  const bytes = Number(n) || 0;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+// Build an attachment item by reading the File's bytes directly. Returns null
+// to defer to the main-process route (folders, HEIC, oversize, other files).
+async function readDroppedMediaItem(file) {
+  if (!file || !file.size) return null; // folders / empty → main route
+  const type = (file.type || '').toLowerCase();
+  const name = file.name || 'file';
+  const isHeic = /image\/(heic|heif)/.test(type) || /\.(heic|heif)$/i.test(name);
+  if (isHeic) return null; // needs sips transcode in main
+  const isPdf = type === 'application/pdf' || /\.pdf$/i.test(name);
+  const isImage = type.startsWith('image/');
+  if (!isImage && !isPdf) return null; // other files → path reference via main
+  if (file.size > (isPdf ? DROP_PDF_MAX_BYTES : DROP_IMAGE_MAX_BYTES)) return null;
+  const mime = type || (isPdf ? 'application/pdf' : 'image/png');
+  let dataUrl;
+  try {
+    dataUrl = `data:${mime};base64,${arrayBufferToBase64(await file.arrayBuffer())}`;
+  } catch {
+    return null; // couldn't read here → let main try the path
+  }
+  let path = name;
+  try {
+    if (typeof window.borHost.getPathForFile === 'function') {
+      path = (await window.borHost.getPathForFile(file)) || name;
+    }
+  } catch { /* keep name */ }
+  return {
+    id: path,
+    kind: isPdf ? 'document' : 'image',
+    path,
+    name,
+    bytes: file.size,
+    size: attachBytesLabel(file.size),
+    mediaType: mime,
+    dataUrl,
+  };
 }
 
 function setDropTargetActive(active) {
   composer.classList.toggle('drop-target', active);
   thought.classList.toggle('drop-target', active);
 }
+
+// Stop a file dropped outside the drop targets from navigating the window away
+// (which would blank the presence and load the file:// URL).
+window.addEventListener('dragover', (event) => {
+  if (isFileDrag(event)) event.preventDefault();
+});
+window.addEventListener('drop', (event) => {
+  if (isFileDrag(event)) event.preventDefault();
+});
 
 ['composer', 'thought'].forEach((id) => {
   const el = document.getElementById(id);
@@ -3126,15 +4179,25 @@ function setDropTargetActive(active) {
     event.preventDefault();
     dragDepth = 0;
     setDropTargetActive(false);
-    const files = Array.from(event.dataTransfer?.files || []);
-    if (!files.length || typeof window.borHost.describeDroppedFiles !== 'function') return;
-    if (currentMode === 'collapsed' || currentMode === 'minimized') setMode('expanded');
+    const files = filesFromDrop(event);
+    if (!files.length) return;
+    if (isClosedMode()) setMode('expanded');
     try {
-      const result = await window.borHost.describeDroppedFiles(files);
-      if (Array.isArray(result?.items) && result.items.length) {
-        addAttachedContext(result.items);
-        promptInput.focus();
+      // Read images/PDFs straight from the File objects (race-free); defer
+      // folders, HEIC, oversize, and other files to the main-process route.
+      const directItems = [];
+      const deferred = [];
+      for (const file of files) {
+        const item = await readDroppedMediaItem(file);
+        if (item) directItems.push(item);
+        else deferred.push(file);
       }
+      if (directItems.length) addAttachedContext(directItems);
+      if (deferred.length && typeof window.borHost.describeDroppedFiles === 'function') {
+        const result = await window.borHost.describeDroppedFiles(deferred);
+        if (Array.isArray(result?.items) && result.items.length) addAttachedContext(result.items);
+      }
+      promptInput.focus();
     } catch (error) {
       addAttachedContext([{
         kind: 'error',
@@ -3160,13 +4223,17 @@ if (chipRail) {
 
 if (surfacesButton) {
   surfacesButton.addEventListener('click', async () => {
+    notificationsOpen = false;
+    notificationReturnState = null;
+    historyOpen = false;
+    historyReturnState = null;
     thought.classList.add('hidden');
     taskChip.classList.add('hidden');
     surfaceDrawer.classList.toggle('hidden');
     if (!surfaceDrawer.classList.contains('hidden')) {
       setMode('thinking');
       await refreshSurfaces().catch((error) => {
-        surfaceList.innerHTML = `<div class="surface-row"><span>${escapeHtml(error.message)}</span><small>error</small></div>`;
+        surfaceList.innerHTML = `<div class="surface-empty">${escapeHtml(error.message)}</div>`;
       });
     } else {
       setMode('expanded');
@@ -3174,8 +4241,50 @@ if (surfacesButton) {
   });
 }
 
+const closeSurfacesButton = document.getElementById('close-surfaces');
+if (closeSurfacesButton) {
+  closeSurfacesButton.addEventListener('click', () => {
+    surfaceDrawer.classList.add('hidden');
+    setMode(collapsedModeForNotifications());
+  });
+}
+
+if (notificationsButton) {
+  notificationsButton.addEventListener('click', () => {
+    showNotifications().catch(() => {});
+  });
+}
+
+if (notificationChip) {
+  notificationChip.addEventListener('click', () => {
+    showNotifications({ notificationId: notificationChip.dataset.notificationId || '', detail: true }).catch(() => {});
+  });
+}
+
+if (historyButton) {
+  historyButton.addEventListener('click', () => {
+    if (historyOpen) {
+      closeHistory();
+      return;
+    }
+    showHistory().catch(() => {});
+  });
+}
+
+// Voice is not shipped yet — the button is blurred and shows a "Coming soon"
+// tooltip on hover (see presence.css). Swallow clicks so it stays inert.
+if (voiceButton) {
+  voiceButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
+}
+
 setupButton.addEventListener('click', () => {
-  window.borHost.openOnboarding();
+  // The gear now opens the Main BOR app (manage presences, edit onboarding,
+  // view logs). Falls back to the raw onboarding window on older hosts.
+  if (typeof window.borHost.openMainApp === 'function') window.borHost.openMainApp();
+  else window.borHost.openOnboarding();
 });
 
 minimizeButton.addEventListener('click', minimizeThought);
@@ -3187,6 +4296,21 @@ stopButton.addEventListener('click', () => {
 closeButton.addEventListener('click', () => {
   closeThoughtSession();
 });
+
+const mcpButton = document.getElementById('mcp-market');
+if (mcpButton && typeof window.borHost.openMcpMarketplace === 'function') {
+  mcpButton.addEventListener('click', () => { window.borHost.openMcpMarketplace(); });
+}
+
+// An MCP "Install" click in the marketplace window arrives here as a ready-made
+// install task — run it through the normal chat task path (LLM writes
+// .bor/mcp.json, runs setup, demos a tool), exactly like Sixth.
+if (typeof window.borHost.onSubmitPrompt === 'function') {
+  window.borHost.onSubmitPrompt((text) => {
+    if (typeof text !== 'string' || !text.trim()) return;
+    startTask(text);
+  });
+}
 
 bubbleResizeZones.forEach((zone) => {
   zone.addEventListener('pointerdown', startBubbleResize);
@@ -3224,7 +4348,7 @@ window.addEventListener('keydown', resetIdleTimer);
 // `launch-app` is the one new bridge op shortcuts get that apps don't —
 // shortcuts can call launchApp(appId) to open a full Mac window from inside
 // the bubble card.
-const SHORTCUT_BRIDGE_OPS = new Set(['state-get', 'state-set', 'llm-request', 'web-search', 'web-fetch', 'image-generate']);
+const SHORTCUT_BRIDGE_OPS = new Set(['state-get', 'state-set', 'llm-request', 'web-search', 'web-fetch', 'image-generate', 'cron', 'notification-push', 'notifications-list']);
 
 function findShortcutIframe(source) {
   if (!source) return null;
@@ -3324,6 +4448,49 @@ window.addEventListener('pointerup', (event) => {
 // brings a frozen (out-of-cap) shortcut back live. Delegated on thoughtBody
 // so it survives every renderBubble().
 thoughtBody.addEventListener('click', (event) => {
+  const notificationAction = event.target.closest('[data-notification-action]');
+  if (notificationAction) {
+    event.preventDefault();
+    event.stopPropagation();
+    performNotificationAction(notificationAction.dataset.notificationAction, notificationAction.dataset.notificationId || '');
+    return;
+  }
+  const notificationOpen = event.target.closest('[data-notification-open]');
+  if (notificationOpen) {
+    event.preventDefault();
+    performNotificationAction('open-detail', notificationOpen.dataset.notificationOpen || '');
+    return;
+  }
+  const historyAction = event.target.closest('[data-history-action]');
+  if (historyAction) {
+    event.preventDefault();
+    event.stopPropagation();
+    performHistoryAction(historyAction.dataset.historyAction, historyAction.dataset.historyId || '');
+    return;
+  }
+  const historyOpenItem = event.target.closest('[data-history-open]');
+  if (historyOpenItem) {
+    event.preventDefault();
+    performHistoryAction('open', historyOpenItem.dataset.historyOpen || '');
+    return;
+  }
+  const browserCtl = event.target.closest('[data-browser-step], [data-browser-console]');
+  if (browserCtl) {
+    event.preventDefault();
+    const cardEl = browserCtl.closest('.browser-card');
+    const card = findBrowserCardById(cardEl?.dataset.browserCard);
+    if (card) {
+      if (browserCtl.dataset.browserConsole) {
+        card.consoleExpanded = !card.consoleExpanded;
+      } else {
+        const dir = browserCtl.dataset.browserStep === 'prev' ? -1 : 1;
+        const total = card.pages?.length || 0;
+        card.currentIndex = Math.min(Math.max((card.currentIndex || 0) + dir, 0), Math.max(total - 1, 0));
+      }
+      renderBubble();
+    }
+    return;
+  }
   const closeBtn = event.target.closest('[data-shortcut-close]');
   if (closeBtn) {
     event.preventDefault();
@@ -3344,7 +4511,7 @@ if (typeof window.borHost.onPresenceLayout === 'function') {
   window.borHost.onPresenceLayout(applyPresenceLayout);
 }
 window.borHost.onTogglePresence(() => {
-  if ((currentMode === 'collapsed' || currentMode === 'minimized') && hasVisibleThoughtSession()) {
+  if (isClosedMode() && hasVisibleThoughtSession()) {
     restoreTask();
     return;
   }
@@ -3352,10 +4519,85 @@ window.borHost.onTogglePresence(() => {
     minimizeThought();
     return;
   }
-  setMode(currentMode === 'collapsed' || currentMode === 'minimized' ? 'expanded' : 'collapsed');
+  setMode(isClosedMode() ? 'expanded' : collapsedModeForNotifications());
 });
 
 hydratePresenceConfig();
 applyBubbleUserSize();
 resizePrompt();
 resetIdleTimer();
+refreshNotifications({ sound: false }).catch(() => {});
+window.setInterval(() => {
+  refreshPresenceConfig().catch(() => {});
+}, 5_000);
+window.setInterval(() => {
+  refreshNotifications().catch(() => {});
+}, 10_000);
+
+// ---------------------------------------------------------------------------
+// Click-through. The orb window is a large TRANSPARENT rectangle. The host
+// starts it in mouse-ignore mode so the empty area doesn't block clicks to apps
+// underneath (Chrome, Finder, etc.). Here we re-enable capture ONLY while the
+// cursor is over actual presence UI, and release it the moment it isn't — so
+// the desktop stays fully interactive everywhere the orb isn't drawn.
+(() => {
+  if (!window.borHost || typeof window.borHost.setMouseIgnore !== 'function') return;
+  let ignoring = true; // matches the host's initial setIgnoreMouseEvents(true)
+  let lastX = -1, lastY = -1; // last known cursor position (window coords)
+
+  // An element counts as "solid" (should capture the mouse) if it's real UI and
+  // not the transparent root/body. The presence root paints nothing itself —
+  // only its descendants (orb, bubble, composer) are visible.
+  function isSolid(el) {
+    if (!el || el === document.documentElement || el === document.body) return false;
+    // The .presence container is the transparent stage; only its children paint.
+    if (el.classList && el.classList.contains('presence')) return false;
+    return true;
+  }
+
+  function update(x, y) {
+    if (x >= 0) { lastX = x; lastY = y; }
+    const el = document.elementFromPoint(lastX, lastY);
+    const solid = isSolid(el);
+    if (solid && ignoring) {
+      ignoring = false;
+      window.borHost.setMouseIgnore(false);
+    } else if (!solid && !ignoring) {
+      ignoring = true;
+      window.borHost.setMouseIgnore(true);
+    }
+  }
+
+  // While the window is click-through, the host forwards move events here
+  // (forward:true), so mousemove keeps firing and we can detect re-entry.
+  window.addEventListener('mousemove', (e) => update(e.clientX, e.clientY), true);
+  // Native file drags (e.g. a dragged screenshot) don't deliver mousemove, so
+  // the host polls the global cursor and feeds coords here — this runs the same
+  // hit-test mid-drag so the window flips to capturing and the drop can land.
+  if (typeof window.borHost.onCursorPoll === 'function') {
+    window.borHost.onCursorPoll((pt) => {
+      if (pt) {
+        update(pt.x, pt.y);
+      } else if (!ignoring) {
+        ignoring = true;
+        window.borHost.setMouseIgnore(true);
+      }
+    });
+  }
+  // When the pointer leaves the window entirely, go back to click-through.
+  window.addEventListener('mouseout', (e) => {
+    if (!e.relatedTarget && !ignoring) {
+      ignoring = true;
+      window.borHost.setMouseIgnore(true);
+    }
+  }, true);
+
+  // Re-evaluate at the LAST cursor position even without a mousemove. A mode
+  // change (e.g. closing the App Library → collapse) resizes the window, which
+  // fires no mousemove, so the capture state could stay stale and strand the
+  // next orb click. setMode() calls this after the layout settles.
+  window.__borReevalMouseIgnore = () => {
+    // Re-check a few times across the resize/layout transition.
+    [0, 80, 180, 320].forEach((d) => window.setTimeout(() => update(-1, -1), d));
+  };
+})();

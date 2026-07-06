@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, globalShortcut, ipcMain, screen, shell, dialog, session } = require('electron');
+const { app, BrowserWindow, Menu, globalShortcut, ipcMain, screen, shell, dialog, session, nativeImage } = require('electron');
 const { spawn, execFile } = require('node:child_process');
 const fs = require('node:fs/promises');
 const { appendFileSync, watch } = require('node:fs');
@@ -6,6 +6,7 @@ const http = require('node:http');
 const net = require('node:net');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
+const { syncNativeApps, writeHostControlDiscovery, writeMainAppWrapper } = require('./native-apps.cjs');
 
 const ROOT = path.resolve(__dirname, '../..');
 const DATA_DIR = path.join(ROOT, 'os-data');
@@ -16,18 +17,70 @@ const SERVER_ENTRY = path.join(ROOT, 'server', 'index.js');
 const DEFAULT_PORT = Number(process.env.PORT || 7777);
 const NODE_EXECUTABLE = process.env.BOR_NODE || process.env.npm_node_execpath || 'node';
 
-let runtimeUrl = process.env.BOR_RUNTIME_URL || null;
-let runtimeProcess = null;
-let presenceWindow = null;
-let onboardingWindow = null;
+// ----- Multi-presence maps --------------------------------------------------
+// One Node runtime process + one orb window per presence, keyed by the registry
+// presence id (v2/host/presences.cjs). With exactly one presence the host looks
+// and behaves identically to the old single-presence build.
+const runtimeUrls = new Map();        // presenceId -> 'http://127.0.0.1:PORT'
+const runtimeProcesses = new Map();   // presenceId -> ChildProcess
+const _claimedPorts = new Set();      // ports handed out this boot (collision guard)
+const presenceWindows = new Map();    // presenceId -> BrowserWindow
+const onboardingWindows = new Map();  // presenceId -> BrowserWindow
+const presenceState = new Map();      // presenceId -> { mode, anchor, captureHideDepth, captureWasVisible }
+
+// Per-presence UI/geometry state, lazily initialised to the legacy defaults.
+function getPresenceState(id) {
+  let st = presenceState.get(id);
+  if (!st) {
+    st = { mode: 'collapsed', anchor: 'bottom-right', captureHideDepth: 0, captureWasVisible: false };
+    presenceState.set(id, st);
+  }
+  return st;
+}
+
+const {
+  readRegistry, migrateToPresences, updatePresence,
+  createPresence, deletePresence, getPresence, listPresences,
+} = require('./presences.cjs');
+
+let mainAppWindow = null;
+
+// Registry default-presence id, cached after boot so synchronous helpers can
+// resolve a presence when an event/sender doesn't tell us which one.
+let defaultPresenceId = null;
+
+// Map an IPC event (or any webContents) to the presence that owns its window.
+// Falls back to the registry default so calls from detached/early senders still
+// route somewhere sane.
+function presenceIdForEvent(event) {
+  try {
+    return BrowserWindow.fromWebContents(event.sender)?.borPresenceId || defaultPresenceId;
+  } catch {
+    return defaultPresenceId;
+  }
+}
+
+// A live presence window to anchor host-global UI (dialogs) to: prefer the
+// default presence's window, else any live one.
+function anyPresenceWindow() {
+  const preferred = presenceWindows.get(defaultPresenceId);
+  if (preferred && !preferred.isDestroyed()) return preferred;
+  for (const win of presenceWindows.values()) {
+    if (win && !win.isDestroyed()) return win;
+  }
+  return null;
+}
+
 let allowOnboardingClose = false;
 let wallpaperApplyTimer = null;
 let presenceHotReloadInstalled = false;
 let mediaRequestHeadersInstalled = false;
-let presenceMode = 'collapsed';
-let presenceAnchor = 'bottom-right';
-let presenceCaptureHideDepth = 0;
-let presenceCaptureWasVisible = false;
+// Host-global screenshot-capture state. /api/host/presence-capture is a single
+// global screenshot operation, so it tracks one depth/visibility pair and
+// hides/shows EVERY presence window. This is the one place global capture state
+// is intentional (per-presence capture state lives in getPresenceState()).
+let captureHideDepth = 0;
+let captureWasVisible = false;
 let hostControlServer = null;
 let hostControlUrl = null;
 const hostControlToken = randomUUID();
@@ -47,11 +100,16 @@ const HELPER_RESTART_WINDOW_MS = 60_000;
 const HELPER_RESTART_BACKOFF_MS = 800;
 const surfaceWindows = new Map();
 const widgetPreviewWindows = new Map();
+let nativeAppsSyncTimer = null;
+let nativeAppsSyncInFlight = false;
+let nativeAppsResyncQueued = false;
+const NATIVE_APPS_SYNC_INTERVAL_MS = 30_000;
 const previewStateRevisions = new Map();
 const activeChatControllers = new Map();
 
 const PRESENCE_SIZES = {
   collapsed: { width: 53, height: 53 },
+  'collapsed-notification': { width: 278, height: 66 },
   expanded: { width: 520, height: 92 },
   thinking: { width: 604, height: 690 },
   minimized: { width: 188, height: 55 },
@@ -91,6 +149,123 @@ function showDockForSetup() {
 function hideDockForPresence() {
   if (process.platform !== 'darwin') return;
   try { app.dock.hide(); } catch { /* ignore */ }
+}
+
+// ---------------------------------------------------------------------------
+// Main BOR app — the persistent management window. Replaces the throwaway shell
+// page that used to flash after onboarding. Tabs: edit onboarding details, view
+// presence logs, and manage presences (create / delete / inspect).
+// ---------------------------------------------------------------------------
+
+function createMainAppWindow() {
+  if (mainAppWindow && !mainAppWindow.isDestroyed()) {
+    mainAppWindow.show();
+    mainAppWindow.focus();
+    return mainAppWindow;
+  }
+  showDockForSetup(); // a normal-chrome window — show the dock while it's open.
+  mainAppWindow = new BrowserWindow({
+    width: 1080,
+    height: 760,
+    minWidth: 820,
+    minHeight: 560,
+    title: 'Bed of Roses',
+    show: false,
+    backgroundColor: '#050409',
+    webPreferences: {
+      preload: path.join(__dirname, 'main-app-preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  mainAppWindow.once('ready-to-show', () => { mainAppWindow.show(); mainAppWindow.focus(); });
+  mainAppWindow.on('closed', () => {
+    mainAppWindow = null;
+    // Drop the dock again if no other dock-worthy window remains.
+    if (!hasOpenOnboarding()) hideDockForPresence();
+  });
+  mainAppWindow.loadFile(path.join(__dirname, 'main-app.html'));
+  return mainAppWindow;
+}
+
+// Push a fresh presence list to the Main app whenever it changes, so its
+// Manage Presences tab stays live without polling.
+function notifyMainAppPresencesChanged() {
+  if (mainAppWindow && !mainAppWindow.isDestroyed()) {
+    mainAppWindow.webContents.send('bor:presences-changed');
+  }
+}
+
+// Compact, serialisable view of a presence for the Main app (no live objects).
+function presenceSummary(entry) {
+  return {
+    id: entry.id,
+    nickname: entry.nickname,
+    displayName: entry.displayName,
+    tagName: entry.tagName,
+    createdAtMs: entry.createdAtMs || null,
+    onboarded: entry.onboarded === true,
+    port: entry.port || null,
+    dataDir: entry.dataDir,
+    running: runtimeUrls.has(entry.id),
+    orbOpen: Boolean(presenceWindows.get(entry.id) && !presenceWindows.get(entry.id).isDestroyed()),
+  };
+}
+
+// Create a brand-new presence end-to-end: registry entry → runtime → onboarding
+// window (so the user sets its name/avatar/provider). Returns the summary.
+async function spawnNewPresence({ nickname } = {}) {
+  const entry = await createPresence({ nickname: nickname || 'New presence' }, { nowMs: Date.now() });
+  log(`presences: created ${entry.id} (${entry.nickname}) — starting runtime + onboarding`);
+  try {
+    await startRuntime(entry);
+  } catch (err) {
+    // Runtime failed to come up — roll back so we don't leave a dead presence.
+    log(`presences: runtime failed for ${entry.id} (${err.message}); rolling back`);
+    await destroyPresence(entry.id).catch(() => {});
+    throw new Error(`could not start presence runtime: ${err.message}`);
+  }
+  // Open onboarding for the NEW presence and force it to the front so it can't
+  // get lost behind the Main app / other orbs. A fresh presence is never
+  // onboarded yet, so onboarding (name, avatar, provider + API key) always runs
+  // here; completion flips onboarded=true and creates its orb.
+  const win = createOnboardingWindow(entry);
+  if (win && !win.isDestroyed()) {
+    try { win.show(); win.focus(); if (typeof win.moveTop === 'function') win.moveTop(); } catch { /* ignore */ }
+  }
+  notifyMainAppPresencesChanged();
+  return presenceSummary(entry);
+}
+
+// Tear a presence down fully: kill its runtime, close its windows, drop its
+// registry entry + data dir (registry guards the rm to os-data/presences/).
+async function destroyPresence(id) {
+  const entry = await getPresence(id);
+  if (!entry) return { ok: false, error: 'unknown presence' };
+  const reg = await readRegistry();
+  if (Object.keys(reg.presences).length <= 1) {
+    return { ok: false, error: 'cannot delete the last presence' };
+  }
+  const proc = runtimeProcesses.get(id);
+  if (proc) { try { proc.kill('SIGTERM'); } catch { /* ignore */ } }
+  runtimeProcesses.delete(id);
+  runtimeUrls.delete(id);
+  for (const map of [presenceWindows, onboardingWindows]) {
+    const win = map.get(id);
+    if (win && !win.isDestroyed()) { try { win.close(); } catch { /* ignore */ } }
+    map.delete(id);
+  }
+  presenceState.delete(id);
+  await deletePresence(id, { removeData: true });
+  _claimedPorts.delete(entry.port);
+  // If we just deleted the default presence, repoint defaultPresenceId at a
+  // survivor so sender-less routing (host-control, dialogs) still resolves.
+  if (defaultPresenceId === id) {
+    const reg = await readRegistry();
+    defaultPresenceId = reg.defaultId || Object.keys(reg.presences)[0] || null;
+  }
+  notifyMainAppPresencesChanged();
+  return { ok: true };
 }
 
 const CONTEXT_TREE_IGNORE = new Set([
@@ -187,6 +362,53 @@ const IMAGE_MIME_BY_EXT = {
   '.heif': 'image/heif',
 };
 const IMAGE_CONTEXT_MAX_BYTES = 8 * 1024 * 1024; // 8 MB per attached image
+// HEIC/HEIF (iPhone photos) are rejected by Anthropic and OpenAI — only Gemini
+// accepts them. Transcode to JPEG at attach time so every provider can see the
+// image; macOS ships `sips`, so no extra dependency.
+const HEIC_EXTS = new Set(['.heic', '.heif']);
+const PDF_CONTEXT_MAX_BYTES = 20 * 1024 * 1024; // 20 MB per attached PDF (stays under Anthropic's 32 MB request limit once base64-inflated)
+
+function execFileAsync(cmd, args, opts = {}) {
+  return new Promise((resolve, reject) => {
+    execFile(cmd, args, { timeout: 30_000, ...opts }, (err, stdout, stderr) => {
+      if (err) {
+        const detail = (stderr && stderr.toString().trim()) || err.message;
+        reject(new Error(detail));
+        return;
+      }
+      resolve(stdout);
+    });
+  });
+}
+
+async function imagePixelDims(filePath) {
+  try {
+    const stdout = String(await execFileAsync('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', filePath]));
+    const w = Number((stdout.match(/pixelWidth:\s*(\d+)/) || [])[1]) || 0;
+    const h = Number((stdout.match(/pixelHeight:\s*(\d+)/) || [])[1]) || 0;
+    return { w, h };
+  } catch {
+    return { w: 0, h: 0 };
+  }
+}
+
+// Convert a HEIC/HEIF file to a JPEG buffer. Large photos are downscaled to a
+// 2048px long edge (keeps the payload under provider per-image limits); small
+// images keep their native size — `sips -Z` upscales, so we only apply it when
+// a dimension actually exceeds the cap. Throws if `sips` fails.
+async function heicToJpegBuffer(filePath) {
+  const out = path.join(app.getPath('temp'), `bor-heic-${randomUUID()}.jpg`);
+  try {
+    const args = ['-s', 'format', 'jpeg'];
+    const { w, h } = await imagePixelDims(filePath);
+    if (Math.max(w, h) > 2048) args.push('-Z', '2048');
+    args.push(filePath, '--out', out);
+    await execFileAsync('sips', args);
+    return await fs.readFile(out);
+  } finally {
+    fs.unlink(out).catch(() => {});
+  }
+}
 
 async function describeContextPath(filePath) {
   const stat = await fs.stat(filePath);
@@ -216,8 +438,14 @@ async function describeContextPath(filePath) {
       };
     }
     try {
-      const buf = await fs.readFile(filePath);
-      const mime = IMAGE_MIME_BY_EXT[ext] || 'application/octet-stream';
+      let mime = IMAGE_MIME_BY_EXT[ext] || 'application/octet-stream';
+      let buf;
+      if (HEIC_EXTS.has(ext)) {
+        buf = await heicToJpegBuffer(filePath);
+        mime = 'image/jpeg';
+      } else {
+        buf = await fs.readFile(filePath);
+      }
       const dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
       return {
         id: `${filePath}:${stat.size}:${stat.mtimeMs}`,
@@ -237,7 +465,48 @@ async function describeContextPath(filePath) {
         name: path.basename(filePath) || filePath,
         bytes: stat.size,
         size: contextFormatBytes(stat.size),
-        error: `image read failed: ${error.message}`,
+        error: HEIC_EXTS.has(ext)
+          ? `HEIC conversion failed: ${error.message}`
+          : `image read failed: ${error.message}`,
+      };
+    }
+  }
+  // PDFs attach as native document blocks (Anthropic/OpenAI/Gemini all ingest
+  // PDFs directly) so the model reads them without a <read_file> round-trip.
+  if (ext === '.pdf') {
+    if (stat.size > PDF_CONTEXT_MAX_BYTES) {
+      return {
+        id: `${filePath}:${stat.size}:${stat.mtimeMs}`,
+        kind: 'document',
+        path: filePath,
+        name: path.basename(filePath) || filePath,
+        bytes: stat.size,
+        size: contextFormatBytes(stat.size),
+        error: `PDF is ${contextFormatBytes(stat.size)} (max ${contextFormatBytes(PDF_CONTEXT_MAX_BYTES)} for inline context)`,
+      };
+    }
+    try {
+      const buf = await fs.readFile(filePath);
+      const dataUrl = `data:application/pdf;base64,${buf.toString('base64')}`;
+      return {
+        id: `${filePath}:${stat.size}:${stat.mtimeMs}`,
+        kind: 'document',
+        path: filePath,
+        name: path.basename(filePath) || filePath,
+        bytes: stat.size,
+        size: contextFormatBytes(stat.size),
+        mediaType: 'application/pdf',
+        dataUrl,
+      };
+    } catch (error) {
+      return {
+        id: `${filePath}:${stat.size}:${stat.mtimeMs}`,
+        kind: 'document',
+        path: filePath,
+        name: path.basename(filePath) || filePath,
+        bytes: stat.size,
+        size: contextFormatBytes(stat.size),
+        error: `PDF read failed: ${error.message}`,
       };
     }
   }
@@ -257,8 +526,9 @@ async function pickContextItems() {
     buttonLabel: 'Attach',
     properties: ['openFile', 'openDirectory', 'multiSelections'],
   };
-  const result = presenceWindow && !presenceWindow.isDestroyed()
-    ? await dialog.showOpenDialog(presenceWindow, options)
+  const anchorWin = anyPresenceWindow();
+  const result = anchorWin
+    ? await dialog.showOpenDialog(anchorWin, options)
     : await dialog.showOpenDialog(options);
   if (result.canceled || !result.filePaths?.length) return { canceled: true, items: [] };
   const items = [];
@@ -326,26 +596,32 @@ function sendControlJson(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
+// Capture hide/restore applies to ALL presence windows — a screen capture is a
+// global operation, so every orb must vanish for the screenshot and reappear
+// afterward. Depth is tracked with the host-global counter.
 function hidePresenceForCapture() {
-  if (presenceCaptureHideDepth === 0) {
-    presenceCaptureWasVisible = Boolean(presenceWindow && !presenceWindow.isDestroyed() && presenceWindow.isVisible());
-    if (presenceCaptureWasVisible) {
-      try { presenceWindow.hide(); } catch { /* ignore */ }
+  if (captureHideDepth === 0) {
+    captureWasVisible = false;
+    for (const win of presenceWindows.values()) {
+      if (win && !win.isDestroyed() && win.isVisible()) {
+        captureWasVisible = true;
+        try { win.hide(); } catch { /* ignore */ }
+      }
     }
   }
-  presenceCaptureHideDepth += 1;
-  return { ok: true, hidden: presenceCaptureWasVisible, depth: presenceCaptureHideDepth };
+  captureHideDepth += 1;
+  return { ok: true, hidden: captureWasVisible, depth: captureHideDepth };
 }
 
 function restorePresenceAfterCapture() {
-  if (presenceCaptureHideDepth > 0) presenceCaptureHideDepth -= 1;
-  if (presenceCaptureHideDepth === 0 && presenceCaptureWasVisible) {
-    presenceCaptureWasVisible = false;
-    if (presenceWindow && !presenceWindow.isDestroyed()) {
-      bringPresenceForward();
+  if (captureHideDepth > 0) captureHideDepth -= 1;
+  if (captureHideDepth === 0 && captureWasVisible) {
+    captureWasVisible = false;
+    for (const [id, win] of presenceWindows) {
+      if (win && !win.isDestroyed()) bringPresenceForward(id);
     }
   }
-  return { ok: true, hidden: false, depth: presenceCaptureHideDepth };
+  return { ok: true, hidden: false, depth: captureHideDepth };
 }
 
 async function startHostControlServer() {
@@ -375,7 +651,10 @@ async function startHostControlServer() {
         const body = await readControlJson(req);
         const surfaceId = String(body?.surfaceId || '').trim();
         if (!surfaceId) return sendControlJson(res, 400, { error: 'surfaceId required' });
-        openSurface(surfaceId).catch((err) => log(`open-surface from helper failed: ${err.message}`));
+        // Route to the requested presence if known, else the default presence.
+        const reqId = String(body?.presenceId || '').trim();
+        const presenceId = (reqId && runtimeUrls.has(reqId)) ? reqId : defaultPresenceId;
+        openSurface(presenceId, surfaceId).catch((err) => log(`open-surface from helper failed: ${err.message}`));
         return sendControlJson(res, 200, { ok: true });
       }
       return sendControlJson(res, 404, { error: 'not found' });
@@ -394,8 +673,81 @@ async function startHostControlServer() {
   return hostControlUrl;
 }
 
-async function fetchJson(pathname, options = {}) {
-  const res = await fetch(`${runtimeUrl}${pathname}`, {
+// --- Native app wrappers (~/Applications) ----------------------------------
+// Mirror every BOR-created app (kind:'app') as a thin .app bundle so it shows
+// in Finder/Applications and Spotlight. Bundles are launch shims that ping the
+// host control server to open the surface; see native-apps.cjs.
+
+function resolveElectronBinary() {
+  // In `electron v2/host/main.cjs`, process.execPath IS the Electron binary.
+  return process.execPath;
+}
+
+async function registerWithLaunchServices(paths = []) {
+  // Nudge Spotlight/LaunchServices to index freshly-written bundles. Best
+  // effort — lsregister isn't guaranteed present and indexing happens anyway,
+  // this just makes it immediate.
+  if (!paths.length) return;
+  const lsregister = '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister';
+  await Promise.all(paths.map((p) => new Promise((resolve) => {
+    execFile(lsregister, ['-f', p], { timeout: 5000 }, () => resolve());
+  })));
+}
+
+async function syncNativeAppWrappers({ immediate = false } = {}) {
+  // First cut: native-app wrappers mirror the DEFAULT presence only.
+  const presenceId = defaultPresenceId;
+  if (!presenceId || !runtimeUrls.has(presenceId)) return;
+  if (nativeAppsSyncInFlight) { nativeAppsResyncQueued = true; return; }
+  nativeAppsSyncInFlight = true;
+  try {
+    const surfaces = (await fetchJson(presenceId, '/api/surfaces')).surfaces || [];
+    const summary = await syncNativeApps({ surfaces, log: (m) => log(m) });
+    if (summary.created || summary.updated || summary.pruned || summary.errors) {
+      log(`native-apps: ${summary.created} created, ${summary.updated} updated, ${summary.pruned} pruned, ${summary.errors} errors (${summary.total} apps)`);
+    }
+    if (immediate || summary.created || summary.updated) {
+      await registerWithLaunchServices(summary.paths || []).catch(() => {});
+    }
+  } catch (err) {
+    log(`native-apps: sync failed: ${err.message}`);
+  } finally {
+    nativeAppsSyncInFlight = false;
+    if (nativeAppsResyncQueued) {
+      nativeAppsResyncQueued = false;
+      setTimeout(() => syncNativeAppWrappers().catch(() => {}), 250);
+    }
+  }
+}
+
+async function startNativeAppSync() {
+  try {
+    await writeHostControlDiscovery({
+      hostControlUrl,
+      hostControlToken,
+      electronPath: resolveElectronBinary(),
+      mainScript: path.join(__dirname, 'main.cjs'),
+      cwd: ROOT,
+    });
+  } catch (err) {
+    log(`native-apps: could not write host-control discovery: ${err.message}`);
+    return;
+  }
+  // Install/refresh the ~/Applications/Bed of Roses.app host wrapper so the app
+  // itself is launchable from Finder/Spotlight. Idempotent; non-fatal.
+  await writeMainAppWrapper({ log: (m) => log(m) }).then((p) => {
+    if (p) registerWithLaunchServices([p]).catch(() => {});
+  }).catch((err) => log(`native-apps: host wrapper failed: ${err.message}`));
+  await syncNativeAppWrappers({ immediate: true });
+  if (nativeAppsSyncTimer) clearInterval(nativeAppsSyncTimer);
+  nativeAppsSyncTimer = setInterval(() => syncNativeAppWrappers().catch(() => {}), NATIVE_APPS_SYNC_INTERVAL_MS);
+  if (typeof nativeAppsSyncTimer.unref === 'function') nativeAppsSyncTimer.unref();
+}
+
+async function fetchJson(presenceId, pathname, options = {}) {
+  const base = runtimeUrls.get(presenceId);
+  if (!base) throw new Error(`no runtime for presence ${presenceId}`);
+  const res = await fetch(`${base}${pathname}`, {
     ...options,
     headers: {
       'content-type': 'application/json',
@@ -409,33 +761,48 @@ async function fetchJson(pathname, options = {}) {
   return data;
 }
 
-async function probeRuntime(url) {
+// Probe a runtime URL. When `expectPresenceId` is given, the responder must
+// report that exact presence id — so we never mistake an orphan runtime from a
+// prior session, another presence, or Electron's own network helper squatting
+// on the port for the runtime we actually want.
+async function probeRuntime(url, expectPresenceId = null) {
   try {
     const res = await fetch(`${url}/api/providers`, { signal: AbortSignal.timeout(700) });
-    return res.ok;
+    if (!res.ok) return false;
+    if (!expectPresenceId) return true;
+    const data = await res.json().catch(() => ({}));
+    return data.presenceId === expectPresenceId;
   } catch {
     return false;
   }
 }
 
-async function startRuntime() {
-  if (runtimeUrl) {
-    if (!(await probeRuntime(runtimeUrl))) {
-      throw new Error(`BOR_RUNTIME_URL is not responding: ${runtimeUrl}`);
-    }
-    log(`using external runtime ${runtimeUrl}`);
-    return;
+// Spawn (and own) one Node runtime process per presence. Each runtime serves a
+// single presence by setting BOR_DATA_DIR to that presence's root, on its own
+// port. We deliberately do NOT adopt a runtime already on the port, and we
+// ignore BOR_RUNTIME_URL for multi-presence — each presence must own its own
+// process so they never share os-data. Returns the runtime URL.
+async function startRuntime(entry) {
+  // Choose a port: reuse the persisted one if still free AND not already claimed
+  // by another presence this boot, else find a fresh one and persist it.
+  // `_claimedPorts` guards against two presences booting close together (before
+  // either binds) both picking the same port — the OS-level isPortFree check
+  // alone can't see a sibling that hasn't listened yet.
+  const taken = new Set(_claimedPorts);
+  for (const u of runtimeUrls.values()) { try { taken.add(Number(new URL(u).port)); } catch { /* ignore */ } }
+  let port = Number.isInteger(entry.port) ? entry.port : null;
+  if (port && !taken.has(port) && await isPortFree(port)) {
+    // keep persisted port
+  } else {
+    let candidate = await findFreePort(DEFAULT_PORT);
+    while (taken.has(candidate)) candidate = await findFreePort(candidate + 1);
+    port = candidate;
+    await updatePresence(entry.id, { port }).catch((err) => log(`presences: could not persist port for ${entry.id}: ${err.message}`));
+    entry.port = port;
   }
+  _claimedPorts.add(port);
 
-  const defaultRuntimeUrl = `http://127.0.0.1:${DEFAULT_PORT}`;
-  if (await probeRuntime(defaultRuntimeUrl)) {
-    runtimeUrl = defaultRuntimeUrl;
-    log(`using existing runtime ${runtimeUrl}`);
-    return;
-  }
-
-  const port = await findFreePort(DEFAULT_PORT);
-  runtimeUrl = `http://127.0.0.1:${port}`;
+  const url = `http://127.0.0.1:${port}`;
   // Use `inherit` for stdout/stderr instead of `pipe` + on('data') forward.
   // The pipe path block-buffers small writes on macOS (~16KB pipe buffer +
   // Node's libuv async write queue), then Electron's main-thread event-loop
@@ -451,25 +818,45 @@ async function startRuntime() {
   // The trade-off is the loss of the `[bor-runtime]` prefix; we now rely
   // on the runtime's own log prefixes (`[llm]`, `[gemini]`, etc) for source
   // attribution, which is actually clearer.
-  runtimeProcess = spawn(NODE_EXECUTABLE, [SERVER_ENTRY], {
+  //
+  // IMPORTANT: always set BOR_DATA_DIR explicitly so a stray inherited value
+  // can never make two presences share a data root.
+  const proc = spawn(NODE_EXECUTABLE, [SERVER_ENTRY], {
     cwd: ROOT,
-    env: { ...process.env, PORT: String(port), BOR_HOST_MODE: 'v2', BOR_HOST_CONTROL_URL: hostControlUrl || '', BOR_HOST_CONTROL_TOKEN: hostControlToken },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      BOR_DATA_DIR: entry.dataDir,
+      BOR_HOST_MODE: 'v2',
+      BOR_HOST_CONTROL_URL: hostControlUrl || '',
+      BOR_HOST_CONTROL_TOKEN: hostControlToken,
+      BOR_PRESENCE_ID: entry.id,
+    },
     stdio: ['ignore', 'inherit', 'inherit'],
   });
-  runtimeProcess.on('exit', (code, signal) => {
-    log(`runtime exited (${signal || code})`);
-    runtimeProcess = null;
+  runtimeProcesses.set(entry.id, proc);
+  proc.on('exit', (code, signal) => {
+    log(`runtime[${entry.id}] exited (${signal || code})`);
+    runtimeProcesses.delete(entry.id);
+    runtimeUrls.delete(entry.id);
+    _claimedPorts.delete(port);
   });
 
   const startedAt = Date.now();
   while (Date.now() - startedAt < 15_000) {
-    if (await probeRuntime(runtimeUrl)) {
-      log(`started runtime ${runtimeUrl}`);
-      return;
+    // Verify it's OUR child for THIS presence — not an orphan on the same port.
+    if (await probeRuntime(url, entry.id)) {
+      runtimeUrls.set(entry.id, url);
+      log(`started runtime[${entry.id}] ${url} (data ${entry.dataDir})`);
+      return url;
+    }
+    // If our spawned child already died, stop waiting and fail fast.
+    if (proc.exitCode !== null || proc.signalCode) {
+      throw new Error(`Runtime for presence ${entry.id} exited during startup (${proc.signalCode || proc.exitCode})`);
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  throw new Error('Runtime did not become ready within 15s');
+  throw new Error(`Runtime for presence ${entry.id} did not become ready within 15s`);
 }
 
 /**
@@ -536,7 +923,8 @@ async function startHelper() {
     `--bor-helper-token=${helperToken}`,
     `--bor-helper-port=${port}`,
     `--bor-parent-pid=${process.pid}`,
-    `--bor-runtime-url=${runtimeUrl || ''}`,
+    // Host-global helper points at the default presence's runtime.
+    `--bor-runtime-url=${runtimeUrls.get(defaultPresenceId) || ''}`,
     `--bor-host-control-url=${hostControlUrl || ''}`,
     `--bor-host-control-token=${hostControlToken}`,
   ], {
@@ -605,23 +993,39 @@ function providerConfigured(config) {
 }
 
 function onboardingComplete(config) {
-  return Boolean(config?.aiName && providerConfigured(config));
+  return Boolean(
+    config?.aiName
+    && config?.avatarStyle
+    && config?.avatarColor
+    && config?.baseTheme
+    && providerConfigured(config)
+  );
 }
 
-async function getPublicConfig() {
-  return (await fetchJson('/api/config')).config || null;
+async function getPublicConfig(presenceId) {
+  return (await fetchJson(presenceId, '/api/config')).config || null;
 }
 
-function createOnboardingWindow() {
-  if (onboardingWindow && !onboardingWindow.isDestroyed()) {
-    onboardingWindow.show();
-    onboardingWindow.focus();
-    return onboardingWindow;
+// True if ANY onboarding window is still open — used to decide whether the dock
+// should stay visible (onboarding wants a normal dock app; presences hide it).
+function hasOpenOnboarding() {
+  for (const win of onboardingWindows.values()) {
+    if (win && !win.isDestroyed()) return true;
+  }
+  return false;
+}
+
+function createOnboardingWindow(entry) {
+  const existing = onboardingWindows.get(entry.id);
+  if (existing && !existing.isDestroyed()) {
+    existing.show();
+    existing.focus();
+    return existing;
   }
 
   showDockForSetup();
   allowOnboardingClose = false;
-  onboardingWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     width: 1180,
     height: 820,
     minWidth: 940,
@@ -634,64 +1038,78 @@ function createOnboardingWindow() {
       nodeIntegration: false,
     },
   });
-  onboardingWindow.on('close', (event) => {
+  win.borPresenceId = entry.id;
+  onboardingWindows.set(entry.id, win);
+  // Surface above the always-on-top Main app and onto the current Space (incl.
+  // fullscreen) — same treatment as the Main app + presence orb windows.
+  // Without this the onboarding window opens BEHIND the screen-saver-level Main
+  // app (and on a different Space when fullscreen), so it looks like onboarding
+  // never appears and "Finish setup" does nothing.
+  try {
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    win.setAlwaysOnTop(true, 'screen-saver');
+  } catch { /* non-macOS / unsupported */ }
+  win.on('close', (event) => {
     if (allowOnboardingClose) return;
     event.preventDefault();
-    getPublicConfig()
+    getPublicConfig(entry.id)
       .then((config) => {
         if (onboardingComplete(config)) {
           allowOnboardingClose = true;
-          onboardingWindow?.close();
+          win.close();
           return;
         }
         log('prevented onboarding close before setup completed');
-        onboardingWindow?.show();
-        onboardingWindow?.focus();
+        win.show();
+        win.focus();
       })
       .catch(() => {
         log('prevented onboarding close while setup state was unavailable');
-        onboardingWindow?.show();
-        onboardingWindow?.focus();
+        win.show();
+        win.focus();
       });
   });
-  onboardingWindow.once('ready-to-show', () => {
-    onboardingWindow.show();
-    onboardingWindow.focus();
+  win.once('ready-to-show', () => {
+    win.show();
+    win.focus();
   });
-  onboardingWindow.webContents.on('render-process-gone', (_event, details) => {
+  win.webContents.on('render-process-gone', (_event, details) => {
     log(`onboarding render process gone: ${details.reason || 'unknown'}`);
   });
-  onboardingWindow.webContents.on('did-fail-load', (_event, code, description) => {
+  win.webContents.on('did-fail-load', (_event, code, description) => {
     log(`onboarding failed to load: ${code} ${description}`);
   });
-  onboardingWindow.on('closed', () => {
-    log('onboarding window closed');
-    onboardingWindow = null;
+  win.on('closed', () => {
+    log(`onboarding window closed (${entry.id})`);
+    onboardingWindows.delete(entry.id);
   });
-  onboardingWindow.loadURL(`${runtimeUrl}/?host=v2`);
+  win.loadURL(`${runtimeUrls.get(entry.id)}/?host=v2`);
 
   const timer = setInterval(async () => {
-    if (!onboardingWindow || onboardingWindow.isDestroyed()) {
+    if (win.isDestroyed()) {
       clearInterval(timer);
       return;
     }
     try {
-      const config = await getPublicConfig();
+      const config = await getPublicConfig(entry.id);
       if (onboardingComplete(config)) {
         clearInterval(timer);
         allowOnboardingClose = true;
-        onboardingWindow.close();
-        hideDockForPresence();
-        createPresenceWindow();
-        syncWidgetPreviews().catch((error) => log(`widget preview sync failed: ${error.message}`));
-        queueWallpaperApply(config);
+        win.close();
+        await updatePresence(entry.id, { onboarded: true }).catch(() => {});
+        entry.onboarded = true;
+        await createPresenceWindow(entry);
+        syncWidgetPreviews(entry.id).catch((error) => log(`widget preview sync failed: ${error.message}`));
+        if (entry.id === defaultPresenceId) queueWallpaperApply(config);
+        // Only hide the dock once no onboarding window remains open.
+        if (!hasOpenOnboarding()) hideDockForPresence();
       }
     } catch {
       // Runtime may still be settling.
     }
   }, 1200);
 
-  return onboardingWindow;
+  return win;
 }
 
 function presenceSizeForMode(mode) {
@@ -699,13 +1117,14 @@ function presenceSizeForMode(mode) {
 }
 
 function orbCenterForMode(mode) {
-  return mode === 'collapsed' || mode === 'minimized'
+  return mode === 'collapsed' || mode === 'collapsed-notification' || mode === 'minimized'
     ? PRESENCE_COLLAPSED_ORB_CENTER
     : PRESENCE_ORB_CENTER;
 }
 
 function presenceModeForBounds(bounds) {
   if (!bounds || (bounds.width <= 72 && bounds.height <= 72)) return 'collapsed';
+  if (bounds.width >= 220 && bounds.width < 340 && bounds.height <= 82) return 'collapsed-notification';
   if (bounds.width >= 580 && bounds.height >= 500) return 'thinking';
   if (bounds.width >= 150 && bounds.width < 260 && bounds.height <= 72) return 'minimized';
   return 'expanded';
@@ -730,7 +1149,7 @@ function fallbackOrbPoint(display = screen.getPrimaryDisplay().workArea) {
   };
 }
 
-function orbPointForBounds(bounds, mode = presenceMode, anchor = presenceAnchor) {
+function orbPointForBounds(bounds, mode = 'collapsed', anchor = 'bottom-right') {
   if (!bounds) return fallbackOrbPoint();
   if (mode === 'collapsed') {
     return {
@@ -784,10 +1203,10 @@ function boundsForAnchor(point, size, anchor, display = displayForPoint(point), 
   return clampBounds({ ...size, x, y }, display);
 }
 
-function presenceLayoutForMode(mode, currentBounds) {
+function presenceLayoutForMode(mode, currentBounds, currentMode = 'collapsed', currentAnchor = 'bottom-right') {
   const size = presenceSizeForMode(mode);
   const sourcePoint = currentBounds
-    ? orbPointForBounds(currentBounds)
+    ? orbPointForBounds(currentBounds, currentMode, currentAnchor)
     : fallbackOrbPoint();
   const display = displayForPoint(sourcePoint);
 
@@ -808,33 +1227,49 @@ function presenceBoundsForMode(mode, currentBounds) {
   return presenceLayoutForMode(mode, currentBounds).bounds;
 }
 
+function presenceSizeMatchesMode(bounds, mode) {
+  const size = presenceSizeForMode(mode);
+  return Math.abs(Number(bounds?.width) - size.width) <= 1
+    && Math.abs(Number(bounds?.height) - size.height) <= 1;
+}
+
 function clampPresenceBounds(bounds) {
   return clampBounds(bounds);
 }
 
-function sendPresenceLayout(bounds = null) {
-  if (!presenceWindow || presenceWindow.isDestroyed()) return;
-  presenceWindow.webContents.send('bor:presence-layout', {
-    mode: presenceMode,
-    anchor: presenceAnchor,
-    bounds: bounds || presenceWindow.getBounds(),
+function sendPresenceLayout(id, bounds = null) {
+  const win = presenceWindows.get(id);
+  if (!win || win.isDestroyed()) return;
+  const st = getPresenceState(id);
+  win.webContents.send('bor:presence-layout', {
+    mode: st.mode,
+    anchor: st.anchor,
+    bounds: bounds || win.getBounds(),
   });
 }
 
-function bringPresenceForward(bounds = null) {
-  if (!presenceWindow || presenceWindow.isDestroyed()) return;
-  if (bounds) presenceWindow.setBounds(bounds, false);
-  presenceWindow.setOpacity(1);
-  presenceWindow.setIgnoreMouseEvents(false);
-  presenceWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  presenceWindow.setAlwaysOnTop(true, 'screen-saver');
-  presenceWindow.showInactive();
-  if (typeof presenceWindow.moveTop === 'function') presenceWindow.moveTop();
+function bringPresenceForward(id, bounds = null) {
+  const win = presenceWindows.get(id);
+  if (!win || win.isDestroyed()) return;
+  if (bounds) win.setBounds(bounds, false);
+  win.setOpacity(1);
+  // Start click-through: the orb window is a big TRANSPARENT rectangle, so if it
+  // captured the whole area it would block clicks to apps underneath (Chrome,
+  // etc.). The renderer re-enables capture only while the cursor is actually
+  // over the orb/bubble (see bor:set-mouse-ignore + presence.js hit-testing).
+  win.setIgnoreMouseEvents(true, { forward: true });
+  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  win.setAlwaysOnTop(true, 'screen-saver');
+  win.showInactive();
+  if (typeof win.moveTop === 'function') win.moveTop();
 }
 
 function runtimeOrigin() {
+  // Any valid http origin works for the YouTube Referer hack; use the default
+  // presence's runtime when available.
+  const url = runtimeUrls.get(defaultPresenceId);
   try {
-    return new URL(runtimeUrl || `http://127.0.0.1:${DEFAULT_PORT}`).origin;
+    return new URL(url || `http://127.0.0.1:${DEFAULT_PORT}`).origin;
   } catch {
     return `http://127.0.0.1:${DEFAULT_PORT}`;
   }
@@ -882,9 +1317,10 @@ function installPresenceHotReload() {
       const watcher = watch(file, () => {
         clearTimeout(timer);
         timer = setTimeout(() => {
-          if (!presenceWindow || presenceWindow.isDestroyed()) return;
           log(`hot reloading ${path.basename(file)}`);
-          presenceWindow.webContents.reloadIgnoringCache();
+          for (const win of presenceWindows.values()) {
+            if (win && !win.isDestroyed()) win.webContents.reloadIgnoringCache();
+          }
         }, 120);
       });
       if (typeof watcher.unref === 'function') watcher.unref();
@@ -894,21 +1330,67 @@ function installPresenceHotReload() {
   }
 }
 
-async function createPresenceWindow() {
-  if (presenceWindow && !presenceWindow.isDestroyed()) {
-    bringPresenceForward();
-    return presenceWindow;
+// Global cursor poll — the drag-drop enabler. The presence window is
+// click-through (setIgnoreMouseEvents) and the renderer flips it to capturing
+// via forwarded mousemove. Native file drags (e.g. a screenshot dragged from
+// Finder) DON'T deliver mousemove, so without this the window stays
+// click-through and the drop falls through to whatever is behind it (the
+// terminal/desktop). Polling the global cursor works during a drag; we feed
+// window-relative coords to the renderer so its existing precise hit-test runs
+// and captures the window before the drop lands.
+let cursorPollTimer = null;
+const cursorInsidePresence = new Map(); // win.id -> bool
+function startCursorPoll() {
+  if (cursorPollTimer) return;
+  cursorPollTimer = setInterval(() => {
+    let pt;
+    try { pt = screen.getCursorScreenPoint(); } catch { return; }
+    for (const win of presenceWindows.values()) {
+      if (!win || win.isDestroyed() || !win.isVisible()) continue;
+      let b;
+      try { b = win.getBounds(); } catch { continue; }
+      const inside = pt.x >= b.x && pt.x < b.x + b.width && pt.y >= b.y && pt.y < b.y + b.height;
+      const was = cursorInsidePresence.get(win.id) || false;
+      if (inside) {
+        cursorInsidePresence.set(win.id, true);
+        try { win.webContents.send('bor:cursor-poll', { x: pt.x - b.x, y: pt.y - b.y }); } catch { /* window gone */ }
+      } else if (was) {
+        cursorInsidePresence.set(win.id, false);
+        try { win.webContents.send('bor:cursor-poll', null); } catch { /* window gone */ }
+      }
+    }
+  }, 80);
+  if (typeof cursorPollTimer.unref === 'function') cursorPollTimer.unref();
+}
+
+async function createPresenceWindow(entry) {
+  const existing = presenceWindows.get(entry.id);
+  if (existing && !existing.isDestroyed()) {
+    bringPresenceForward(entry.id);
+    return existing;
   }
 
-  const state = await readHostState();
-  const saved = state.presenceBounds;
-  presenceAnchor = state.presenceAnchor || presenceAnchor;
-  presenceMode = state.presenceMode || presenceModeForBounds(saved);
-  const initialLayout = presenceLayoutForMode('collapsed', saved || null);
-  presenceMode = 'collapsed';
-  presenceAnchor = initialLayout.anchor;
-  presenceWindow = new BrowserWindow({
-    ...initialLayout.bounds,
+  const st = getPresenceState(entry.id);
+  // Per-presence geometry now lives in the registry entry (bounds/anchor),
+  // not in v2-host.json. We always open collapsed.
+  const saved = entry.bounds || null;
+  st.anchor = entry.anchor || st.anchor;
+  st.mode = 'collapsed';
+  const initialLayout = presenceLayoutForMode('collapsed', saved, 'collapsed', st.anchor);
+  st.anchor = initialLayout.anchor;
+
+  // Cascade new orbs so multiple presences don't perfectly stack — offset each
+  // additional orb down-right within its work area before clamping.
+  let bounds = initialLayout.bounds;
+  if (!saved && presenceWindows.size > 0) {
+    const display = displayForPoint({ x: bounds.x, y: bounds.y });
+    const offset = 48 * presenceWindows.size;
+    bounds = clampBounds({ ...bounds, x: bounds.x - offset, y: bounds.y - offset }, display);
+    st.anchor = anchorForPoint(orbPointForBounds(bounds, 'collapsed'), display);
+  }
+
+  const win = new BrowserWindow({
+    ...bounds,
     frame: false,
     transparent: true,
     show: false,
@@ -924,7 +1406,7 @@ async function createPresenceWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      additionalArguments: [`--bor-runtime-url=${runtimeUrl}`],
+      additionalArguments: [`--bor-runtime-url=${runtimeUrls.get(entry.id)}`, `--bor-presence-id=${entry.id}`],
       // CRITICAL — keep timers (setTimeout / scheduleBubbleRender) running
       // at full rate when the presence orb is not the foreground window.
       // Chromium's default is to throttle setTimeout in non-foreground
@@ -935,36 +1417,43 @@ async function createPresenceWindow() {
       backgroundThrottling: false,
     },
   });
+  win.borPresenceId = entry.id;
+  const winId = win.id;
+  presenceWindows.set(entry.id, win);
+  startCursorPoll();
   // Belt-and-suspenders — the webPreferences flag is honored at window
   // creation, but call setBackgroundThrottling explicitly so a future
   // Electron upgrade can't silently re-throttle us.
-  try { presenceWindow.webContents.setBackgroundThrottling(false); } catch { /* not available on older Electron */ }
-  presenceWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  presenceWindow.setAlwaysOnTop(true, 'screen-saver');
-  presenceWindow.loadFile(path.join(__dirname, 'presence.html'));
+  try { win.webContents.setBackgroundThrottling(false); } catch { /* not available on older Electron */ }
+  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  win.setAlwaysOnTop(true, 'screen-saver');
+  win.loadFile(path.join(__dirname, 'presence.html'));
   installPresenceHotReload();
-  presenceWindow.once('ready-to-show', () => bringPresenceForward(initialLayout.bounds));
-  presenceWindow.webContents.once('did-finish-load', () => {
-    sendPresenceLayout(initialLayout.bounds);
-    bringPresenceForward(initialLayout.bounds);
+  win.once('ready-to-show', () => {
+    bringPresenceForward(entry.id, bounds);
   });
-  presenceWindow.webContents.on('render-process-gone', (_event, details) => {
-    log(`presence render process gone: ${details.reason || 'unknown'}`);
+  win.webContents.once('did-finish-load', () => {
+    sendPresenceLayout(entry.id, bounds);
+    bringPresenceForward(entry.id, bounds);
   });
-  presenceWindow.webContents.on('did-fail-load', (_event, code, description) => {
-    log(`presence failed to load: ${code} ${description}`);
+  win.webContents.on('render-process-gone', (_event, details) => {
+    log(`presence[${entry.id}] render process gone: ${details.reason || 'unknown'}`);
   });
-  presenceWindow.on('moved', () => {
-    if (!presenceWindow || presenceWindow.isDestroyed()) return;
-    const bounds = presenceWindow.getBounds();
-    if (presenceMode === 'collapsed') {
-      presenceAnchor = anchorForPoint(orbPointForBounds(bounds, 'collapsed'));
-      sendPresenceLayout(bounds);
+  win.webContents.on('did-fail-load', (_event, code, description) => {
+    log(`presence[${entry.id}] failed to load: ${code} ${description}`);
+  });
+  win.on('moved', () => {
+    if (win.isDestroyed()) return;
+    const moved = win.getBounds();
+    const state = getPresenceState(entry.id);
+    if (state.mode === 'collapsed') {
+      state.anchor = anchorForPoint(orbPointForBounds(moved, 'collapsed'));
+      sendPresenceLayout(entry.id, moved);
     }
-    writeHostState({ presenceBounds: bounds, presenceAnchor, presenceMode }).catch(() => {});
+    updatePresence(entry.id, { bounds: moved, anchor: state.anchor }).catch(() => {});
   });
-  presenceWindow.on('closed', () => { presenceWindow = null; });
-  return presenceWindow;
+  win.on('closed', () => { presenceWindows.delete(entry.id); cursorInsidePresence.delete(winId); });
+  return win;
 }
 
 function widgetSizeToBounds(surface) {
@@ -1029,14 +1518,14 @@ function clampBounds(bounds, display = screen.getDisplayMatching(bounds).workAre
   };
 }
 
-async function resolveSurface(surfaceOrId) {
+async function resolveSurface(presenceId, surfaceOrId) {
   if (surfaceOrId && typeof surfaceOrId === 'object') return surfaceOrId;
-  const { surfaces: widgets } = await fetchJson('/api/surfaces');
+  const { surfaces: widgets } = await fetchJson(presenceId, '/api/surfaces');
   return widgets.find((surface) => surface.id === surfaceOrId) || null;
 }
 
-async function patchWidgetLayout(id, bounds) {
-  return fetchJson(`/api/surfaces/${encodeURIComponent(id)}`, {
+async function patchWidgetLayout(presenceId, id, bounds) {
+  return fetchJson(presenceId, `/api/surfaces/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: JSON.stringify({
       layout: {
@@ -1049,16 +1538,16 @@ async function patchWidgetLayout(id, bounds) {
   }).catch(() => null);
 }
 
-async function bridgePreviewMessage(surfaceId, message) {
+async function bridgePreviewMessage(presenceId, surfaceId, message) {
   if (!surfaceId) return { error: 'surface id missing' };
   switch (message.type) {
     case 'state-get': {
-      const data = await fetchJson(`/api/surfaces/${encodeURIComponent(surfaceId)}/state`);
+      const data = await fetchJson(presenceId, `/api/surfaces/${encodeURIComponent(surfaceId)}/state`);
       previewStateRevisions.set(surfaceId, data.revision || null);
       return { state: data.state || {} };
     }
     case 'state-set': {
-      const data = await fetchJson(`/api/surfaces/${encodeURIComponent(surfaceId)}/state`, {
+      const data = await fetchJson(presenceId, `/api/surfaces/${encodeURIComponent(surfaceId)}/state`, {
         method: 'POST',
         body: JSON.stringify({
           __borStateEnvelope: true,
@@ -1071,7 +1560,7 @@ async function bridgePreviewMessage(surfaceId, message) {
       return { ok: true, bytes: data.bytes };
     }
     case 'llm-request':
-      return fetchJson('/api/surface-llm', {
+      return fetchJson(presenceId, '/api/surface-llm', {
         method: 'POST',
         body: JSON.stringify({
           surfaceId,
@@ -1081,17 +1570,17 @@ async function bridgePreviewMessage(surfaceId, message) {
         }),
       });
     case 'web-search':
-      return fetchJson('/api/surface-search', {
+      return fetchJson(presenceId, '/api/surface-search', {
         method: 'POST',
         body: JSON.stringify({ surfaceId, query: message.query, limit: message.limit }),
       });
     case 'web-fetch':
-      return fetchJson('/api/surface-fetch', {
+      return fetchJson(presenceId, '/api/surface-fetch', {
         method: 'POST',
         body: JSON.stringify({ surfaceId, url: message.url }),
       });
     case 'image-generate':
-      return fetchJson('/api/surface-image-gen', {
+      return fetchJson(presenceId, '/api/surface-image-gen', {
         method: 'POST',
         body: JSON.stringify({ surfaceId, prompt: message.prompt, size: message.size }),
       });
@@ -1125,10 +1614,12 @@ function reloadSurfaceViews(surfaceId, { includeSurface = true, includePreview =
  * CSS media queries. The legacy widget-preview.html / iframe path stays
  * unused but in tree as a rollback option through Phase 5.
  */
-async function tryOpenPreviewViaHelper(surface, index) {
+async function tryOpenPreviewViaHelper(presenceId, surface, index) {
   if (process.env.BOR_USE_SWIFT_PREVIEWS === '0') return null;
   if (!shouldUseHelper()) return null;
   if (!surface?.id || surface.kind === 'app') return null;
+  const runtimeUrl = runtimeUrls.get(presenceId);
+  if (!runtimeUrl) return null;
   const bounds = widgetPreviewBounds(surface, index);
   try {
     const res = await fetch(`${helperUrl}/window/open`, {
@@ -1164,9 +1655,11 @@ async function tryOpenPreviewViaHelper(surface, index) {
   }
 }
 
-async function openWidgetPreview(surfaceOrId, index = 0) {
-  const surface = await resolveSurface(surfaceOrId);
+async function openWidgetPreview(presenceId, surfaceOrId, index = 0) {
+  const surface = await resolveSurface(presenceId, surfaceOrId);
   if (!surface?.id || surface.kind === 'app') return null;
+  const runtimeUrl = runtimeUrls.get(presenceId);
+  if (!runtimeUrl) return null;
   const existing = widgetPreviewWindows.get(surface.id);
   if (existing && !existing.isDestroyed()) {
     existing.webContents.reloadIgnoringCache();
@@ -1177,7 +1670,7 @@ async function openWidgetPreview(surfaceOrId, index = 0) {
   // Swift-helper cutover gated by flag during Phases 4-5. When flag is on
   // AND helper succeeds, we return a sentinel and skip Electron window
   // creation entirely. When unset/failed we fall through.
-  const viaSwift = await tryOpenPreviewViaHelper(surface, index);
+  const viaSwift = await tryOpenPreviewViaHelper(presenceId, surface, index);
   if (viaSwift) return viaSwift;
 
   const bounds = widgetPreviewBounds(surface, index);
@@ -1214,9 +1707,10 @@ async function openWidgetPreview(surfaceOrId, index = 0) {
       preload: path.join(__dirname, 'preview-preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      additionalArguments: [`--bor-runtime-url=${runtimeUrl}`, `--bor-surface-id=${surface.id}`],
+      additionalArguments: [`--bor-runtime-url=${runtimeUrl}`, `--bor-surface-id=${surface.id}`, `--bor-presence-id=${presenceId}`],
     },
   });
+  win.borPresenceId = presenceId;
   widgetPreviewWindows.set(surface.id, win);
   win.setAlwaysOnTop(false);
   // Explicitly pin to a single Space (off = not all-spaces), and don't
@@ -1227,20 +1721,62 @@ async function openWidgetPreview(surfaceOrId, index = 0) {
   win.once('ready-to-show', () => {
     win.showInactive();
   });
-  win.on('moved', () => patchWidgetLayout(surface.id, win.getBounds()));
+  win.on('moved', () => patchWidgetLayout(presenceId, surface.id, win.getBounds()));
   win.on('closed', () => widgetPreviewWindows.delete(surface.id));
   await win.loadFile(path.join(__dirname, 'widget-preview.html'));
   return win;
 }
 
-async function syncWidgetPreviews() {
-  const { surfaces: widgets } = await fetchJson('/api/surfaces');
+// --- MCP marketplace window -------------------------------------------------
+// One window, reused across opens. Hidden (not destroyed) on close, so the
+// catalog the renderer already holds is instantly there on the next open.
+let mcpMarketplaceWindow = null;
+
+function openMcpMarketplace(presenceId) {
+  if (!presenceId || !runtimeUrls.has(presenceId)) return;
+  if (mcpMarketplaceWindow && !mcpMarketplaceWindow.isDestroyed()) {
+    mcpMarketplaceWindow.borPresenceId = presenceId; // serve whichever presence asked
+    mcpMarketplaceWindow.show();
+    mcpMarketplaceWindow.focus();
+    mcpMarketplaceWindow.webContents.send('bor:mcp-shown');
+    return;
+  }
+  const win = new BrowserWindow({
+    width: 900,
+    height: 700,
+    minWidth: 560,
+    minHeight: 440,
+    title: 'MCP Marketplace',
+    backgroundColor: '#fbfbfa',
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'mcp-preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  win.borPresenceId = presenceId;
+  mcpMarketplaceWindow = win;
+  win.once('ready-to-show', () => { win.show(); win.focus(); });
+  // Hide instead of destroy unless the app is actually quitting.
+  win.on('close', (e) => {
+    if (helperShutdownRequested) return;
+    e.preventDefault();
+    win.hide();
+  });
+  win.on('closed', () => { mcpMarketplaceWindow = null; });
+  win.loadFile(path.join(__dirname, 'mcp-marketplace.html'));
+}
+
+async function syncWidgetPreviews(presenceId = defaultPresenceId) {
+  if (!presenceId || !runtimeUrls.has(presenceId)) return;
+  const { surfaces: widgets } = await fetchJson(presenceId, '/api/surfaces');
   const widgetSurfaces = (widgets || []).filter((surface) => surface.kind !== 'app');
   const activeIds = new Set(widgetSurfaces.map((surface) => surface.id));
   for (const [id, win] of widgetPreviewWindows) {
     if (!activeIds.has(id) && !win.isDestroyed()) win.close();
   }
-  await Promise.all(widgetSurfaces.map((surface, index) => openWidgetPreview(surface, index).catch((error) => {
+  await Promise.all(widgetSurfaces.map((surface, index) => openWidgetPreview(presenceId, surface, index).catch((error) => {
     log(`widget preview failed for ${surface.id}: ${error.message}`);
   })));
 }
@@ -1266,9 +1802,11 @@ function shouldUseHelper() {
   return Boolean(helperUrl);
 }
 
-async function tryOpenSurfaceViaHelper(surface) {
+async function tryOpenSurfaceViaHelper(presenceId, surface) {
   if (process.env.BOR_USE_SWIFT_APP_WINDOWS === '0') return null;
   if (!shouldUseHelper()) return null;
+  const runtimeUrl = runtimeUrls.get(presenceId);
+  if (!runtimeUrl) return null;
   const size = widgetSizeToBounds(surface);
   const layout = surface?.layout || {};
   const display = screen.getPrimaryDisplay().workArea;
@@ -1301,7 +1839,7 @@ async function tryOpenSurfaceViaHelper(surface) {
       return null;
     }
     log(`opened surface ${surface.id} via Swift helper`);
-    await fetchJson('/api/memory/event', {
+    await fetchJson(presenceId, '/api/memory/event', {
       method: 'POST',
       body: JSON.stringify({ kind: 'widget.open', id: surface.id, name: surface.name, host: 'v2-swift' }),
     }).catch(() => {});
@@ -1312,8 +1850,11 @@ async function tryOpenSurfaceViaHelper(surface) {
   }
 }
 
-async function openSurface(surfaceOrId) {
-  const surface = await resolveSurface(surfaceOrId);
+async function openSurface(presenceId, surfaceOrId) {
+  if (!presenceId) presenceId = defaultPresenceId;
+  const runtimeUrl = runtimeUrls.get(presenceId);
+  if (!runtimeUrl) throw new Error(`no runtime for presence ${presenceId}`);
+  const surface = await resolveSurface(presenceId, surfaceOrId);
   if (!surface?.id) throw new Error('Surface not found');
   const existing = surfaceWindows.get(surface.id);
   if (existing && !existing.isDestroyed()) {
@@ -1325,7 +1866,7 @@ async function openSurface(surfaceOrId) {
   // Swift-helper cutover lives behind a flag. When unset (default during
   // Phases 3-5) we fall through to the existing Electron BrowserWindow
   // path so the migration can roll back per-surface or per-session.
-  const viaSwift = await tryOpenSurfaceViaHelper(surface);
+  const viaSwift = await tryOpenSurfaceViaHelper(presenceId, surface);
   if (viaSwift) return viaSwift;
 
   const size = widgetSizeToBounds(surface);
@@ -1341,9 +1882,10 @@ async function openSurface(surfaceOrId) {
       preload: path.join(__dirname, 'surface-preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      additionalArguments: [`--bor-runtime-url=${runtimeUrl}`, `--bor-surface-id=${surface.id}`],
+      additionalArguments: [`--bor-runtime-url=${runtimeUrl}`, `--bor-surface-id=${surface.id}`, `--bor-presence-id=${presenceId}`],
     },
   });
+  win.borPresenceId = presenceId;
   surfaceWindows.set(surface.id, win);
   win.once('ready-to-show', () => win.show());
   win.on('closed', () => surfaceWindows.delete(surface.id));
@@ -1352,7 +1894,7 @@ async function openSurface(surfaceOrId) {
     return { action: 'deny' };
   });
   await win.loadURL(`${runtimeUrl}/widgets/${encodeURIComponent(surface.id)}/widget.html`);
-  await fetchJson('/api/memory/event', {
+  await fetchJson(presenceId, '/api/memory/event', {
     method: 'POST',
     body: JSON.stringify({ kind: 'widget.open', id: surface.id, name: surface.name, host: 'v2' }),
   }).catch(() => {});
@@ -1377,13 +1919,40 @@ function parseSseBlock(raw) {
 }
 
 async function streamChatToRenderer(sender, requestId, messages) {
+  // Route to the presence that owns the sender window. We do NOT fall back to
+  // the default presence here — every orb has its own borPresenceId, and
+  // misrouting to another presence's runtime is exactly what made two presences
+  // appear to share one sequential stream.
+  let presenceId = null;
+  try { presenceId = BrowserWindow.fromWebContents(sender)?.borPresenceId || null; } catch { /* none */ }
+  if (!presenceId) presenceId = defaultPresenceId;
+
+  let runtimeUrl = runtimeUrls.get(presenceId);
+  if (!runtimeUrl) {
+    // This presence's own runtime isn't up (crashed, or never started due to a
+    // port clash). Self-heal: start ITS runtime — never borrow another's.
+    log(`chat: no runtime for ${presenceId}; starting it on demand`);
+    try {
+      const entry = await getPresence(presenceId);
+      if (!entry) throw new Error(`unknown presence ${presenceId}`);
+      runtimeUrl = await startRuntime(entry);
+    } catch (err) {
+      if (sender.isDestroyed && sender.isDestroyed()) return;
+      sender.send('bor:chat-event', { requestId, event: 'error', data: { error: `could not start runtime for ${presenceId}: ${err.message}` } });
+      return;
+    }
+  }
+  // Supersede only THIS presence's own prior task — never another presence's.
+  // Presences run independently and concurrently; aborting across presences was
+  // why starting a task on one orb left the other stuck "thinking".
   for (const [id, active] of activeChatControllers) {
-    if (id !== requestId) {
+    if (id !== requestId && active.presenceId === presenceId) {
       try { active.abort(new Error('superseded by newer BOR task')); } catch { /* noop */ }
       activeChatControllers.delete(id);
     }
   }
   const controller = new AbortController();
+  controller.presenceId = presenceId;
   activeChatControllers.set(requestId, controller);
   const sendChatEvent = (payload) => {
     if (activeChatControllers.get(requestId) !== controller) return;
@@ -1416,12 +1985,12 @@ async function streamChatToRenderer(sender, requestId, messages) {
         if (activeChatControllers.get(requestId) !== controller) break;
         sendChatEvent({ requestId, ...parsed });
         if (parsed.event === 'create_app' && parsed.data?.manifest) {
-          openSurface(parsed.data.manifest).catch((error) => {
+          openSurface(presenceId, parsed.data.manifest).catch((error) => {
             sendChatEvent({ requestId, event: 'surface_error', data: { error: error.message } });
           });
         }
         if ((parsed.event === 'launch_app' || parsed.event === 'launch_widget') && (parsed.data?.manifest || parsed.data?.id)) {
-          openSurface(parsed.data.manifest || parsed.data.id).catch((error) => {
+          openSurface(presenceId, parsed.data.manifest || parsed.data.id).catch((error) => {
             sendChatEvent({ requestId, event: 'surface_error', data: { error: error.message } });
           });
         }
@@ -1429,7 +1998,7 @@ async function streamChatToRenderer(sender, requestId, messages) {
           reloadSurfaceViews(parsed.data.manifest.id, { includePreview: false });
         }
         if ((parsed.event === 'create_widget' || parsed.event === 'update_widget') && parsed.data?.manifest) {
-          openWidgetPreview(parsed.data.manifest).catch((error) => {
+          openWidgetPreview(presenceId, parsed.data.manifest).catch((error) => {
             sendChatEvent({ requestId, event: 'surface_error', data: { error: error.message } });
           });
           if (parsed.event === 'update_widget' && parsed.data.manifest.id) {
@@ -1459,6 +2028,8 @@ async function streamChatToRenderer(sender, requestId, messages) {
 }
 
 function cssUrlToAbsolute(value) {
+  // Wallpaper is a host-global, default-presence concern.
+  const runtimeUrl = runtimeOrigin();
   const match = String(value || '').match(/url\((['"]?)(.*?)\1\)/);
   if (!match) return null;
   const raw = match[2];
@@ -1468,6 +2039,7 @@ function cssUrlToAbsolute(value) {
 }
 
 function wallpaperHtml(config, width, height) {
+  const runtimeUrl = runtimeOrigin();
   const wallpaper = config?.wallpaper || 'radial-gradient(circle at 50% 50%, #141021, #050409 72%)';
   const decorations = Array.isArray(config?.decorations) ? config.decorations : [];
   const decor = decorations.map((item) => {
@@ -1568,17 +2140,64 @@ async function applyMacWallpaper(config) {
   log(`applied macOS wallpaper ${wallpaperPath} via ${appliedVia}`);
 }
 
-function installIpcHandlers() {
-  ipcMain.handle('bor:get-runtime-url', () => runtimeUrl);
-  ipcMain.handle('bor:get-config', () => getPublicConfig());
-  ipcMain.handle('bor:get-surface', async (_event, surfaceId) => resolveSurface(surfaceId));
-  ipcMain.handle('bor:get-presence-bounds', () => {
-    if (!presenceWindow || presenceWindow.isDestroyed()) return null;
-    return presenceWindow.getBounds();
+function playNotificationSound() {
+  return new Promise((resolve) => {
+    const soundPath = process.env.BOR_NOTIFICATION_SOUND || '/System/Library/Sounds/Glass.aiff';
+    execFile('/usr/bin/afplay', [soundPath], { timeout: 3_000 }, (error) => {
+      if (!error) return resolve({ ok: true, sound: soundPath });
+      execFile('/usr/bin/osascript', ['-e', 'beep 1'], { timeout: 3_000 }, (fallbackError) => {
+        resolve({ ok: !fallbackError, sound: fallbackError ? null : 'beep', error: (fallbackError || error)?.message });
+      });
+    });
   });
-  ipcMain.handle('bor:set-presence-bounds', (_event, bounds) => {
-    if (!presenceWindow || presenceWindow.isDestroyed()) return { ok: false };
-    const current = presenceWindow.getBounds();
+}
+
+function installIpcHandlers() {
+  // Each handler resolves the caller's presence from its window so every runtime
+  // call is scoped to the right BOR instance.
+  ipcMain.handle('bor:get-runtime-url', (event) => runtimeUrls.get(presenceIdForEvent(event)) || null);
+
+  // --- MCP marketplace ---
+  ipcMain.handle('bor:open-mcp-marketplace', (event) => { openMcpMarketplace(presenceIdForEvent(event)); });
+  ipcMain.handle('bor:mcp-get-catalog', (event, opts = {}) =>
+    fetchJson(presenceIdForEvent(event), `/api/mcp/marketplace${opts && opts.refresh ? '?refresh=1' : ''}`));
+  ipcMain.handle('bor:mcp-get-installed', (event) => fetchJson(presenceIdForEvent(event), '/api/mcp/installed'));
+  ipcMain.handle('bor:mcp-get-theme', async (event) => {
+    const cfg = await getPublicConfig(presenceIdForEvent(event)).catch(() => ({}));
+    return { theme: (cfg && cfg.baseTheme) || '' };
+  });
+  ipcMain.handle('bor:mcp-ask', (event, query) =>
+    fetchJson(presenceIdForEvent(event), '/api/mcp/ask', { method: 'POST', body: JSON.stringify({ query }) }));
+  ipcMain.handle('bor:mcp-install', async (event, mcpId) => {
+    const presenceId = presenceIdForEvent(event);
+    const result = await fetchJson(presenceId, '/api/mcp/install', { method: 'POST', body: JSON.stringify({ mcpId }) });
+    // Kick the install off as a chat task in the owning presence (LLM-driven,
+    // exactly like Sixth — it reads .bor/mcp.json, writes the server, runs setup).
+    if (result && result.task) {
+      const pwin = presenceWindows.get(presenceId);
+      if (pwin && !pwin.isDestroyed()) {
+        pwin.webContents.send('bor:submit-prompt', result.task);
+        try { pwin.show(); } catch { /* ignore */ }
+      }
+    }
+    return result;
+  });
+  ipcMain.handle('bor:mcp-close', () => {
+    if (mcpMarketplaceWindow && !mcpMarketplaceWindow.isDestroyed()) mcpMarketplaceWindow.hide();
+  });
+  ipcMain.handle('bor:get-config', (event) => getPublicConfig(presenceIdForEvent(event)));
+  ipcMain.handle('bor:get-surface', async (event, surfaceId) => resolveSurface(presenceIdForEvent(event), surfaceId));
+  ipcMain.handle('bor:get-presence-bounds', (event) => {
+    const win = presenceWindows.get(presenceIdForEvent(event));
+    if (!win || win.isDestroyed()) return null;
+    return win.getBounds();
+  });
+  ipcMain.handle('bor:set-presence-bounds', (event, bounds) => {
+    const id = presenceIdForEvent(event);
+    const win = presenceWindows.get(id);
+    if (!win || win.isDestroyed()) return { ok: false };
+    const st = getPresenceState(id);
+    const current = win.getBounds();
     const display = screen.getDisplayMatching(current).workArea;
     const requestedWidth = Number.isFinite(Number(bounds?.width))
       ? Math.max(48, Math.min(display.width, Math.round(Number(bounds.width))))
@@ -1593,19 +2212,19 @@ function installIpcHandlers() {
       width: requestedWidth,
       height: requestedHeight,
     });
-    const point = orbPointForBounds(next, presenceMode, presenceAnchor);
+    const point = orbPointForBounds(next, st.mode, st.anchor);
     const pointDisplay = displayForPoint(point);
     const nextAnchor = anchorForPoint(point, pointDisplay);
-    if (nextAnchor !== presenceAnchor) {
-      presenceAnchor = nextAnchor;
-      if (presenceMode !== 'collapsed') {
-        next = boundsForAnchor(point, { width: next.width, height: next.height }, presenceAnchor, pointDisplay, presenceMode);
+    if (nextAnchor !== st.anchor) {
+      st.anchor = nextAnchor;
+      if (st.mode !== 'collapsed') {
+        next = boundsForAnchor(point, { width: next.width, height: next.height }, st.anchor, pointDisplay, st.mode);
       }
     }
-    presenceWindow.setBounds(next, false);
-    sendPresenceLayout(next);
-    writeHostState({ presenceBounds: next, presenceAnchor, presenceMode }).catch(() => {});
-    return { ok: true, bounds: next, anchor: presenceAnchor, mode: presenceMode };
+    win.setBounds(next, false);
+    sendPresenceLayout(id, next);
+    updatePresence(id, { bounds: next, anchor: st.anchor }).catch(() => {});
+    return { ok: true, bounds: next, anchor: st.anchor, mode: st.mode };
   });
   ipcMain.handle('bor:get-widget-preview-bounds', (_event, surfaceId) => {
     const win = widgetPreviewWindows.get(surfaceId);
@@ -1624,14 +2243,19 @@ function installIpcHandlers() {
     win.setBounds(next, false);
     return { ok: true, bounds: next };
   });
-  ipcMain.handle('bor:persist-widget-preview-bounds', async (_event, surfaceId, bounds) => {
+  ipcMain.handle('bor:persist-widget-preview-bounds', async (event, surfaceId, bounds) => {
     const win = widgetPreviewWindows.get(surfaceId);
+    const presenceId = win?.borPresenceId || presenceIdForEvent(event);
     const current = win && !win.isDestroyed() ? win.getBounds() : bounds;
     if (!current) return { ok: false };
-    const result = await patchWidgetLayout(surfaceId, current);
+    const result = await patchWidgetLayout(presenceId, surfaceId, current);
     return { ok: Boolean(result), bounds: current };
   });
-  ipcMain.handle('bor:preview-bridge', async (_event, surfaceId, message) => bridgePreviewMessage(surfaceId, message));
+  ipcMain.handle('bor:preview-bridge', async (event, surfaceId, message) => {
+    const win = widgetPreviewWindows.get(surfaceId);
+    const presenceId = win?.borPresenceId || presenceIdForEvent(event);
+    return bridgePreviewMessage(presenceId, surfaceId, message);
+  });
   ipcMain.handle('bor:pick-context-items', () => pickContextItems());
   // Drop-target IPC: the renderer collects absolute paths from native files
   // dropped onto the composer/bubble (via `webUtils.getPathForFile` on the
@@ -1656,8 +2280,34 @@ function installIpcHandlers() {
     }
     return { items };
   });
-  ipcMain.handle('bor:list-surfaces', async () => (await fetchJson('/api/surfaces')).surfaces || []);
-  ipcMain.handle('bor:open-surface', (_event, surfaceOrId) => openSurface(surfaceOrId));
+  ipcMain.handle('bor:list-surfaces', async (event) => {
+    const surfaces = (await fetchJson(presenceIdForEvent(event), '/api/surfaces')).surfaces || [];
+    // The App Library was just opened — a good moment to reconcile the
+    // ~/Applications wrappers (debounced; in-flight guard prevents pile-up).
+    syncNativeAppWrappers().catch(() => {});
+    return surfaces;
+  });
+  ipcMain.handle('bor:open-surface', (event, surfaceOrId) => openSurface(presenceIdForEvent(event), surfaceOrId));
+  ipcMain.handle('bor:list-notifications', async (event) => fetchJson(presenceIdForEvent(event), '/api/notifications'));
+  ipcMain.handle('bor:notification-action', async (event, payload = {}) => fetchJson(presenceIdForEvent(event), '/api/notifications', {
+    method: 'POST',
+    body: JSON.stringify(payload || {}),
+  }));
+  ipcMain.handle('bor:notification-sound', () => playNotificationSound());
+  ipcMain.handle('bor:list-conversations', async (event) => fetchJson(presenceIdForEvent(event), '/api/conversations'));
+  ipcMain.handle('bor:get-conversation', async (event, id) => fetchJson(presenceIdForEvent(event), `/api/conversations/${encodeURIComponent(String(id || ''))}`));
+  ipcMain.handle('bor:save-conversation', async (event, conversation = {}) => fetchJson(presenceIdForEvent(event), '/api/conversations', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'save', conversation }),
+  }));
+  ipcMain.handle('bor:conversation-action', async (event, payload = {}) => fetchJson(presenceIdForEvent(event), '/api/conversations', {
+    method: 'POST',
+    body: JSON.stringify(payload || {}),
+  }));
+  ipcMain.handle('bor:cron-action', async (event, payload = {}) => fetchJson(presenceIdForEvent(event), '/api/cron', {
+    method: 'POST',
+    body: JSON.stringify(payload || {}),
+  }));
   /**
    * Shortcut iframe bridge. The presence renderer catches postMessage from
    * sandboxed shortcut iframes and invokes this. We proxy to the runtime's
@@ -1721,6 +2371,24 @@ function installIpcHandlers() {
           });
           return data.error ? { error: data.error } : { url: data.url, model: data.model, mediaType: data.mediaType, bytes: data.bytes };
         }
+        case 'cron': {
+          const data = await fetchJson('/api/cron', {
+            method: 'POST',
+            body: JSON.stringify({ ...(payload || {}), surfaceId }),
+          });
+          return data.error ? { error: data.error } : data;
+        }
+        case 'notification-push': {
+          const data = await fetchJson('/api/notifications', {
+            method: 'POST',
+            body: JSON.stringify({ ...(payload || {}), action: 'add', source: payload?.source || 'surface', surfaceId }),
+          });
+          return data.error ? { error: data.error } : data;
+        }
+        case 'notifications-list': {
+          const data = await fetchJson('/api/notifications');
+          return data.error ? { error: data.error } : data;
+        }
         default:
           return { error: `unknown bridge op: ${op}` };
       }
@@ -1730,36 +2398,49 @@ function installIpcHandlers() {
     }
   });
   /** Open a BOR app full-screen from inside a shortcut iframe. */
-  ipcMain.handle('bor:launch-app-from-shortcut', async (_event, appId) => {
+  ipcMain.handle('bor:launch-app-from-shortcut', async (event, appId) => {
     if (!appId || typeof appId !== 'string' || !appId.startsWith('app-')) {
       return { ok: false, error: 'launch-app requires an app-* id' };
     }
+    const presenceId = presenceIdForEvent(event);
     try {
-      const surface = await resolveSurface(appId);
+      const surface = await resolveSurface(presenceId, appId);
       if (!surface) return { ok: false, error: `app ${appId} not found` };
-      const win = await openSurface(surface);
+      const win = await openSurface(presenceId, surface);
       return { ok: !!win, id: appId };
     } catch (err) {
       return { ok: false, error: err.message };
     }
   });
-  ipcMain.handle('bor:open-onboarding', () => {
-    createOnboardingWindow();
+  // Re-open onboarding for the CALLER's presence (parity with the old build —
+  // creating brand-new presences is a later phase's Main App job).
+  ipcMain.handle('bor:open-onboarding', async (event) => {
+    const id = presenceIdForEvent(event);
+    const reg = await readRegistry();
+    const entry = reg.presences[id];
+    if (!entry) return { ok: false, error: `unknown presence ${id}` };
+    createOnboardingWindow(entry);
     return { ok: true };
   });
-  ipcMain.handle('bor:presence-mode', (_event, mode) => {
-    if (!presenceWindow || presenceWindow.isDestroyed()) return { ok: false };
-    if (mode === presenceMode) {
-      const bounds = presenceWindow.getBounds();
-      return { ok: true, bounds, anchor: presenceAnchor, mode: presenceMode };
+  ipcMain.handle('bor:presence-mode', (event, mode) => {
+    const id = presenceIdForEvent(event);
+    const win = presenceWindows.get(id);
+    if (!win || win.isDestroyed()) return { ok: false };
+    const st = getPresenceState(id);
+    const current = win.getBounds();
+    if (mode === st.mode) {
+      if (presenceSizeMatchesMode(current, mode)) {
+        return { ok: true, bounds: current, anchor: st.anchor, mode: st.mode };
+      }
     }
-    const layout = presenceLayoutForMode(mode, presenceWindow.getBounds());
-    presenceMode = mode;
-    presenceAnchor = layout.anchor;
-    presenceWindow.setBounds(layout.bounds, true);
-    sendPresenceLayout(layout.bounds);
-    writeHostState({ presenceBounds: layout.bounds, presenceAnchor, presenceMode }).catch(() => {});
-    return { ok: true, bounds: layout.bounds, anchor: presenceAnchor, mode: presenceMode };
+    const layout = presenceLayoutForMode(mode, current, st.mode, st.anchor);
+    st.mode = mode;
+    st.anchor = layout.anchor;
+    win.setBounds(layout.bounds, false);
+    const bounds = win.getBounds();
+    sendPresenceLayout(id, bounds);
+    updatePresence(id, { bounds, anchor: st.anchor }).catch(() => {});
+    return { ok: true, bounds, anchor: st.anchor, mode: st.mode };
   });
   ipcMain.on('bor:chat-start', (event, { requestId, messages }) => {
     streamChatToRenderer(event.sender, requestId, messages).catch((error) => {
@@ -1778,32 +2459,226 @@ function installIpcHandlers() {
   ipcMain.on('bor:surface-state-updated', (_event, { surfaceId } = {}) => {
     reloadSurfaceViews(surfaceId, { includeSurface: false });
   });
+
+  // Open a URL in the user's system browser (BOR credits / sign-in flow).
+  ipcMain.handle('bor:open-external', (_event, url) => {
+    try {
+      if (typeof url === 'string' && /^https?:\/\//i.test(url)) shell.openExternal(url);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // ---- Main BOR app (presence management) ----
+  // These are registry-scoped, not sender-scoped: the Main app operates ACROSS
+  // presences (the others above are scoped to the caller's own presence).
+  ipcMain.handle('bor:presences-list', async () => {
+    const list = await listPresences();
+    return list.map(presenceSummary);
+  });
+  ipcMain.handle('bor:presences-create', async (_event, { nickname } = {}) => {
+    try { return { ok: true, presence: await spawnNewPresence({ nickname }) }; }
+    catch (err) { return { ok: false, error: err.message }; }
+  });
+  ipcMain.handle('bor:presences-delete', async (_event, { id } = {}) => {
+    try { return await destroyPresence(String(id || '')); }
+    catch (err) { return { ok: false, error: err.message }; }
+  });
+  // Update registry-level identity (nickname / displayName / tagName). Config
+  // fields (aiName, avatar, provider) go through presence-update-config below.
+  ipcMain.handle('bor:presences-update', async (_event, { id, patch } = {}) => {
+    try {
+      const allowed = {};
+      for (const k of ['nickname', 'displayName', 'tagName']) {
+        if (patch && typeof patch[k] === 'string') allowed[k] = patch[k];
+      }
+      const updated = await updatePresence(String(id || ''), allowed);
+      notifyMainAppPresencesChanged();
+      return { ok: true, presence: presenceSummary(updated) };
+    } catch (err) { return { ok: false, error: err.message }; }
+  });
+  // Read a presence's onboarding/config (public projection — keys masked by the
+  // runtime's publicConfig). Routes to that presence's runtime.
+  ipcMain.handle('bor:presence-get-config', async (_event, { id } = {}) => {
+    try { return { ok: true, config: await getPublicConfig(String(id || '')) }; }
+    catch (err) { return { ok: false, error: err.message }; }
+  });
+  // Patch a presence's config (aiName, persona, theme, avatar, provider). Merge
+  // semantics — only the provided fields change.
+  ipcMain.handle('bor:presence-update-config', async (_event, { id, patch } = {}) => {
+    try {
+      const presenceId = String(id || '');
+      if (!runtimeUrls.has(presenceId)) return { ok: false, error: 'presence runtime not running' };
+      const data = await fetchJson(presenceId, '/api/config', {
+        method: 'POST',
+        body: JSON.stringify(patch || {}),
+      });
+      notifyMainAppPresencesChanged();
+      return { ok: true, config: data.config || null };
+    } catch (err) { return { ok: false, error: err.message }; }
+  });
+  // Read a presence's accumulated data for the logs tab. Host reads the
+  // presence's own data dir directly (no runtime round-trip needed).
+  ipcMain.handle('bor:presence-get-data', async (_event, { id, kind = 'sessions' } = {}) => {
+    try { return { ok: true, ...(await readPresenceData(String(id || ''), kind)) }; }
+    catch (err) { return { ok: false, error: err.message }; }
+  });
+  ipcMain.handle('bor:open-presence-onboarding', (_event, { id } = {}) => {
+    getPresence(String(id || '')).then((entry) => { if (entry) createOnboardingWindow(entry); });
+    return { ok: true };
+  });
+  ipcMain.handle('bor:focus-presence', (_event, { id } = {}) => {
+    const win = presenceWindows.get(String(id || ''));
+    if (win && !win.isDestroyed()) { bringPresenceForward(String(id || '')); return { ok: true }; }
+    return { ok: false, error: 'presence orb not open' };
+  });
+  // Open the Main BOR app — invoked from a presence orb (settings affordance)
+  // or the dock. Idempotent: focuses if already open.
+  ipcMain.handle('bor:open-main-app', () => { createMainAppWindow(); return { ok: true }; });
+  // Toggle mouse capture for the calling presence orb. The renderer calls this
+  // with `ignore:true` when the cursor leaves the visible orb/bubble (so clicks
+  // pass through to apps underneath) and `ignore:false` when it enters, so the
+  // transparent window never blocks the desktop.
+  ipcMain.on('bor:set-mouse-ignore', (event, ignore) => {
+    const id = presenceIdForEvent(event);
+    const win = presenceWindows.get(id);
+    if (!win || win.isDestroyed()) return;
+    if (ignore) win.setIgnoreMouseEvents(true, { forward: true });
+    else win.setIgnoreMouseEvents(false);
+  });
+}
+
+// Read a presence's logs/data straight off its data dir for the Main app's logs
+// tab. `kind`: 'sessions' (recent session JSONL events) or 'audit' (audit.jsonl
+// tail) or 'summary' (counts). Bounded so a huge log can't blow up the IPC.
+async function readPresenceData(id, kind) {
+  const entry = await getPresence(id);
+  if (!entry) throw new Error('unknown presence');
+  const dir = entry.dataDir;
+  if (kind === 'summary') {
+    const counts = { sessions: 0, surfaces: 0, notifications: 0, cronJobs: 0 };
+    try { counts.sessions = (await fs.readdir(path.join(dir, 'memory', 'sessions'))).filter((f) => f.endsWith('.jsonl')).length; } catch { /* none */ }
+    try { counts.surfaces = (await fs.readdir(path.join(dir, 'surfaces'))).filter((f) => !f.startsWith('.')).length; } catch { /* none */ }
+    try {
+      const n = JSON.parse(await fs.readFile(path.join(dir, 'notifications', 'notifications.json'), 'utf8'));
+      counts.notifications = Array.isArray(n?.notifications) ? n.notifications.length : 0;
+    } catch { /* none */ }
+    try {
+      const j = JSON.parse(await fs.readFile(path.join(dir, 'cron', 'jobs.json'), 'utf8'));
+      counts.cronJobs = Array.isArray(j?.jobs) ? j.jobs.length : 0;
+    } catch { /* none */ }
+    return { counts };
+  }
+  if (kind === 'audit') {
+    try {
+      const raw = await fs.readFile(path.join(dir, 'logs', 'audit.jsonl'), 'utf8');
+      const lines = raw.trim().split('\n').filter(Boolean).slice(-200);
+      return { entries: lines.map((l) => { try { return JSON.parse(l); } catch { return { raw: l }; } }) };
+    } catch { return { entries: [] }; }
+  }
+  // sessions: newest session file's events (most recent activity)
+  try {
+    const sessionsDir = path.join(dir, 'memory', 'sessions');
+    const files = (await fs.readdir(sessionsDir)).filter((f) => f.endsWith('.jsonl')).sort();
+    const newest = files.at(-1);
+    if (!newest) return { entries: [], file: null };
+    const raw = await fs.readFile(path.join(sessionsDir, newest), 'utf8');
+    const lines = raw.trim().split('\n').filter(Boolean).slice(-200);
+    return { file: newest, entries: lines.map((l) => { try { return JSON.parse(l); } catch { return { raw: l }; } }) };
+  } catch { return { entries: [], file: null }; }
+}
+
+// Read the legacy single-tenant config directly (pre-migration) just to seed the
+// default presence's nickname + onboarded flag for the migration.
+async function readLegacyConfig() {
+  try {
+    return JSON.parse(await fs.readFile(path.join(DATA_DIR, 'config.json'), 'utf8'));
+  } catch {
+    return null;
+  }
 }
 
 async function boot() {
+  // Brand the app: show the bloom rose mark in the dock instead of the default
+  // Electron logo (the dock icon is the visible one when running in dev).
+  try {
+    const bloomIcon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'bloom-icon.png'));
+    if (!bloomIcon.isEmpty() && process.platform === 'darwin' && app.dock && app.dock.setIcon) {
+      app.dock.setIcon(bloomIcon);
+    }
+  } catch (e) {
+    log('[brand] failed to set bloom dock icon:', e?.message || e);
+  }
+
   await startHostControlServer();
-  await startRuntime();
-  // Helper boot runs AFTER the runtime is up because we pass the runtime
-  // URL into the helper. Failure here is non-fatal — Electron's existing
-  // widget/surface windows still work, so we just log and continue.
+
+  // One-time fold of legacy single-tenant os-data into a default presence. Must
+  // run BEFORE any runtime spawns (nothing should read the old paths mid-move).
+  const legacy = await readLegacyConfig();
+  const defaultName = legacy?.aiName || 'Bed of Roses';
+  const onboarded = onboardingComplete(legacy);
+  await migrateToPresences({ defaultName, onboarded, nowMs: Date.now(), log });
+
+  const reg = await readRegistry();
+  defaultPresenceId = reg.defaultId;
+
+  // Bring up one runtime + one window (orb or onboarding) per presence.
+  for (const entry of Object.values(reg.presences)) {
+    try {
+      await startRuntime(entry);
+    } catch (err) {
+      log(`failed to start runtime for presence ${entry.id}: ${err.message}`);
+      continue;
+    }
+    if (entry.onboarded) {
+      await createPresenceWindow(entry);
+    } else {
+      createOnboardingWindow(entry);
+    }
+  }
+
+  // Helper boots AFTER the runtimes are up (it points at the default runtime).
+  // Failure here is non-fatal — Electron's own windows still work.
   await startHelper().catch((err) => log(`helper: ${err.message}`));
   installMediaRequestHeaders();
   installIpcHandlers();
   Menu.setApplicationMenu(null);
   globalShortcut.register('CommandOrControl+Option+Space', () => {
-    if (!presenceWindow || presenceWindow.isDestroyed()) createPresenceWindow();
-    else presenceWindow.webContents.send('bor:toggle-presence');
+    // Toggle every presence orb; if none exist, recreate onboarded ones.
+    let any = false;
+    for (const [, win] of presenceWindows) {
+      if (win && !win.isDestroyed()) {
+        any = true;
+        win.webContents.send('bor:toggle-presence');
+      }
+    }
+    if (!any) {
+      readRegistry().then((r) => {
+        for (const entry of Object.values(r.presences)) {
+          if (entry.onboarded) createPresenceWindow(entry).catch(() => {});
+        }
+      }).catch(() => {});
+    }
   });
 
-  const config = await getPublicConfig().catch(() => null);
-  if (onboardingComplete(config)) {
-    hideDockForPresence();
-    await createPresenceWindow();
-    await syncWidgetPreviews().catch((error) => log(`widget preview sync failed: ${error.message}`));
-    queueWallpaperApply(config);
-  } else {
-    showDockForSetup();
-    createOnboardingWindow();
+  // First cut: native-app wrappers + wallpaper + widget previews mirror the
+  // DEFAULT presence only.
+  startNativeAppSync().catch((err) => log(`native-apps: startup sync failed: ${err.message}`));
+  if (defaultPresenceId && runtimeUrls.has(defaultPresenceId)) {
+    await syncWidgetPreviews(defaultPresenceId).catch((error) => log(`widget preview sync failed: ${error.message}`));
+    const defConfig = await getPublicConfig(defaultPresenceId).catch(() => null);
+    if (defConfig && onboardingComplete(defConfig)) queueWallpaperApply(defConfig);
+  }
+
+  // Dock: hide if any presence is onboarded & shown; show if any onboarding open.
+  if (hasOpenOnboarding()) showDockForSetup();
+  else hideDockForPresence();
+
+  // `bor onboard`: after normal boot, spin up a fresh presence + its onboarding
+  // window. Electron may inject its own argv, so detect by token, not position.
+  if (process.argv.includes('onboard')) {
+    await spawnNewPresence().catch((err) => log(`onboard: ${err.message}`));
   }
 }
 
@@ -1814,19 +2689,31 @@ if (singleInstanceLock) {
   });
 }
 
-app.on('second-instance', async () => {
-  const config = await getPublicConfig().catch(() => null);
-  if (onboardingComplete(config)) {
-    hideDockForPresence();
-    if (presenceWindow && !presenceWindow.isDestroyed()) bringPresenceForward();
-    else createPresenceWindow().catch((error) => log(`presence reopen failed: ${error.message}`));
-  } else if (onboardingWindow && !onboardingWindow.isDestroyed()) {
-    onboardingWindow.show();
-    onboardingWindow.focus();
-  } else {
-    showDockForSetup();
-    createOnboardingWindow();
+// Re-show every presence (recreating windows/runtimes from the registry as
+// needed), and surface onboarding for any presence that still needs it.
+async function reviveAllPresences() {
+  const reg = await readRegistry();
+  defaultPresenceId = defaultPresenceId || reg.defaultId;
+  for (const entry of Object.values(reg.presences)) {
+    if (!runtimeUrls.has(entry.id)) {
+      // Runtime gone (crashed/never started) — try to bring it back.
+      await startRuntime(entry).catch((err) => log(`runtime revive failed for ${entry.id}: ${err.message}`));
+    }
+    if (!runtimeUrls.has(entry.id)) continue;
+    if (entry.onboarded) {
+      const win = presenceWindows.get(entry.id);
+      if (win && !win.isDestroyed()) bringPresenceForward(entry.id);
+      else await createPresenceWindow(entry).catch((error) => log(`presence reopen failed (${entry.id}): ${error.message}`));
+    } else {
+      createOnboardingWindow(entry);
+    }
   }
+  if (hasOpenOnboarding()) showDockForSetup();
+  else hideDockForPresence();
+}
+
+app.on('second-instance', () => {
+  reviveAllPresences().catch((error) => log(`second-instance revive failed: ${error.message}`));
 });
 
 app.on('render-process-gone', (_event, webContents, details) => {
@@ -1840,8 +2727,8 @@ app.on('child-process-gone', (_event, details) => {
 app.on('before-quit', () => {
   log('before quit');
   globalShortcut.unregisterAll();
-  if (runtimeProcess) {
-    try { runtimeProcess.kill('SIGTERM'); } catch { /* ignore */ }
+  for (const proc of runtimeProcesses.values()) {
+    try { proc.kill('SIGTERM'); } catch { /* ignore */ }
   }
   if (helperProcess) {
     // The helper has its own parent-PID watchdog that would exit it
@@ -1859,29 +2746,25 @@ app.on('quit', (_event, code) => {
   log(`quit (${code})`);
 });
 
-app.on('activate', async () => {
-  const config = await getPublicConfig().catch(() => null);
-  if (onboardingComplete(config)) {
-    hideDockForPresence();
-    createPresenceWindow().catch((error) => log(`presence reopen failed: ${error.message}`));
-  } else {
-    showDockForSetup();
-    createOnboardingWindow();
-  }
+app.on('activate', () => {
+  reviveAllPresences().catch((error) => log(`activate revive failed: ${error.message}`));
 });
 
 app.on('window-all-closed', (event) => {
+  // Never quit while a runtime process is still alive — recreate any onboarded
+  // presence whose window went missing.
   event.preventDefault();
   setTimeout(async () => {
-    const config = await getPublicConfig().catch(() => null);
-    if (onboardingComplete(config)) {
-      hideDockForPresence();
-      if (!presenceWindow || presenceWindow.isDestroyed()) {
-        createPresenceWindow().catch((error) => log(`presence recreate failed: ${error.message}`));
+    const reg = await readRegistry().catch(() => null);
+    if (!reg) return;
+    for (const entry of Object.values(reg.presences)) {
+      if (!entry.onboarded || !runtimeUrls.has(entry.id)) continue;
+      const win = presenceWindows.get(entry.id);
+      if (!win || win.isDestroyed()) {
+        await createPresenceWindow(entry).catch((error) => log(`presence recreate failed (${entry.id}): ${error.message}`));
       }
-    } else {
-      showDockForSetup();
-      createOnboardingWindow();
     }
+    if (hasOpenOnboarding()) showDockForSetup();
+    else hideDockForPresence();
   }, 0);
 });

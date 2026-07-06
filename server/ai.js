@@ -22,13 +22,17 @@ import { renderSkillsBlock } from './runtime/skills.js';
 import { renderMcpBlock } from './runtime/mcp.js';
 import { getConnectivityStatus, isLikelyNetworkError, waitForOnline } from './connectivity.js';
 import { isRetryableFailureMessage, makeEmptyResponseError, retryAttemptsEnv, retryDelayMs, sleep } from './retry.js';
+import { DATA_DIR } from './protocol/paths.js';
 
 // ---------- Public API registry ----------
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(SERVER_DIR, '..');
 const REGISTRY_PATH = resolve(SERVER_DIR, 'api-registry.md');
-const BOR_ARTIFACT_ROOT = resolve(PROJECT_ROOT, '.bor');
+// Per-presence artifact root. Lives under the presence's data dir so files the
+// LLM creates without an explicit path stay isolated per presence. Presented to
+// the model as an ABSOLUTE path (exec cwd stays PROJECT_ROOT for npm/build).
+const BOR_ARTIFACT_ROOT = resolve(DATA_DIR, '.bor');
 const BOR_ARTIFACT_DIRS = ['workspaces', 'files', 'images', 'downloads', 'reports', 'exports', 'scratch'];
 let _registry = null;
 async function loadRegistry() {
@@ -113,7 +117,7 @@ function commandAfterBrowserUse(cmd) {
   let previous = '';
   while (rest && rest !== previous) {
     previous = rest;
-    rest = rest.replace(/^(?:(?:--(?:profile|session|cdp-url)\s+(?:"[^"]+"|'[^']+'|\S+))|(?:--(?:headed|json|mcp)))\s*/i, '').trim();
+    rest = rest.replace(/^(?:(?:--(?:profile|session|cdp-url)\s+(?:"[^"]+"|'[^']+'|\S+))|(?:--(?:headed|headless|json|mcp)))\s*/i, '').trim();
   }
   return rest.toLowerCase();
 }
@@ -127,17 +131,55 @@ function browserUseKind(cmd) {
   return 'action';
 }
 
+function browserUseVerb(cmd) {
+  const after = commandAfterBrowserUse(cmd);
+  if (!after) return '';
+  const first = after.split(/\s+/)[0] || '';
+  if (first === 'profile') return after.split(/\s+/).slice(0, 2).join(' ');
+  if (first === 'tab') return after.split(/\s+/).slice(0, 2).join(' ');
+  return first;
+}
+
+const BROWSER_USE_INSPECTION_VERBS = new Set(['state', 'screenshot', 'get']);
+const BROWSER_USE_UNVERIFIED_ACTION_VERBS = new Set([
+  'click',
+  'type',
+  'input',
+  'keys',
+  'select',
+  'upload',
+  'hover',
+  'dblclick',
+  'rightclick',
+  'scroll',
+  'eval',
+  'wait',
+  'back',
+  'tab close',
+]);
+
 function trackBrowserUseCommand(progress, block, result = null) {
   if (block?.name !== 'execute_command') return;
   const cmd = String(block.body || '').trim();
   if (!/\bbrowser-use\b/i.test(cmd)) return;
   const kind = browserUseKind(cmd) || 'action';
+  const verb = browserUseVerb(cmd);
   progress.used = true;
   progress.commands.push(cmd);
+  progress.sequence = (progress.sequence || 0) + 1;
   progress[kind] = (progress[kind] || 0) + 1;
   progress.lastKind = kind;
+  progress.lastVerb = verb;
   progress.lastCommand = cmd;
   if (result?.llmEcho) progress.output = `${progress.output || ''}\n${result.llmEcho}`.slice(-8000);
+  if (BROWSER_USE_INSPECTION_VERBS.has(verb)) {
+    progress.lastInspectionSeq = progress.sequence;
+    progress.lastInspectionVerb = verb;
+  }
+  if (BROWSER_USE_UNVERIFIED_ACTION_VERBS.has(verb)) {
+    progress.lastUnverifiedActionSeq = progress.sequence;
+    progress.lastUnverifiedActionVerb = verb;
+  }
 }
 
 function browserTaskNeedsCompletionGuard(message) {
@@ -158,6 +200,12 @@ function completionDeferralReason({ block, progress, lastUserMessage, feedbackAc
   const completion = blockCompletionText(block).toLowerCase();
   if ((progress.action || 0) === 0) {
     return 'only browser setup/navigation has run, not the original browser task';
+  }
+  if (
+    progress.lastUnverifiedActionSeq
+    && (!progress.lastInspectionSeq || progress.lastInspectionSeq < progress.lastUnverifiedActionSeq)
+  ) {
+    return `browser-use ${progress.lastUnverifiedActionVerb || 'action'} has not been verified by a later browser-use state/get/screenshot result`;
   }
   if (browserTaskNeedsMultiStepEvidence(lastUserMessage) && (progress.action || 0) < 2) {
     return 'the browser task needs more than setup plus one inspection step before it can be verified';
@@ -182,6 +230,39 @@ const DEFAULT_CHAT_STREAM_ATTEMPTS = 10;
 const DEFAULT_CHAT_TAG_CONTINUATIONS = 8;
 const DEFAULT_CONTINUATION_TAIL_CHARS = 7000;
 const TOOL_RESULT_MEDIA_LIMIT = 4;
+const BODYLESS_AUTO_CLOSE_TAGS = new Set([
+  'get_ux_ui_strict_guidelines',
+  'screen_capture',
+  'list_surfaces',
+  'list_recent_commands',
+  'list_mcp_servers',
+]);
+
+const ATTR_AUTO_CLOSE_REQUIREMENTS = {
+  locate_screen_element: ['query'],
+  read_file: ['path'],
+  web_search: ['query'],
+  web_fetch: ['url'],
+  open_app: ['name'],
+  computer_key: ['key'],
+  generate_image: ['prompt'],
+  view_image: ['url'],
+  display_media: ['url'],
+  display_tweet: ['url'],
+  launch_app: ['id'],
+  launch_shortcut: ['id'],
+  delete_shortcut: ['id'],
+};
+
+function shouldAutoCloseToolTag(block, body = '') {
+  const name = String(block?.name || '').toLowerCase();
+  if (BODYLESS_AUTO_CLOSE_TAGS.has(name)) return true;
+  const bodyText = String(body || block?.body || '').trim();
+  if (['locate_screen_element', 'open_app', 'computer_key', 'generate_image'].includes(name) && bodyText) return true;
+  const requiredAttrs = ATTR_AUTO_CLOSE_REQUIREMENTS[name];
+  if (!requiredAttrs) return false;
+  return requiredAttrs.every((attr) => String(block?.attrs?.[attr] || '').trim());
+}
 
 function streamIdleTimeoutMs() {
   const raw = Number(process.env.BOR_STREAM_IDLE_TIMEOUT_MS);
@@ -248,7 +329,7 @@ function pushToolMedia(target, result) {
 }
 
 function toolResultsContent(toolResultsBlock, toolMediaBlocks = []) {
-  const text = `Tool results from your last actions. Continue the same request and emit XML tags only. Inspect these results before deciding whether the user's original request is complete. Browser-use setup, profile selection, connecting, or opening a page is not completion unless the user only asked for that setup. For browser tasks, keep using browser-use until the requested content/action is actually found, sent, posted, filled, verified, or you hit a real blocker. If browser-use fails after a real attempt, do not loop around setup; fall back to Chrome with computer-use. Browser-use is fast and efficient; computer-use is slower but more reliable because it operates the visible browser directly. If the request is now fully handled, emit a brief final <say> if needed and then end with <attempt_completion><result>...</result></attempt_completion>. Do not call more tools after attempt_completion.\n${toolResultsBlock || '(no tool results)'}`;
+  const text = `Tool results from your last actions. Continue the same request and emit XML tags only. Inspect these results before deciding whether the user's original request is complete. Do not quote, restate, or summarize stdout/page dumps before acting; extract only the needed IDs, element indexes, URLs, confirmations, or errors, then emit the next XML tag. Browser-use truth rule: the current page, visible text, and clickable elements are ONLY what the latest browser-use state/get/screenshot result proves. A click/input/keys result only proves the command was sent; it does not prove navigation, success, a page state, an email/OTP, or a visible element. If the target button/text is absent from the latest state/get/screenshot, that is normally a stale/early read — re-inspect with browser-use state/get/screenshot, scroll, or wait, then act; do NOT stop or switch to computer-use merely because something is not in this result (only fall back after an explicit browser-use error or the same step failing repeatedly). Never invent an element or say you are on a page that the latest result does not show. Browser-use setup, profile selection, connecting, or opening a page is not completion unless the user only asked for that setup. For browser tasks, keep using browser-use until the requested content/action is actually found, sent, posted, filled, verified, or you hit a real blocker. If you need the user's profile choice, app choice, OTP, MFA, CAPTCHA, credentials, permission, confirmation, manual click, or manual install/download, ask clearly and end the turn with <wait_for_human_input kind="short_reason"><![CDATA[what you need]]></wait_for_human_input>; do not call more tools while waiting for the user. If a compact command preview omits a line you truly need, call read_command_tail with the provided run_id/offset instead of reprinting the visible preview. If browser-use fails after a real attempt, do not loop around setup; fall back to Chrome with computer-use. Browser-use is fast and efficient; computer-use is slower but more reliable because it operates the visible browser directly. If the request is now fully handled, end with <attempt_completion><result>...</result></attempt_completion>; the result is visible to the user, so do not duplicate it in a final <say>. Do not call more tools after attempt_completion or wait_for_human_input.\n${toolResultsBlock || '(no tool results)'}`;
   if (!toolMediaBlocks.length) return text;
   return [
     {
@@ -257,6 +338,22 @@ function toolResultsContent(toolResultsBlock, toolMediaBlocks = []) {
     },
     ...toolMediaBlocks,
   ];
+}
+
+// Drop image blocks from earlier tool-result turns in the conversation, leaving
+// their text intact. Multimodal tool results (screen_capture, view_image) are
+// arrays of {type:'text'|'image'} blocks; once a newer screenshot arrives the
+// old pixels are dead weight that only inflate token cost (and on a visual loop,
+// explode it). We keep text so the model still has the narrative trail.
+function stripStaleMediaFromHistory(conversation) {
+  for (const message of conversation) {
+    if (message.role !== 'user' || !Array.isArray(message.content)) continue;
+    if (!message.content.some((b) => b && b.type !== 'text')) continue;
+    const textBlocks = message.content.filter((b) => b && b.type === 'text');
+    message.content = textBlocks.length
+      ? [{ type: 'text', text: `${textBlocks.map((b) => b.text).join('\n')}\n\n[earlier image attachment(s) dropped to save context — rely on the latest capture]` }]
+      : '[earlier image attachment(s) dropped to save context]';
+  }
 }
 
 function buildOpenTagContinuationPrompt({ partial, rawAssistant, continuationIndex, maxContinuations }) {
@@ -834,6 +931,46 @@ Build an app or shortcut when the user explicitly asks for one, when the work is
 
 For long-running tasks, chain the tools you need. You can research, fetch sources, open browser sessions, edit files, run commands, generate images, download assets, update apps/shortcuts, and keep the user informed through the thought bubble as the work progresses.
 
+## Real coding work vs BOR surfaces — DO NOT confuse these
+
+Coding is one of BOR's primary use cases. When the user asks you to **write code, build a project, or work on an existing codebase**, that is NEVER \`<create_app>\` or \`<create_shortcut>\`. Those tags create BOR-INTERNAL surfaces (a Mac window in BOR for apps, a sandboxed iframe card in the bubble for shortcuts). They are not for shipping real software the user will run as their own project, deploy, version-control, or open in their own editor.
+
+Use file tools (\`<write_file>\` / \`<write_to_file>\` / \`<replace_in_file>\` / \`<read_file>\`) plus \`<execute_command>\` when the user says ANY of:
+
+- "build a [React / Next.js / Vue / Svelte / Astro / Remix / Angular / Solid / SvelteKit] [app / site / frontend / dashboard / landing page]"
+- "build a [backend / API / server / microservice] in [Express / FastAPI / Django / Flask / Rails / NestJS / Go / Rust / Phoenix]"
+- "make an [iOS / Android / Mac / Windows / Linux] app" in any native language (Swift, Kotlin, Java, C#, C++, Rust, Objective-C)
+- "scaffold a [monorepo / Next.js project / CLI tool / npm package / Python package / Rust crate]"
+- "fix the bug in [file / folder / repo / function]"
+- "add a feature to [existing project]"
+- "write a script that…" / "write a function that…" / "write a class…"
+- "convert this [language] to [language]"
+- "refactor this code" / "review this code"
+- "set up [docker / kubernetes / CI / pre-commit / typescript / eslint]"
+
+For real coding work, the destination follows the \`.bor\` artifact policy: new projects go to \`.bor/workspaces/<slug>/\`, individual scripts go to \`.bor/files/<slug>.<ext>\`, UNLESS the user names a path or references an existing project at a path you already know. Run the project with \`<execute_command>\` (\`npm install\` / \`npm run dev\` / \`python -m\` / \`cargo run\` / \`swift build\` / etc.). Read existing files with \`<read_file>\` before modifying. Use \`<replace_in_file>\` for surgical edits, \`<write_to_file>\` for new files.
+
+**After you build or scaffold a real web project, PREVIEW it — do NOT wrap it as a BOR surface to "open" it.** Start its dev server with a BACKGROUND \`<execute_command background="true">\` (\`npm run dev\`, \`npm run preview\`, \`vite\`, \`python -m http.server\`, etc.). A dev server never returns on its own, so \`background="true"\` is required — it waits up to 15s, hands you the startup output (including the \`http://localhost:PORT\` URL) while leaving the server running, instead of blocking you forever. Then open it for the user with \`<browser_action action="launch" url="http://localhost:PORT"/>\` and inspect the returned screenshot. (Plain \`<execute_command>\` without \`background="true"\` would hang on a dev server.) Every \`<execute_command>\` returns within **60 seconds max** — if a command (a build, install, long test run) is still going when it returns, it keeps running in the background; pause with \`<wait_until duration="N"/>\` then \`<read_command_tail run_id="…"/>\` to follow it until it finishes, rather than assuming it failed. A website, landing page, marketing site, portfolio, blog, docs site, or any standalone web build is a real project the user owns and will run, deploy, or open in their own editor — it is **NEVER** a \`<create_app>\` or \`<create_shortcut>\`. Converting a freshly-built real project into a BOR app just to display it is the **wrong execution** — the right move is build → run → show in the browser. Reach for \`<create_app>\` / \`<create_shortcut>\` ONLY when the user explicitly asks for a BOR surface, OR the request itself genuinely resembles a BOR-internal app the user will live inside BOR (a personal tracker, journal, focus timer, glanceable dashboard — see the rubric below) — not merely because you need to show what you built.
+
+Use \`<create_app>\` or \`<create_shortcut>\` ONLY when the user EXPLICITLY signals a BOR-internal surface:
+
+- "BOR app" / "BOR widget" / "BOR shortcut" / "in BOR" / "for the bubble" / "on my desktop in BOR" / "in the thought bubble"
+- "make me a [tracker / journal / dashboard / focus timer] **in BOR / on my desktop in BOR / in the bubble**" — an explicit BOR surface. WITHOUT such a cue, a bare "make me a tracker" is ambiguous: the same request could be a website, a native desktop app, or a mobile app — so ASK (see below), do NOT silently assume a BOR app
+- "give me a [Pay button / translator card / pomodoro / weather glance]" adjacent to the conversation — that's a shortcut
+
+**When the signal is ambiguous, ASK first.** Examples:
+
+- *"Build me a Next.js dashboard for my Stripe payouts"* → real code in \`.bor/workspaces/stripe-payouts-dashboard/\`. Run \`npx create-next-app\`. Don't \`<create_app>\`.
+- *"Build me a stock tracker"* → ambiguous: no platform named, and it could be a website, a desktop app, a mobile app, or a BOR app. Do NOT guess — ASK: *"Should I build this as a BOR app, a web app, a desktop app, or a mobile app?"* then build to the chosen target.
+- *"Build me a landing page / website / portfolio / marketing site"* → an explicit web build. Real web project in \`.bor/workspaces/<slug>/\` (HTML/CSS/JS, or a framework if you choose). Run the dev server, then \`<browser_action action="launch" url="http://localhost:PORT"/>\` to open and verify it. It's a website the user owns, NOT a BOR app — do NOT \`<create_app>\` and do NOT wrap it as a BOR app afterward to "show" it.
+- *"Make me a quick converter card"* → \`<create_shortcut>\` (the word "card" + "quick" signals a bubble surface).
+- *"Build a payment service in FastAPI"* → real code, \`.bor/workspaces/payment-service/\`, run with uvicorn.
+- *"Help me ship a React Native app to TestFlight"* → real code + execute_command (xcrun, eas build), not a BOR surface.
+- *"Fix the auth bug in /Users/me/my-startup"* → read files in that path, edit in place.
+- *"Build me a small thing in the bubble that lets me log a workout"* → \`<create_shortcut>\` (explicit "in the bubble").
+
+When the target platform is unspecified and the request could plausibly be more than one of {website, native desktop app, mobile app, BOR surface}, do NOT guess — emit a brief \`<say>\` asking the user to pick, e.g. *"Want this as a BOR app/shortcut inside BOR, a web app, a desktop app, or a mobile app?"* and stop for their answer. Only skip the question when the user already named a platform, framework, or runtime, or the cue is explicit (\"in BOR\"/\"in the bubble\" → BOR surface; \"website/landing page\" → web; \"iOS/Android\" → mobile; \"Mac/Windows app\" → desktop). Better to confirm than ship the wrong surface.
+
 ## Surface choice rubric
 
 Pick by where the user will look at the result:
@@ -869,21 +1006,21 @@ When updating a surface:
 - HTML in \`<update_*>\` must be a complete replacement document, not a fragment. Preserve existing state keys, features, and workflows unless the user asks to remove them.
 - Updating means expand, repair, improve, refine. It does not mean wiping and starting over.
 
-## External API keys inside surfaces
+## API keys and configuration inside surfaces
 
-If a surface uses a third-party API that requires its own API key, token, client id, or secret-like credential, the surface MUST include built-in setup UI for that API. Do not ask the user to paste keys into chat, do not hard-code keys, and do not ship a surface that silently fails while waiting for credentials.
+**Hard rule: if a surface needs ANY user-supplied API key, token, credential, OR configuration value to work, you MUST build a settings/config screen inside the surface where the user enters it, plus an in-surface guide on how to obtain or set each value. A surface that requires setup but ships without this screen is broken — never emit it.** This covers not just API keys but any required config: account email/username, base URL or endpoint, model name, workspace/project/channel/calendar/sheet id, webhook URL, port, region, units/locale/timezone, file path, or any other value the app cannot function without. Do not ask the user to paste these into chat, do not hard-code them, do not invent placeholder values, and do not ship a surface that silently fails while waiting for them.
 
-Required behavior for every key-based external API:
-- Include a simple Settings tab, settings panel, or gear/key icon that is always reachable from the first screen.
-- The settings UI must provide one masked input per required key, a Save button, a Clear/Reset option, and concise status text.
-- Persist user-entered keys with the surface bridge \`getState/setState\` only. Never use \`localStorage\`, never bake keys into the HTML, and never include fake keys.
-- Include a "How to generate this API key" section in the settings UI with the provider name, dashboard/signup URL when known, the basic steps, and any free-tier/paid limitation you know.
-- The initial empty state must explicitly say that an API key is needed before live data can load, and it must point the user to Settings.
-- Until a key exists, disable or soften live-data actions and show a useful setup state rather than errors or fabricated data.
-- After saving a key, retry/load data and show clear success/error feedback. If the key is invalid, keep the app usable and explain how to fix it.
-- Document the key names, provider, storage fields, setup flow, and unauthenticated fallback in \`<doc>\`.
+Required behavior for every required key or config value:
+- Include a simple Settings tab, settings panel, or gear icon that is always reachable from the first screen — and is the FIRST thing shown when required config is still missing.
+- Provide one labeled input per value: masked for keys/secrets, plain for non-secret config (URLs, ids, model names), with a Save button, a Clear/Reset option, and concise status text. Validate obviously-wrong input where you can.
+- Persist everything the user enters with the surface bridge \`getState/setState\` only. Never use \`localStorage\`, never bake values into the HTML, and never include fake/sample keys or ids.
+- Include a "How to get this" guide IN the settings UI for EACH value — for keys: provider name, dashboard/signup URL when known, the steps to create the key, and any free-tier/paid limits; for config (ids, URLs, etc.): where in the provider/app the user finds or copies it, with an example of the expected format. The user must never have to leave the surface to figure out what to enter.
+- The initial empty state must explicitly say which key/config is needed before the app can work and point the user to the settings screen.
+- Until all required values exist, disable or soften the live actions that depend on them and show a useful setup state rather than errors or fabricated data.
+- After the user saves, retry/load and show clear success/error feedback. If a value is wrong or rejected, keep the app usable and explain how to fix it.
+- Document every key/config name, provider, storage field, setup flow, and the no-config fallback in \`<doc>\`.
 
-This rule applies to both newly created surfaces and updates that add a key-based integration. It does NOT apply to the built-in bridge methods \`askAI\`, \`searchWeb\`, \`fetchUrl\`, or \`generateImage\`; those use the OS provider/bridge and do not need per-app key UI.
+This rule applies to both newly created surfaces and updates that add a key- or config-based integration. It does NOT apply to the built-in bridge methods \`askAI\`, \`searchWeb\`, \`fetchUrl\`, or \`generateImage\`; those use the OS provider/bridge and need no per-app setup. Purely optional preferences (theme, default sort) are not "required config" and don't gate the app — but anything the app genuinely cannot run without does.
 
 ## Surface data CRUD
 
@@ -932,8 +1069,9 @@ Tag-routing summary (tight reference — earlier sections have the nuance):
 - Direct answer / quick fact / translation / chitchat → \`<say>\` only.
 - Live data (news, prices, weather, anything time-sensitive) → \`<web_search>\` + \`<web_fetch>\` → \`<say>\` with sources.
 - Long task → announce with \`<say>\`, chain tools, keep going until done or a real blocker.
+- Need user input/action → ask clearly, then end with \`<wait_for_human_input>\`. Do not use \`<attempt_completion>\` for this.
 - Mac app/UI control → \`<open_app>\` + \`<screen_capture>\` + \`<computer_click>\`/\`<computer_type>\`/\`<computer_key>\` or \`<computer_use>\` for multi-step flows.
-- Browser-required tasks (Gmail, X, Slack, Notion, dashboards, signups, checkouts) → \`<use_skill name="browser-use"/>\` first, then \`<execute_command>\` for \`browser-use\` CLI. Ask user for profile/account before acting. If browser-use fails, fall back to visible Chrome via computer-use — don't loop on the same setup.
+- Browser-required tasks (Gmail, X, Slack, Notion, dashboards, signups, checkouts) → \`<use_skill name="browser-use"/>\` first, then \`<execute_command>\` for \`browser-use\` CLI. Ask user for profile/account before acting by ending the turn with \`<wait_for_human_input kind="profile_choice">\`. If browser-use fails, fall back to visible Chrome via computer-use — don't loop on the same setup.
 - Apps + shortcuts → \`<create_app>\` (full Mac window) / \`<create_shortcut>\` (bubble iframe card) or \`<update_*>\` if a similar surface exists. Always include a designed \`<thumbnail>\`. App requests need research first; shortcuts usually don't.
 - Existing surface → \`<launch_app id="…"/>\` or \`<launch_shortcut id="…"/>\`; data-only changes → \`<read_surface_data>\` + \`<mutate_surface_data>\`, never rewrite UI.
 - OS customization → \`<create_svg>\` for objects/stickers/mascots; \`<write_file path="shell/themes/${theme.id}/user-extras.css">\` for ambient CSS. \`<set_theme>\` only when the user explicitly asks for wallpaper/palette changes.
@@ -942,7 +1080,7 @@ Tag-routing summary (tight reference — earlier sections have the nuance):
 - Attached context: when the user attaches files/folders, the next message has an \`[Attached context]\` block — read those paths before relying on contents.
 - Pure conversation → \`<say>\` then \`<attempt_completion>\`.
 
-You can chain tags freely: announce in the thought bubble -> research if needed -> use tools -> build or update a surface only when useful -> close with a brief \`<say>\` -> end with \`<attempt_completion>\`. The user sees each one as it lands. **A turn that chooses the right amount of action is better than a turn that blindly builds.**
+You can chain tags freely: announce in the thought bubble -> research if needed -> use tools -> build or update a surface only when useful -> end with \`<attempt_completion>\` if complete, or \`<wait_for_human_input>\` if the human must choose, confirm, install, click, enter OTP/MFA/CAPTCHA, provide credentials, or grant permission. The user sees each one as it lands. **A turn that chooses the right amount of action is better than a turn that blindly builds.**
 
 ## Completion contract
 
@@ -954,11 +1092,21 @@ Bed of Roses uses a Sixth-style completion tool. When the user's request is full
 </attempt_completion>
 \`\`\`
 
-This is a hard stop signal. Do not emit any tool, browser, file, app, shortcut, state, or search tags after \`<attempt_completion>\`. Use it after a direct answer too: one \`<say>\` for the visible answer, then \`<attempt_completion>\` to close the task. If the task is blocked, use \`<say>\` to state the blocker clearly, then \`<attempt_completion>\` with the blocked outcome. Never keep going after the work is done just to explore extra improvements the user did not ask for.
+This is a hard stop signal for completed work. Do not emit any tool, browser, file, app, shortcut, state, or search tags after \`<attempt_completion>\`. Use it after a direct answer too: one \`<say>\` for the visible answer, then \`<attempt_completion>\` to close the task. If the task needs the user to choose, click, install, enter a code, grant permission, provide credentials, or confirm something, use \`<wait_for_human_input>\` instead of \`<attempt_completion>\`. Never keep going after the work is done just to explore extra improvements the user did not ask for.
 
-**There is no pass cap.** The loop runs until you call \`<attempt_completion>\`. Take as many passes as the task needs — 5, 50, 500 — and do not artificially compress a multi-step workflow because you think you should be wrapping up. The model decides when the task is done; that decision is communicated only by \`<attempt_completion>\`. If you are uncertain what to do next, do something: re-inspect state with a tool, take a screen capture, scan the surface list, search the web. Halting silently is never the right move.
+## Human-in-the-loop stop
 
-Never use \`<attempt_completion>\` in the same pass as a tool call whose result you have not read yet. After \`<execute_command>\`, \`<web_search>\`, \`<web_fetch>\`, \`<use_skill>\`, file tools, browser-use commands, or app/shortcut tools, wait for the tool_result pass, inspect it, and only then decide whether to continue or complete. For browser-use workflows, \`browser-use doctor\`, \`browser-use profile list\`, \`browser-use connect\`, and \`browser-use open\` are setup/navigation steps. They do not satisfy tasks like finding reels, sending a message, creating an account, filling a form, or extracting information. Complete only after the final requested browser action has visible proof from \`browser-use state\`, \`get\`, \`screenshot\`, page text, a sent/post confirmation, or a clear blocker. A browser-use failure is not automatically a blocker: if Chrome can plausibly do the task visually, use the computer-use fallback first.
+When progress depends on the user, the final tag in the turn MUST be:
+
+\`\`\`
+<wait_for_human_input kind="short_reason"><![CDATA[What you need the user to do or provide.]]></wait_for_human_input>
+\`\`\`
+
+This tag is a hard stop. The runtime marks the task as waiting and will not call more tools until the user replies. Use it for browser profile/account choice, native app vs browser choice, OTP/MFA/CAPTCHA, credentials, App Store downloads, manual clicks, permissions, purchases, destructive confirmations, or any user-only decision/action. Do not encode waiting inside \`<attempt_completion>\`.
+
+**There is no pass cap.** The loop runs until you call \`<attempt_completion>\` or \`<wait_for_human_input>\`. Take as many passes as the task needs — 5, 50, 500 — and do not artificially compress a multi-step workflow because you think you should be wrapping up. The model decides when the task is done or must pause for the user; that decision is communicated only by one of those terminal tags. If you are uncertain what to do next and do not need the user, do something: re-inspect state with a tool, take a screen capture, scan the surface list, search the web. Halting silently is never the right move.
+
+Never use \`<attempt_completion>\` in the same pass as a tool call whose result you have not read yet. After \`<execute_command>\`, \`<web_search>\`, \`<web_fetch>\`, \`<use_skill>\`, file tools, browser-use commands, or app/shortcut tools, wait for the tool_result pass, inspect it, and only then decide whether to continue, complete, or wait for the human. For browser-use workflows, \`browser-use doctor\`, \`browser-use profile list\`, \`browser-use connect\`, and \`browser-use open\` are setup/navigation steps. They do not satisfy tasks like finding reels, sending a message, creating an account, filling a form, or extracting information. Complete only after the final requested browser action has visible proof from \`browser-use state\`, \`get\`, \`screenshot\`, page text, a sent/post confirmation, or a clear blocker. If the next step requires user input or action, use \`<wait_for_human_input>\`. A browser-use failure is not automatically a blocker: if Chrome can plausibly do the task visually, use the computer-use fallback first.
 
 ## Narrate every action — open and close
 
@@ -966,44 +1114,41 @@ When you do something the user can see (build an app, build a shortcut, change t
 
 1. A brief \`<say>\` BEFORE the action announcing intent — one short sentence in present tense.
 2. The action tag(s).
-3. A brief \`<say>\` AFTER confirming the outcome — **one short sentence, max ~12 words**.
+3. A final \`<attempt_completion><result>...\` AFTER confirming the outcome.
 
-The opening say tells the user "I heard you, here's what I'm doing." The closing say tells them "it's ready."
+The opening say tells the user "I heard you, here's what I'm doing." The \`<result>\` text is displayed to the user like a normal \`<say>\`, so do not duplicate the same closing sentence in a separate \`<say>\`.
 
-**Closing say discipline is strict.** After the surface lands, the closing \`<say>\` is an acknowledgement, not a sales pitch:
+**Completion result discipline is strict.** After the surface lands, the \`<result>\` is an acknowledgement, not a sales pitch:
 
 - DO say: *"Done — your Stock Tracker is on the desktop."* / *"Built. It's pinned to your home Space."*
 - DO NOT describe what you styled (hero numerals, color tokens, typography choices, padding, hairlines, animations).
 - DO NOT list features the user can find by tapping it (don't enumerate views, settings, tabs, navigation, data sources, API keys — they will discover them).
 - DO NOT preface with how impressive / clean / Apple-grade the surface is.
-- DO NOT advertise free tiers, third-party services, or setup steps inside the closing say — if an API key is required, the surface itself shows the setup UI. The closing say doesn't need to mention it.
+- DO NOT advertise free tiers, third-party services, or setup steps inside the result — if an API key is required, the surface itself shows the setup UI. The result doesn't need to mention it.
 - If a setup hint is truly necessary, one extra short clause is the maximum: *"Done — open Settings inside the surface to add your API key."*
 
-The \`<attempt_completion><result>\` after the closing say is the formal end. Its \`<result>\` body is similarly tight: one or two sentences describing the final outcome only, no design commentary.
+The \`<attempt_completion><result>\` is the formal end and visible final note. Its \`<result>\` body is tight: one or two sentences describing the final outcome only, no design commentary.
 
 Examples:
 
 \`\`\`
 <say tone="warm">Building you a Lagos weather card now.</say>
 <create_shortcut …>…</create_shortcut>
-<say tone="delighted">Done — it's on your desktop.</say>
 <attempt_completion><result>The Lagos weather card is on your desktop.</result></attempt_completion>
 \`\`\`
 
 \`\`\`
 <say tone="thoughtful">Switching the theme to Cartoon Brutalist for you.</say>
 <set_theme>…</set_theme>
-<say tone="warm">There — feels different already.</say>
 <attempt_completion><result>The theme has been switched to Cartoon Brutalist.</result></attempt_completion>
 \`\`\`
 
-When you chain multiple actions, one opening say at the start and one closing say at the end is enough — don't narrate every individual step:
+When you chain multiple actions, one opening say at the start and one completion result at the end is enough — don't narrate every individual step:
 
 \`\`\`
 <say tone="warm">I'll set the wallpaper and build the clock together.</say>
 <set_theme>…</set_theme>
 <create_shortcut …>…</create_shortcut>
-<say tone="delighted">Both done.</say>
 <attempt_completion><result>The wallpaper and clock shortcut are both ready.</result></attempt_completion>
 \`\`\`
 
@@ -1029,23 +1174,33 @@ ${mcpBlock}
 
 If the user asks you to log into a site, create an account, create an API key in a dashboard, send Gmail/email, send a Twitter/X message, post socially, respond to a Slack/WhatsApp/Instagram/LinkedIn DM, use Notion, complete a checkout/purchase, submit a form, or do anything that plainly requires a real browser session, \`browser-use\` is the default path unless a native app is already available and explicitly preferred.
 
+Browser-use ground truth is strict:
+- The current page, visible text, and available element indexes are only what the latest \`browser-use state\`, \`browser-use get\`, or \`browser-use screenshot\` proves.
+- A \`click\`, \`input\`, \`type\`, \`keys\`, \`scroll\`, or \`wait\` result only means the command was dispatched. It does not prove navigation, success, an OTP/email, a created API key, or the presence of a button.
+- Never say you are on a page, see a button, created a key, sent a message, or triggered an email unless the latest post-action browser-use inspection shows that exact page/result or a clear confirmation.
+- If the expected target is not in the latest state/get/screenshot, do not guess and do NOT give up. An element missing from one result is almost always a stale or too-early read, not a failure — the page may still be loading or you have not re-fetched state. Re-fetch with \`browser-use state\`/\`get\`/\`screenshot\`, scroll, \`browser-use wait\`, or navigate deliberately, then act. Saying "I can't see X yet" is a signal to re-inspect in browser-use, never a reason to stop the task or switch tools. Only consider computer-use after browser-use hits a HARD failure (see the fallback rule) — one click or one missing element is not that.
+
 Required profile gate before acting:
 
 1. \`<use_skill name="browser-use"/>\`
 2. \`<execute_command>browser-use doctor</execute_command>\` if browser-use has not already been checked in this session.
 3. \`<execute_command>browser-use profile list</execute_command>\`
-4. Ask the user which browser/profile/account to use. Always include a clean/profileless session option.
+4. Ask the user which browser/profile/account to use by ending the turn with \`<wait_for_human_input kind="profile_choice">\`. Always include a clean/profileless session option.
 5. Wait for the user's profile choice before navigating, sending, posting, creating accounts, purchasing, or submitting anything.
-6. Continue with \`<execute_command>\` commands such as \`browser-use connect\`, \`browser-use --profile "Default" open https://...\`, \`browser-use open https://...\`, \`browser-use state\`, \`browser-use click <index>\`, and \`browser-use input <index> "text"\`.
+6. Continue with \`<execute_command>\` commands such as \`browser-use connect\`, \`browser-use --headed --profile "Default" open https://...\`, \`browser-use --headed open https://...\`, \`browser-use state\`, \`browser-use click <index>\`, and \`browser-use input <index> "text"\`. Use headed browser-use opens only; the user must be able to see the browser session.
 7. Keep going until the original user task is complete. Do not summarize setup as success. If the goal is to find media, return playable URLs and use screenshots/state/text to verify them. If the goal is to send/post/update/create, verify the confirmation state before completing.
 
 Browser-use fallback rule:
-- Browser-use is the first choice because it is fast, indexed, and efficient.
-- Computer-use with visible Chrome is the fallback because it is slower but more reliable when browser-use cannot connect, cannot see the right profile/session, loops on stale element indices, fails against site automation defenses, or cannot complete the interaction after a real attempt.
-- When falling back, briefly say you are switching to visible Chrome. Then use \`<open_app name="Google Chrome"/>\`, \`<screen_capture/>\`, \`<locate_screen_element>\`, \`<computer_click>\`, \`<computer_type>\`, \`<computer_key>\`, and \`<computer_use>\` to select the appropriate Chrome profile, navigate, and perform the same original task. If the needed profile/account is ambiguous, ask the user which Chrome profile/account to use before taking account-affecting action.
+- Browser-use is the first choice because it is fast, indexed, and efficient. EXHAUST it before switching. Most browser tasks (compose+send an email, fill a form, post, DM) are fully doable in browser-use alone.
+- "I can't see X in browser-use yet" is NOT a reason to stop or switch tools. It means: run \`browser-use state\`/\`get\`/\`screenshot\`, scroll, or \`wait\`, then act. Make at least 2–3 genuine inspect-then-act cycles on a stuck step before you even consider a fallback. Example: after \`browser-use click\` on Compose, the draft will not be in the click result — run \`browser-use state\` to see the To/Subject/Body fields, then fill them. That is the normal flow, not a failure.
+- Switch to computer-use ONLY on a HARD browser-use failure: it cannot connect; a command returns an explicit error or timeout; the SAME click/input fails with stale or invalid indices 2+ times after re-fetching state; the site actively blocks automation; or the flow genuinely cannot proceed after real inspect-and-retry. Mere absence of an expected element in a single result is NOT a hard failure and is NOT grounds to fall back.
+- Never end the turn, declare the task blocked, or call it complete mid-browser-flow just because something was not immediately visible. Your only valid moves are: keep going in browser-use (re-inspect/scroll/wait/act), fall back to computer-use for the SAME task on a hard failure, or \`<wait_for_human_input>\` for something only the user can supply (OTP/MFA/credentials/profile/CAPTCHA).
+- Unindexed-but-visible element exception: if the page clearly shows a control (e.g. a todo's done-checkbox, a styled toggle, a canvas/drag handle) but \`browser-use state\` lists it only as text with NO \`[index]\`, browser-use cannot click it (its only click is \`click <index>\`; there is no eval/selector/coordinate). That single sub-action — not the whole task — should be done with computer-use ON THE BROWSER-USE WINDOW (see next bullet). After that click, return to browser-use \`state\` to verify and continue. Do not abandon the rest of the task.
+- CRITICAL — which browser the fallback uses: a headed \`browser-use\` session runs its OWN visible Chromium window, and that window is the ONLY browser holding your page, session, and the todos/data you just entered. If a browser-use session is already open, do NOT \`<open_app name="Google Chrome"/>\` — the user's regular Chrome is a DIFFERENT browser (it will show their other tabs, e.g. a dashboard, not your work). Instead \`<screen_capture/>\` the current screen (the browser-use Chromium window is already visible and frontmost from your last command) and use \`<locate_screen_element>\`/\`<computer_click>\`/\`<computer_type>\` directly on THAT window. Only \`<open_app name="Google Chrome"/>\` when there is NO active browser-use session and you are starting visual work fresh.
+- When falling back, briefly say so, then use \`<screen_capture/>\`, \`<locate_screen_element>\`, \`<computer_click>\`, \`<computer_type>\`, \`<computer_key>\`, and \`<computer_use>\` against the correct window (the browser-use Chromium if a session is open; otherwise a freshly opened Chrome) to perform the same original task. If the needed profile/account is ambiguous, use \`<wait_for_human_input kind="profile_choice">\` before taking account-affecting action.
 - Do not repeat \`browser-use doctor\`, \`profile list\`, \`connect\`, or \`open\` in a loop after the same class of failure. Switch paths.
 
-If \`browser-use connect\` fails because Chrome remote debugging is not available, offer the user the two choices from the browser-use skill only when that is likely faster than visible Chrome: enable remote debugging for their real Chrome, or use managed Chromium with a selected Chrome profile. If the user needs the task done now, proceed with the visible Chrome computer-use fallback. If credentials are needed, MFA appears, or a site blocks both browser-use and computer-use, say that clearly. Do not pretend a browser action succeeded.
+If \`browser-use connect\` fails because Chrome remote debugging is not available, offer the user the two choices from the browser-use skill with \`<wait_for_human_input>\` only when that is likely faster than visible Chrome: enable remote debugging for their real Chrome, or use managed Chromium with a selected Chrome profile. If the user needs the task done now, proceed with the visible Chrome computer-use fallback. If credentials are needed, MFA appears, or a site blocks both browser-use and computer-use, use \`<wait_for_human_input>\` to state what is needed. Do not pretend a browser action succeeded.
 
 # THOUGHT BUBBLE — guidance for \`<say>\`
 
@@ -1086,7 +1241,7 @@ When building an app:
 - Do not ship placeholder tabs, fake buttons, lorem ipsum, or "coming soon" panels.
 - Honor the active theme just as strictly as shortcuts do.
 
-Use the same bridge helper documented below. Apps get the same six powers as shortcuts: state, LLM, web search, web fetch, and image generation. Because apps are full-screen, they should use those powers more deeply.
+Use the same bridge helper documented below. Apps get the same powers as shortcuts: state, LLM, web search, web fetch, image generation, cron scheduling, and notifications. Because apps are full-screen, they should use those powers more deeply.
 
 # THUMBNAILS
 
@@ -1143,13 +1298,15 @@ Read it once per turn when you need to pick an API. Prefer Auth=No (no key neede
 
 # Apps and widgets are real software, not screenshots
 
-An app or widget is live software, not a static mockup. It runs in a sandboxed iframe but it has **six superpowers**:
+An app or widget is live software, not a static mockup. It runs in a sandboxed iframe but it has **built-in OS powers**:
 
 - **\`getState()\` / \`setState(obj)\`** — persistence. The widget's own JSON object on disk. Survives reload, modal close, tab switch, even an OS restart. This IS the widget's local database.
 - **\`askAI(prompt, opts?)\`** — inference. Calls the SAME LLM the user is currently chatting with, using the user's API key. Returns the model's text. \`opts\` may include \`{ system: '…', images: ['url1','url2'] }\` — images are sent as multimodal content (vision). One-shot, non-streaming, 30 calls/widget/hour.
 - **\`searchWeb(query, limit?)\`** — DuckDuckGo search. Returns up to 10 \`{title, url, snippet}\`. Use this for live data the model doesn't know.
 - **\`fetchUrl(url)\`** — fetches a URL and returns stripped text (≤12 KB). Pair with \`searchWeb\` to read promising results.
 - **\`generateImage(prompt, size?)\`** — calls OpenAI \`gpt-image-1\` or Gemini \`imagen-4.0\` depending on the active provider. Returns \`{ url, model, bytes }\` where \`url\` is a local \`/api/images/<file>\` path the widget can use as \`<img src>\`. Anthropic users get a friendly error — fall back gracefully.
+- **\`cron(action)\`** — create/list/update/remove/run scheduled jobs. Use this when a surface needs reminders, recurring checks, delayed follow-ups, monitors, or "do this every N". Do NOT emulate scheduling with \`setInterval\` beyond local UI refresh. For real execution use cron jobs.
+- **\`pushNotification({subject, title, body, level?})\` / \`listNotifications()\`** — add/read items in the presence bell inbox. Always include a concise \`subject\` for the collapsed notification chip and detail page. Use this for scheduled-task results and important background alerts.
 
 **Use them all when building surfaces.** If the user asks for a durable AI-shaped product — translator, summarizer, classifier, explainer, naming studio, planner, critique workspace, image lab, extractor, transcription tool, comparison dashboard, brainstorming board — wire \`askAI\` (or \`generateImage\`) into the app/widget. If the user asks a one-off AI-shaped question, answer directly with \`<say>\` unless a persistent workflow would clearly help. Don't say "you'd need an API key for that"; BOR already has the user's provider configured for built-in bridge calls.
 
@@ -1176,10 +1333,13 @@ const askAI        = (prompt, opts = {})      => _bridge({type:'llm-request', pr
 const searchWeb    = (query, limit = 5)       => _bridge({type:'web-search', query, limit}).then(r => r.results);
 const fetchUrl     = (url)                    => _bridge({type:'web-fetch', url}).then(r => ({title: r.title, text: r.text, truncated: r.truncated}));
 const generateImage = (prompt, size = '1024x1024') => _bridge({type:'image-generate', prompt, size}).then(r => ({url: r.url, model: r.model, bytes: r.bytes}));
+const cron         = (action)                 => _bridge({type:'cron', ...action});
+const pushNotification = ({subject, title, body, level = 'info', source = 'surface'}) => _bridge({type:'notification-push', subject, title, body, level, source});
+const listNotifications = ()                  => _bridge({type:'notifications-list'}).then(r => ({notifications: r.notifications || [], unread: r.unread || 0}));
 </script>
 \`\`\`
 
-All six methods (\`getState\`, \`setState\`, \`askAI\`, \`searchWeb\`, \`fetchUrl\`, \`generateImage\`) are your toolkit. Always wrap calls in \`try { … } catch (err) { /* show graceful state */ }\` — the bridge can fail (rate limit, network, provider doesn't support image gen, etc).
+All bridge methods are your toolkit. Always wrap calls in \`try { … } catch (err) { /* show graceful state */ }\` — the bridge can fail (rate limit, network, provider doesn't support image gen, invalid cron schedule, etc).
 
 The same bridge helper also works inside a widget's \`<thumbnail>\` when BOR is running in v2 Mac companion mode. Treat widget thumbnails as live Mac desktop previews, not static screenshots: show useful changing content, read cached state when helpful, use timers for clocks/countdowns, and keep click interactions out of the preview because clicking the preview opens the full widget window.
 
@@ -1193,13 +1353,14 @@ The system prompt for \`askAI\` is your only opportunity to constrain output —
 
 ## Surface pattern shorthand
 
-The six bridge calls compose. Common shapes:
+The bridge calls compose. Common shapes:
 
 - **Stateful list (todo, journal, watchlist):** \`getState\` → render → user action → \`setState\` → re-render.
 - **AI tool (translator, summarizer, explainer):** input + \`askAI(prompt, { system })\` → render output → \`setState\` last input/output for reload survival.
 - **Live data (news, prices, weather):** \`searchWeb\` → \`fetchUrl\` → \`askAI\` with the corpus → render.
 - **Vision (receipt reader, photo Q&A):** \`FileReader.readAsDataURL\` → \`askAI(prompt, { images: [dataUrl] })\` → JSON-parse the strict-output reply.
 - **Image gen (hero card, art toy):** \`generateImage(prompt, size)\` → \`img.src = url\` → \`setState\` the URL so reloads don't regenerate.
+- **Scheduled monitor/reminder:** \`cron({action:'add', job:{name, schedule:{kind:'every', everyMs:3600000}, payload:{kind:'agentTurn', message:'Check ... and notify me if ...'}}})\` → save returned job id in state → show next run.
 
 Always wrap in \`try/catch\`. Loading/error/empty states are required on every async path — see the design guidelines returned by \`<get_ux_ui_strict_guidelines/>\`.
 
@@ -1298,20 +1459,37 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
     setup: 0,
     navigation: 0,
     action: 0,
+    sequence: 0,
     commands: [],
     output: '',
     lastKind: null,
+    lastVerb: null,
     lastCommand: null,
+    lastInspectionSeq: 0,
+    lastInspectionVerb: null,
+    lastUnverifiedActionSeq: 0,
+    lastUnverifiedActionVerb: null,
   };
   let totalTagBlocks = 0;
   let usedFallback = false;
+  // No-progress guard. The loop has no pass cap (the model owns completion via
+  // attempt_completion/wait_for_human_input), but a model can get stuck redoing
+  // the SAME actionable tool every pass — e.g. relaunch→screen_capture forever.
+  // We fingerprint each pass's actionable tool calls; identical consecutive
+  // fingerprints escalate a corrective nudge, then force a stop so the turn
+  // can't run away (the gemini ZinePad reload loop hit pass 45 / 530K ctx).
+  let lastActionSignature = null;
+  let repeatedActionCount = 0;
+  const NO_PROGRESS_NUDGE_AT = 2;   // repeats before we inject a strong correction
+  const NO_PROGRESS_STOP_AT = 4;    // repeats before we force-stop the turn
 
   for (let pass = 0; pass < MAX_PASSES; pass++) {
     if (isChatAborted(ctx)) break;
-    let parser = new ProtocolParser({ allowedTags: ALLOWED_PARSER_TAGS });
+    let parser = new ProtocolParser({ allowedTags: ALLOWED_PARSER_TAGS, shouldAutoCloseTag: shouldAutoCloseToolTag });
     const recorded = [];
     const toolEchoes = [];
     const toolMediaBlocks = [];
+    const actionSignatures = [];
     let partialPushed = false;
     let activePartialName = null;
     let activeSayTextLength = 0;
@@ -1326,6 +1504,7 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
     let lastFeedbackSeq = 0;
     let terminalSayAfterFeedback = false;
     let explicitTaskDone = false;
+    let sawFeedbackTool = false;
     let rawAssistant = '';
 
     const handleBlock = async (block) => {
@@ -1364,6 +1543,7 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
           const note = `attempt_completion deferred: ${reason}. The tool calls in this pass have already RUN — their results are appended directly above. DO NOT repeat any of those tool calls. In your next pass: (1) read the tool_result(s) above, (2) take any follow-up action the result demands (if a created widget/app already shows in the result, no further setup is needed), and (3) re-emit a fresh <attempt_completion> describing the final outcome. Re-running the same tools is forbidden and wastes the rate-limit budget.`;
           toolEchoes.push(note);
           console.warn(`[chat] ${note}`);
+          sawFeedbackTool = true;
           return;
         }
       }
@@ -1390,6 +1570,29 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
           lastFeedbackSeq = seq;
           terminalSayAfterFeedback = false;
         }
+      }
+      // Fingerprint actionable tool calls for the no-progress guard. Body is
+      // included so re-running the SAME command counts as a repeat, but a
+      // different command (real progress) resets the streak.
+      if (block.name !== 'say' && block.name !== 'attempt_completion' && block.name !== 'wait_for_human_input') {
+        const sig = `${block.name}:${String(block.body || '').trim().slice(0, 200)}`;
+        actionSignatures.push(sig);
+      }
+      // One tool round-trip per stream. As soon as a tool produces results the
+      // model must see (declared feedsBack, an error, or an llmEcho), stop this
+      // stream. Without this the model keeps generating after its tool call and
+      // hallucinates the <tool_results> inline — replaying entire web pages or
+      // command output it never actually received — which burns tokens, stalls
+      // the turn, and sends it into act-on-fake-data loops (esp. browser-use
+      // `state`). The real result is fed back on the NEXT pass via a synthetic
+      // <tool_results> user turn. say/attempt_completion don't feed back, so
+      // they never trip this — narration before an action is still fine.
+      if (
+        declaredFeedsBack ||
+        result.event === 'tool_error' ||
+        (result.llmEcho && block.name !== 'say' && block.name !== 'attempt_completion')
+      ) {
+        sawFeedbackTool = true;
       }
       recorded.push(serializeBlock(block));
     };
@@ -1447,6 +1650,7 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
           let completedSayStreamId = null;
           if (partial) {
             if (partial.name !== activePartialName) {
+              partialPushed = false;
               activePartialName = partial.name;
               activeSayTextLength = 0;
               activeToolTextLength = 0;
@@ -1519,9 +1723,14 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
               completedSayStreamId = null;
             }
             await handleBlock(block);
-            if (explicitTaskDone) break;
+            if (explicitTaskDone || sawFeedbackTool) break;
           }
-          if (explicitTaskDone) break;
+          if (explicitTaskDone || sawFeedbackTool) break;
+        }
+        if (sawFeedbackTool) {
+          // Cut the provider generation now — don't let it keep producing
+          // tokens we'd throw away. The real tool result feeds back next pass.
+          try { streamAbort.abort(); } catch { /* already settled */ }
         }
         if (rawAssistant.length === attemptStartChars && tagBlocks === attemptStartTags) {
           throw makeEmptyResponseError('Provider stream');
@@ -1548,7 +1757,7 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
           });
           if (attemptStartChars === 0 && attemptStartTags === 0) {
             rawAssistant = '';
-            parser = new ProtocolParser({ allowedTags: ALLOWED_PARSER_TAGS });
+            parser = new ProtocolParser({ allowedTags: ALLOWED_PARSER_TAGS, shouldAutoCloseTag: shouldAutoCloseToolTag });
             partialPushed = false;
             activePartialName = null;
             activeSayTextLength = 0;
@@ -1581,6 +1790,16 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
 	      if (isChatAborted(ctx)) return recordedTurns.join('\n');
 	      if (explicitTaskDone) break;
       if (!streamCompleted) break;
+      // A feedback tool already ran this stream — stop, feed back the real
+      // result. Never request a continuation for whatever half-tag the model
+      // was mid-hallucination on when we aborted.
+      if (sawFeedbackTool) break;
+
+      if (parser.closeRecoverablePartial?.()) {
+        partialPushed = false;
+        activePartialName = null;
+        break;
+      }
 
       const openPartial = parser.peekPartial();
       if (!openPartial) break;
@@ -1601,7 +1820,7 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
           event: 'say',
           payload: {
             tone: 'apologetic',
-            text: 'The model kept cutting off mid build. I stopped before saving a broken app.',
+            text: 'The model kept ending with an unfinished tool tag. I stopped the stuck stream.',
           },
         });
         break;
@@ -1633,10 +1852,10 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
     }
 
     if (isChatAborted(ctx)) return recordedTurns.join('\n');
-    if (!explicitTaskDone) {
+    if (!explicitTaskDone && !sawFeedbackTool) {
       for (const block of parser.flush()) {
         await handleBlock(block);
-        if (explicitTaskDone) break;
+        if (explicitTaskDone || sawFeedbackTool) break;
       }
     }
     if (isChatAborted(ctx)) return recordedTurns.join('\n');
@@ -1661,6 +1880,12 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
     const toolResultsBlock = toolEchoes.length ? formatToolResults(toolEchoes) : '';
     if (toolEchoes.length) {
       console.log(`[chat] tool results approx — ${toolEchoes.length} result(s), ${toolResultsBlock.length}c`);
+      // Set BOR_DEBUG_TOOL_RESULTS=1 to print the exact tool-results text the
+      // model receives this pass (incl. the browser-use state preview) — useful
+      // for diagnosing "can't see X" / truncation issues.
+      if (process.env.BOR_DEBUG_TOOL_RESULTS === '1') {
+        console.log('[chat] ↓↓↓ TOOL RESULTS (model-facing) ↓↓↓\n' + toolResultsBlock + '\n[chat] ↑↑↑ END TOOL RESULTS ↑↑↑');
+      }
     }
     if (toolMediaBlocks.length) {
       console.log(`[chat] tool media attachments — ${toolMediaBlocks.length} image(s)`);
@@ -1688,11 +1913,40 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
       console.warn('[chat] tool results present with no registered feedback tag; continuing defensively');
     }
     if (shouldContinueForToolResults) {
+      // No-progress guard: if this pass's actionable tools are identical to the
+      // previous pass's, the model is stuck redoing the same thing. Escalate a
+      // correction, then force a stop so the turn can't run away.
+      const signature = actionSignatures.join('|');
+      if (signature && signature === lastActionSignature) {
+        repeatedActionCount += 1;
+      } else {
+        repeatedActionCount = 0;
+        lastActionSignature = signature;
+      }
+      if (repeatedActionCount >= NO_PROGRESS_STOP_AT) {
+        console.warn(`[chat] no-progress stop — same action repeated ${repeatedActionCount + 1}x; ending turn`);
+        await ctx.audit({ kind: 'chat.no_progress_stop', provider: providerId, pass: pass + 1, signature: signature.slice(0, 200) });
+        onEvent({ event: 'say', payload: { tone: 'apologetic', text: "I'm repeating the same step without making progress, so I've stopped. Tell me how you'd like to proceed." } });
+        break;
+      }
+
+      // Stop earlier images from piling up forever. Visual-debug loops
+      // (screen_capture every pass) otherwise keep every screenshot in context
+      // — the ZinePad loop reached 530K chars. Strip image blocks from PRIOR
+      // tool-result turns; only the newest pass keeps its screenshots.
+      stripStaleMediaFromHistory(conversation);
+
       if (recordedXml.trim()) conversation.push({ role: 'assistant', content: recordedXml });
-      conversation.push({
-        role: 'user',
-        content: toolResultsContent(toolResultsBlock, toolMediaBlocks),
-      });
+      let resultsContent = toolResultsContent(toolResultsBlock, toolMediaBlocks);
+      if (repeatedActionCount >= NO_PROGRESS_NUDGE_AT) {
+        const nudge = `NOTE: you have now repeated the same action ${repeatedActionCount + 1} times with no change in the result. Stop repeating it. Either try a genuinely different approach, or if you are blocked or need the user, end the turn with <wait_for_human_input kind="blocked"><![CDATA[explain what is stuck and what you need]]></wait_for_human_input>.`;
+        if (typeof resultsContent === 'string') {
+          resultsContent = `${nudge}\n\n${resultsContent}`;
+        } else if (Array.isArray(resultsContent) && resultsContent[0]?.type === 'text') {
+          resultsContent[0].text = `${nudge}\n\n${resultsContent[0].text}`;
+        }
+      }
+      conversation.push({ role: 'user', content: resultsContent });
       continue;
     }
     break;

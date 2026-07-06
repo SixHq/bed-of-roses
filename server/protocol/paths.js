@@ -13,7 +13,7 @@
 //
 // Audit logs always record the absolute resolved path.
 
-import { resolve, isAbsolute, normalize, relative } from 'node:path';
+import { resolve, isAbsolute, normalize, relative, join } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
@@ -22,6 +22,14 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // server/protocol/paths.js -> server/protocol -> server -> project root
 export const PROJECT_ROOT = resolve(HERE, '..', '..');
 const HOME = homedir();
+
+// Per-presence data root. Every runtime process serves exactly one presence;
+// the v2 host spawns it with BOR_DATA_DIR pointing at os-data/presences/<id>/.
+// With no env set this is the legacy single-tenant os-data dir, so standalone
+// `node server/index.js` and the classic shell behave exactly as before.
+// NOTE: PROJECT_ROOT stays the SOURCE-tree anchor (write-protection guards,
+// exec cwd, served shell) — only user DATA is relocated by DATA_DIR.
+export const DATA_DIR = resolve(process.env.BOR_DATA_DIR || join(PROJECT_ROOT, 'os-data'));
 
 // Reserved areas (relative to project root) — never written or deleted.
 const RESERVED_DIRS = ['server', 'shell', 'node_modules', '.git'];

@@ -5,8 +5,17 @@
 // checks. Keeping them here means the create/update flow is consistent across
 // surface kinds and the no-op legacy shim doesn't need to re-implement.
 
+import { stripProtocolArtifacts } from './file.js';
+
 export function pickChild(block, name) {
-  return block.children?.find((c) => c.name === name) || null;
+  const node = block.children?.find((c) => c.name === name) || null;
+  // The model can hallucinate BOR's internal <tool_results>/<tool_result>
+  // turn-wrapper tags (or a stray closing tool tag) INTO the html/doc payload it
+  // streams — strip them so they never land in a surface's source. Idempotent.
+  if (node && (name === 'html' || name === 'doc') && typeof node.body === 'string') {
+    node.body = stripProtocolArtifacts(node.body);
+  }
+  return node;
 }
 
 /**

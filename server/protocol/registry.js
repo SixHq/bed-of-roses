@@ -28,7 +28,10 @@ import * as agent from './handlers/agent.js';
 import * as svg from './handlers/svg.js';
 import * as uxGuidelines from './handlers/ux-guidelines.js';
 import * as computer from './handlers/computer.js';
+import * as browser from './handlers/browser.js';
 import * as media from './handlers/media.js';
+import * as cron from './handlers/cron.js';
+import * as notification from './handlers/notification.js';
 
 export const TAGS = {
   // ---------- THOUGHT BUBBLE ----------
@@ -55,7 +58,7 @@ export const TAGS = {
 
   attempt_completion: {
     description:
-      "Signal the user's request is fully and verifiably complete. No more tools after this. For outcome tasks (send/post/submit/create/delete/save/schedule), you MUST have visible evidence the outcome happened — a confirmation banner, destination page (Sent/Inbox/detail page), success toast, or the recorded value visible. Setup, opening pages, typing fields, intermediate clicks do NOT count. Browser-use evidence must come from a `state` or `screenshot` AFTER the final action. If you can't verify (MFA, CAPTCHA, missing creds), say so in <say> and stop without calling this — stopping is acceptable, falsely claiming completion is not.",
+      "Signal the user's request is fully and verifiably complete. No more tools after this. The <result> child is displayed to the user like a final <say>; raw body text directly inside <attempt_completion> is ignored by the UI. For outcome tasks (send/post/submit/create/delete/save/schedule), you MUST have visible evidence the outcome happened — a confirmation banner, destination page (Sent/Inbox/detail page), success toast, or the recorded value visible. Setup, opening pages, typing fields, intermediate clicks do NOT count. Browser-use evidence must come from a `state` or `screenshot` AFTER the final action. If user input or a manual user action is required, do NOT use this tag; use <wait_for_human_input> instead.",
     params: {
       children: {
         result: 'required. final result summary, phrased as a completed outcome.',
@@ -69,6 +72,45 @@ export const TAGS = {
     ],
     voiced: false,
     execute: say.executeAttemptCompletion,
+  },
+
+  wait_for_human_input: {
+    description:
+      "Stop the current turn because the human must provide input or perform an action before work can continue. This is an explicit human-in-the-loop barrier: after this tag, BOR emits a waiting state and will not call more tools until the user replies. Use it for profile/account/app choice, OTP/MFA/CAPTCHA, credentials, permission/approval, manual App Store downloads, manual clicks, or any decision that must come from the user. The body is displayed to the user like a final <say>.",
+    params: {
+      attrs: {
+        kind: 'optional. short reason category such as profile_choice, otp, mfa, captcha, credentials, permission, manual_action, confirmation.',
+      },
+      body: 'text',
+    },
+    examples: [
+      `<wait_for_human_input kind="profile_choice"><![CDATA[Which Chrome profile should I use: Adewole, glyde.world, overturemcp.com, trysixth.com, or a clean temporary session?]]></wait_for_human_input>`,
+      `<wait_for_human_input kind="manual_action"><![CDATA[I opened the Mac App Store to Prime Video. Click Get to install it, then tell me when the install finishes.]]></wait_for_human_input>`,
+    ],
+    voiced: false,
+    execute: say.executeWaitForHumanInput,
+  },
+
+  push_notification: {
+    description:
+      "Add an item to the notification inbox shown behind the bell in the presence thought bubble. Use this for background results, scheduled-task outcomes, or important user-visible alerts that should remain available after the current bubble is closed. Must include a short subject so the collapsed presence notification chip can summarize it. The body is the longer notification detail text.",
+    params: {
+      attrs: {
+        subject: 'required. concise notification subject shown in collapsed presence chip and detail page.',
+        title: 'required. short notification title.',
+        level: 'optional. one of: info, success, warning, error. default: info.',
+        source: 'optional. short source label such as agent, cron, app, shortcut.',
+        jobId: 'optional. cron job id when this came from a scheduled task.',
+        surfaceId: 'optional. app/shortcut id when this came from a surface.',
+      },
+      body: 'text',
+    },
+    examples: [
+      `<push_notification subject="Price monitor" title="Price check complete" level="success" source="cron"><![CDATA[The monitor found no price drop on the tracked page.]]></push_notification>`,
+    ],
+    voiced: false,
+    feedsBack: true,
+    execute: notification.executePushNotification,
   },
 
   // ---------- STRICT UX/UI GUIDELINES ----------
@@ -89,7 +131,7 @@ export const TAGS = {
   // ---------- APPS ----------
   create_app: {
     description:
-      "Create a full-screen Mac app window via the Swift helper. MUST call <get_ux_ui_strict_guidelines/> first (its tool result has the design contract — do not duplicate). Pick app over shortcut when the result deserves its own Mac window the user will return to: multi-screen, CRUD, dashboards, full workflows, settings, history — anything dock-presented. Tile is just the launcher preview; clicking opens the full app. Use <update_app> if similar exists. Must be responsive, theme-aware, stateful, real (no placeholders). Third-party APIs requiring keys MUST include in-app settings UI (masked input, save/clear, how-to-generate, key-needed initial state). <doc> required.",
+      "Create a full-screen Mac app window via the Swift helper. MUST call <get_ux_ui_strict_guidelines/> first (its tool result has the design contract — do not duplicate). Pick app over shortcut when the result deserves its own Mac window the user will return to: multi-screen, CRUD, dashboards, full workflows, settings, history — anything dock-presented. Tile is just the launcher preview; clicking opens the full app. Use <update_app> if similar exists. Must be responsive, theme-aware, stateful, real (no placeholders). Third-party APIs requiring keys MUST include in-app settings UI (masked input, save/clear, how-to-generate, key-needed initial state). Apps may use the BOR bridge for state, LLM, web, image generation, cron jobs (`type:'cron'`), and notifications (`type:'notification-push'`). <doc> required.",
     params: {
       attrs: {
         name: 'required. short display name, <=32 chars.',
@@ -98,7 +140,7 @@ export const TAGS = {
       children: {
         thumbnail:
           'required. inline SVG OR full <!DOCTYPE html> document inside CDATA, designed as a premium launcher preview for the app. Show the app value proposition or real dashboard preview, not a logo.',
-        html: 'required. complete <!DOCTYPE html> full-screen app document inside CDATA. Inline CSS + JS only, no external scripts, no eval, no localStorage, no <say>. Use the bridge for state, LLM, web, and images. If using a key-based third-party API, include settings UI with masked key entry, setup instructions, and an API-key-needed initial state.',
+        html: 'required. complete <!DOCTYPE html> full-screen app document inside CDATA. Inline CSS + JS only, no external scripts, no eval, no localStorage, no <say>. Use the bridge for state, LLM, web, images, cron, and notifications. If using a key-based third-party API, include settings UI with masked key entry, setup instructions, and an API-key-needed initial state.',
         doc: 'required. complete Markdown documentation inside CDATA covering purpose, features, views/navigation, design guidelines, state schema, bridge/API calls, API key setup/storage if any, loading/error/empty states, accessibility/responsive behavior, limitations, and changelog.',
       },
     },
@@ -180,7 +222,7 @@ Camera-first nutrition tracking app.
   // ---------- SHORTCUTS (iframe cards inside the thought bubble) ----------
   create_shortcut: {
     description:
-      "Create a stateful shortcut — a small live iframe card that renders INSIDE the thought bubble (not on the desktop). Use for results that live adjacent to the conversation: a payment input + Pay button, a quick translator, a tiny travel itinerary that streams its own AI content, a waveform player, a one-step API caller, a settings toggle. MUST call <get_ux_ui_strict_guidelines/> first — the tool result includes design-guideline/shortcut-card.md with the exact contract (tokens, allowed primitives, API-key-UI pattern). Pick <create_app> when the result deserves its own full-screen Mac window the user will return to. Third-party APIs that need keys MUST ship in-shortcut settings UI (masked input, save/clear, how-to-generate, key-needed initial state) as the first interaction. <doc> required.",
+      "Create a stateful shortcut — a small live iframe card that renders INSIDE the thought bubble (not on the desktop). Use for results that live adjacent to the conversation: a payment input + Pay button, a quick translator, a tiny travel itinerary that streams its own AI content, a waveform player, a one-step API caller, a settings toggle. MUST call <get_ux_ui_strict_guidelines/> first — the tool result includes design-guideline/shortcut-card.md with the exact contract (tokens, allowed primitives, API-key-UI pattern). Pick <create_app> when the result deserves its own full-screen Mac window the user will return to. Third-party APIs that need keys MUST ship in-shortcut settings UI (masked input, save/clear, how-to-generate, key-needed initial state) as the first interaction. Shortcuts may use the BOR bridge for state, LLM, web, image generation, cron jobs (`type:'cron'`), notifications (`type:'notification-push'`), and app launching. <doc> required.",
     params: {
       attrs: {
         name: 'required. short display name, ≤24 chars.',
@@ -190,7 +232,7 @@ Camera-first nutrition tracking app.
       children: {
         thumbnail:
           'required. inline SVG OR <!DOCTYPE html> document inside CDATA, used in the inventory/launcher (not in the bubble itself — the live iframe is the surface). Show a representative state, not a logo.',
-        html: 'required. complete <!DOCTYPE html> shortcut document inside CDATA. Inline CSS + JS only, no external scripts, no eval, no localStorage, no <say>. Background MUST be transparent. The theme tokens (--label, --accent, --hairline, font families) are injected by the host. Use parent.postMessage bridge for state-get/state-set/llm-request/web-search/web-fetch/image-generate.',
+        html: 'required. complete <!DOCTYPE html> shortcut document inside CDATA. Inline CSS + JS only, no external scripts, no eval, no localStorage, no <say>. Background MUST be transparent. The theme tokens (--label, --accent, --hairline, font families) are injected by the host. Use parent.postMessage bridge for state-get/state-set/llm-request/web-search/web-fetch/image-generate/cron/notification-push.',
         doc: 'required. complete Markdown documentation inside CDATA covering purpose, the recurring task it serves, state schema, bridge calls, API-key setup if any, when the LLM should re-launch it, and changelog.',
       },
     },
@@ -266,6 +308,26 @@ Quick payment shortcut for the user's recurring Lagos transfers.
     examples: [`<delete_shortcut id="widget-1779…"/>`],
     voiced: false,
     execute: shortcut.executeDeleteShortcut,
+  },
+
+  // ---------- SCHEDULED TASKS ----------
+  cron: {
+    description:
+      'Manage BOR cron jobs for delayed or recurring agent work. This is modeled after OpenClaw cron: do not emulate scheduling with `sleep`, polling loops, or long-running shell processes. Actions: status, list, get, add, update, remove, run. Job schedules support `{ "kind":"at", "at":"<ISO timestamp>" }`, `{ "kind":"every", "everyMs": <milliseconds> }`, and `{ "kind":"cron", "expr":"<cron expression>", "tz":"<IANA timezone optional>" }`. Payloads support `{ "kind":"agentTurn", "message":"<task prompt>" }` for real scheduled agent execution, or `{ "kind":"systemEvent", "text":"<notification/reminder text>" }` for a notification-only reminder. One-shot `at` jobs disable themselves after they run. Apps and shortcuts can also create jobs via the surface bridge.',
+    params: {
+      attrs: {
+        action: 'required. one of: status, list, get, add, update, remove, run.',
+        id: 'optional. job id for get/update/remove/run.',
+        mode: 'optional for run. force (default) or due.',
+      },
+      body: 'JSON object. For add, either the job object itself or `{ "job": {...} }`. For update, `{ "patch": {...} }` or a patch object. For list, `{ "includeDisabled": true }` is accepted.',
+    },
+    examples: [
+      `<cron action="add"><![CDATA[{"name":"Morning news check","schedule":{"kind":"cron","expr":"0 8 * * *","tz":"Africa/Lagos"},"payload":{"kind":"agentTurn","message":"Check the top AI news and notify me with a concise summary."}}]]></cron>`,
+    ],
+    voiced: false,
+    feedsBack: true,
+    execute: cron.executeCron,
   },
 
   // ---------- LEGACY WIDGET SHIMS (hidden from the LLM prompt) ----------
@@ -698,6 +760,30 @@ defs:shell
     execute: computer.executeScreenCapture,
   },
 
+  browser_action: {
+    description:
+      "Drive a real headless Chromium browser to LOAD, VIEW, and INTERACT WITH a web page or local web project, then get back a screenshot of the page plus any new console logs. This is how you PREVIEW and VERIFY web UIs you build (a landing page, a dev server at http://localhost:PORT, a deployed site) and do light browser work. Every action except `close` returns a fresh screenshot + console logs — inspect the screenshot before deciding the next action. Rules: run ONE action per message and wait for the result; the sequence MUST start with `launch` at a URL and MUST end with `close`; while the browser is open use ONLY browser_action (close it before any other tool, then relaunch if needed). To visit a different URL you cannot navigate to from the page, close and launch again. The window is 1024x720 — click coordinates must be within that range and aimed at the CENTER of the target element (read the screenshot to find coordinates). After building a website/landing page, this is the right way to open it for the user — do NOT wrap a real web project as a BOR app.",
+    params: {
+      attrs: {
+        action: 'required. One of: launch | click | type | scroll_down | scroll_up | close.',
+        url: 'for launch. Full URL including protocol, e.g. http://localhost:3000, https://example.com, file:///path/to/index.html.',
+        coordinate: 'for click. "x,y" within 1024x720, aimed at the center of the element, e.g. "512,360".',
+        text: 'for type (alternative to the tag body). The string to type.',
+      },
+      body: 'for type — the text to type (CDATA-safe).',
+    },
+    examples: [
+      `<browser_action action="launch" url="http://localhost:5173"/>`,
+      `<browser_action action="click" coordinate="512,360"/>`,
+      `<browser_action action="type"><![CDATA[hello@example.com]]></browser_action>`,
+      `<browser_action action="scroll_down"/>`,
+      `<browser_action action="close"/>`,
+    ],
+    voiced: false,
+    feedsBack: true,
+    execute: browser.executeBrowserAction,
+  },
+
   locate_screen_element: {
     description:
       "Use the selected BOR provider's vision model to find a visible UI element on the user's Mac screen. BOR hides the presence/thought bubble during the screenshot by default so the model sees the underlying app. Returns the screenshot URL, the model coordinate, and macOS click_x/click_y coordinates you can pass to <computer_click>. Use this when the user asks where to click, asks about a visible button/menu/control, or before interacting with an app. Requires Screen Recording permission and a vision-capable configured provider.",
@@ -869,22 +955,41 @@ defs:shell
   // ---------- SHELL ----------
   execute_command: {
     description:
-      "Run a shell command. Body is the single-line command (CDATA if it contains <). Heredocs and multi-line inline-code (python -c, node -e) are refused — write a script with <write_file> then run it. Default timeout is 5 minutes; pass timeout_seconds to extend up to 30 minutes. Stdout is captured up to 64 KB and stderr up to 32 KB; if output is truncated, the tool_result includes a run_id you can pass to read_command_tail.",
+      "Run a shell command (a real bash shell — pipes, redirects, globs, &&, cd all work). Body is the command (CDATA if it contains <). Heredocs and multi-line inline-code (python -c, node -e) are refused — write a script with <write_file> then run it. HARD 1-MINUTE RULE: a command never blocks you longer than 60 seconds. If it finishes first you get its full result; if it is still running at 60s you get the output captured so far plus a run_id and the process KEEPS RUNNING in the background (it is NOT killed). To follow a still-running command, use <wait_until duration=\"N\"/> to pause, then <read_command_tail run_id=\"…\"/> for newer output — repeat until done. For something you already know is long-running (dev server, watcher, daemon) set background=\"true\" to get that early return after just 15s instead of 60s. Stdout is captured up to 64 KB / stderr 32 KB; the tool_result shows a compact preview with a run_id/offset for read_command_tail. Stop a background process with another execute_command (kill/pkill).",
     params: {
       attrs: {
         cwd: 'optional. working directory.',
-        timeout_seconds: 'optional. command timeout in seconds. default 300 (5 min); max 1800 (30 min).',
+        background: 'optional. "true" for a known long-runner (dev server, watcher, daemon) — returns after ~15s instead of 60s with the output so far while it keeps running. Returns earlier if it exits/crashes first. Default false.',
+        timeout_seconds: 'optional. Force-KILL the command after this many seconds (separate from the 60s return window — use it only when you want the process actually terminated, e.g. a hung command). Otherwise the process is never killed by the tool.',
       },
       body: 'text',
     },
     examples: [
       `<execute_command><![CDATA[ls -la]]></execute_command>`,
       `<execute_command cwd="notes"><![CDATA[wc -l *.md]]></execute_command>`,
-      `<execute_command timeout_seconds="900"><![CDATA[browser-use --profile "Work" open https://mail.google.com]]></execute_command>`,
+      `<execute_command cwd=".bor/workspaces/site" background="true"><![CDATA[npm run dev]]></execute_command>`,
     ],
     voiced: false,
     feedsBack: true,
     execute: exec.execute,
+  },
+
+  wait_until: {
+    description:
+      "Pause for a fixed number of seconds before your next action. Use it to let something already in motion make progress — a background command or dev server to build/warm up/print more, a file to appear, a service to come online — then continue (typically followed by <read_command_tail/> or a re-check). The chat genuinely waits for the duration; if the user cancels, the wait ends early. This is the companion to execute_command's hard 60-second return window: when a command is still running, wait_until + read_command_tail is how you follow it without blocking.",
+    params: {
+      attrs: {
+        duration: 'required. seconds to wait (1–600), e.g. 30.',
+        reason: 'optional. short human-readable note shown in the thought bubble, e.g. "letting the build finish".',
+      },
+    },
+    examples: [
+      `<wait_until duration="30" reason="letting the dev server start"/>`,
+      `<wait_until duration="120"/>`,
+    ],
+    voiced: false,
+    feedsBack: true,
+    execute: exec.executeWaitUntil,
   },
 
   read_command_tail: {

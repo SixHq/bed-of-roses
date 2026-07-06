@@ -11,6 +11,7 @@
 import { iterateSseStream } from './sse-util.js';
 import { toOpenAiContent } from './multimodal.js';
 import { providerMaxOutputTokens } from './limits.js';
+import { openAiCompatibleReasoningParams, openRouterReasoningParams } from './reasoning.js';
 
 const PRESETS = [
   { id: 'groq', name: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', signupUrl: 'https://console.groq.com/keys', exampleModel: 'llama-3.3-70b-versatile' },
@@ -44,10 +45,11 @@ export default {
     if (apiKey) headers.authorization = `Bearer ${apiKey}`;
     const nativeMessages = [{ role: 'system', content: system }];
     for (const m of messages) {
-      nativeMessages.push({ role: m.role, content: await toOpenAiContent(m.content) });
+      nativeMessages.push({ role: m.role, content: await toOpenAiContent(m.content, { supportsDocuments: false }) });
     }
     const body = {
       model,
+      ...(baseUrl.includes('openrouter.ai') ? openRouterReasoningParams(model) : openAiCompatibleReasoningParams(model)),
       max_tokens: providerMaxOutputTokens(),
       stream: true,
       messages: nativeMessages,

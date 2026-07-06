@@ -9,6 +9,9 @@
 //   • web-search         — call /api/surface-search
 //   • web-fetch          — call /api/surface-fetch
 //   • image-generate     — call /api/surface-image-gen (OpenAI/Gemini only)
+//   • cron               — create/list/update/remove/run scheduled jobs
+//   • notification-push  — add an item to the notification inbox
+//   • notifications-list — read the notification inbox
 //
 // Why a bridge? Sandboxed iframes can fetch external HTTPS but the validator
 // blocks localStorage / sessionStorage / indexedDB. The host (this file) is
@@ -131,6 +134,41 @@ async function handleImageGenerate({ surfaceId, prompt, size }) {
   } catch (e) { return { error: e.message }; }
 }
 
+async function handleCron({ surfaceId, payload }) {
+  try {
+    const res = await fetch('/api/cron', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...(payload || {}), surfaceId }),
+    });
+    const json = await res.json();
+    if (!res.ok) return { error: json.error || `HTTP ${res.status}` };
+    return json;
+  } catch (e) { return { error: e.message }; }
+}
+
+async function handleNotificationPush({ surfaceId, payload }) {
+  try {
+    const res = await fetch('/api/notifications', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...(payload || {}), action: 'add', source: payload?.source || 'surface', surfaceId }),
+    });
+    const json = await res.json();
+    if (!res.ok) return { error: json.error || `HTTP ${res.status}` };
+    return json;
+  } catch (e) { return { error: e.message }; }
+}
+
+async function handleNotificationsList() {
+  try {
+    const res = await fetch('/api/notifications');
+    const json = await res.json();
+    if (!res.ok) return { error: json.error || `HTTP ${res.status}` };
+    return json;
+  } catch (e) { return { error: e.message }; }
+}
+
 function ensureListener() {
   if (_installed) return;
   _installed = true;
@@ -161,6 +199,15 @@ function ensureListener() {
         break;
       case 'image-generate':
         response = { type: 'image-generate-response', requestId: data.requestId, ...(await handleImageGenerate({ surfaceId, prompt: data.prompt, size: data.size })) };
+        break;
+      case 'cron':
+        response = { type: 'cron-response', requestId: data.requestId, ...(await handleCron({ surfaceId, payload: data })) };
+        break;
+      case 'notification-push':
+        response = { type: 'notification-response', requestId: data.requestId, ...(await handleNotificationPush({ surfaceId, payload: data })) };
+        break;
+      case 'notifications-list':
+        response = { type: 'notifications-response', requestId: data.requestId, ...(await handleNotificationsList()) };
         break;
       default:
         return; // unknown message type — ignore

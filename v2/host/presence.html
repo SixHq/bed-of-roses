@@ -14,6 +14,37 @@
         <div class="mode" id="thought-mode"><em>Thinking</em></div>
         <span class="meta" id="thought-meta">0:00</span>
         <div class="actions">
+          <button class="head-btn apps-btn" id="surfaces" type="button" title="App Library" aria-label="App Library">
+            <svg class="apps-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="7" height="7" rx="1.6"></rect>
+              <rect x="14" y="3" width="7" height="7" rx="1.6"></rect>
+              <rect x="3" y="14" width="7" height="7" rx="1.6"></rect>
+              <rect x="14" y="14" width="7" height="7" rx="1.6"></rect>
+            </svg>
+          </button>
+          <button class="head-btn notify-btn" id="notifications" type="button" title="Notifications" aria-label="Notifications">
+            <svg class="notify-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M15 18a3 3 0 0 1-6 0"></path>
+              <path d="M19 14.7c-1.2-1.35-1.7-2.85-1.7-5.2a5.3 5.3 0 0 0-10.6 0c0 2.35-.5 3.85-1.7 5.2-.65.73-.1 1.8.88 1.8h12.24c.98 0 1.53-1.07.88-1.8Z"></path>
+              <path d="M4.8 5.6 3.6 4.4"></path>
+              <path d="M19.2 5.6 20.4 4.4"></path>
+            </svg>
+            <span class="head-badge hidden" id="notification-count">0</span>
+          </button>
+          <button class="head-btn history-btn" id="history" type="button" title="History" aria-label="Conversation history">
+            <svg class="history-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+              <path d="M3 3v5h5"></path>
+              <path d="M12 7v5l4 2"></path>
+            </svg>
+          </button>
+          <button class="head-btn mcp-btn" id="mcp-market" type="button" title="MCP Marketplace" aria-label="MCP Marketplace">
+            <svg class="mcp-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path>
+              <path d="m3.3 7 8.7 5 8.7-5"></path>
+              <path d="M12 22V12"></path>
+            </svg>
+          </button>
           <button class="head-btn" id="minimize-task" type="button" title="Minimize">-</button>
           <button class="head-btn" id="stop-task" type="button" title="Stop">■</button>
           <button class="head-btn" id="close-thought" type="button" title="Close">×</button>
@@ -40,10 +71,18 @@
 
     <section class="surface-drawer hidden" id="surface-drawer">
       <header>
-        <span class="card-title">Surfaces</span>
-        <button class="head-btn" id="setup" type="button" title="Open setup">⚙</button>
+        <span class="card-title">App Library<span class="surface-count" id="surface-count"></span></span>
+        <div class="actions">
+          <button class="head-btn" id="setup" type="button" title="Open the main Bed of Roses app" aria-label="Open main app">
+            <svg class="apps-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"></path>
+            </svg>
+          </button>
+          <button class="head-btn" id="close-surfaces" type="button" title="Close" aria-label="Close App Library">×</button>
+        </div>
       </header>
-      <div class="surface-list" id="surface-list"></div>
+      <div class="surface-grid" id="surface-list"></div>
     </section>
 
     <form class="composer" id="composer" autocomplete="off">
@@ -62,6 +101,11 @@
         <span class="hover-hint">⌥ space · ask</span>
       </button>
 
+      <button class="notification-chip hidden" id="notification-chip" type="button" aria-label="Open latest notification">
+        <span class="notification-chip-kicker" id="notification-chip-count">1 unread</span>
+        <span class="notification-chip-subject" id="notification-chip-subject">Notification</span>
+      </button>
+
       <div class="prompt-stack">
         <div class="chip-rail hidden" id="chip-rail"></div>
         <div class="prompt-shell">
@@ -72,7 +116,7 @@
           </button>
           <span class="prompt-sigil" aria-hidden="true">$&gt;</span>
           <textarea class="prompt-input" id="prompt" rows="1" placeholder="Ask, or describe what you need..." autocomplete="off"></textarea>
-          <button class="iconbtn" id="voice" type="button" title="Voice">
+          <button class="iconbtn coming-soon" id="voice" type="button" title="Coming soon" aria-disabled="true" data-tooltip="Coming soon">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.26" stroke-linecap="round">
               <rect x="6" y="2" width="4" height="8" rx="2"></rect>
               <path d="M3 8a5 5 0 0 0 10 0M8 13v2"></path>

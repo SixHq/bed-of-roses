@@ -1185,6 +1185,11 @@ html[data-theme="pixel-crt"] .splash-bootline span {
 }
 .provider-fields-row .field { width: 100%; }
 
+/* BOR-credits "Buy credits" action — full-width like the Connect button below
+   it (not squeezed into the 2-column provider-fields-row grid). */
+.credits-buy-row { margin: var(--s-2) 0; }
+.credits-buy-btn { width: 100%; }
+
 @media (max-width: 520px) {
   .provider-fields-row {
     grid-template-columns: 1fr;

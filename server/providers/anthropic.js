@@ -4,6 +4,7 @@
 import { iterateSseStream } from './sse-util.js';
 import { toAnthropicContent } from './multimodal.js';
 import { providerMaxOutputTokens } from './limits.js';
+import { anthropicReasoningParams } from './reasoning.js';
 
 const URL = 'https://api.anthropic.com/v1/messages';
 const VERSION = '2023-06-01';
@@ -12,9 +13,10 @@ export default {
   id: 'anthropic',
   label: 'Anthropic',
   description: 'Claude — strong reasoning, large context, ideal for widget generation.',
-  defaultModel: 'claude-opus-4-7',
+  defaultModel: 'claude-opus-4-8',
   models: [
-    { id: 'claude-opus-4-7', label: 'Claude Opus 4.7', note: 'Most capable' },
+    { id: 'claude-opus-4-8', label: 'Claude Opus 4.8', note: 'Most capable' },
+    { id: 'claude-opus-4-7', label: 'Claude Opus 4.7', note: 'Powerful' },
     { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', note: 'Balanced' },
     { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', note: 'Fastest, cheapest' },
   ],
@@ -37,8 +39,9 @@ export default {
         'anthropic-version': VERSION,
       },
       body: JSON.stringify({
-        model: model || 'claude-opus-4-7',
+        model: model || 'claude-opus-4-8',
         max_tokens: providerMaxOutputTokens(),
+        ...anthropicReasoningParams(),
         stream: true,
         system,
         messages: nativeMessages,

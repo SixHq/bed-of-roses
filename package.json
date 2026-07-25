@@ -1,6 +1,6 @@
 {
   "name": "bed-of-roses",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Bed of Roses — an ambient AI runtime for macOS with a draggable presence and generated app/widget surfaces.",
   "license": "Apache-2.0",
   "author": "SixHq",
@@ -753,13 +753,19 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@playwright/mcp": "^0.0.75",
+    "bed-of-roses": "^0.1.1",
     "croner": "^9.1.0",
-    "electron": "^36.4.0",
+    "electron": "^43.2.0",
     "exceljs": "^4.4.0",
     "iconv-lite": "^0.7.3",
     "isbinaryfile": "^6.0.0",
     "jschardet": "^3.1.4",
     "mammoth": "^1.12.0",
     "pdf-parse": "^2.4.5"
+  },
+  "overrides": {
+    "brace-expansion": "^5.0.8",
+    "uuid": "^9.0.1",
+    "@hono/node-server": "^1.19.7"
   }
 }

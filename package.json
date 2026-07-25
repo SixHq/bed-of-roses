@@ -1,6 +1,6 @@
 {
   "name": "bed-of-roses",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Bed of Roses — an ambient AI runtime for macOS with a draggable presence and generated app/widget surfaces.",
   "license": "Apache-2.0",
   "author": "SixHq",

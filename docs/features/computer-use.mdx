@@ -1,53 +1,40 @@
 ---
 title: "Computer Use"
-description: "BOR can operate your actual Mac: read the screen, find UI elements, and click, type, and press keys in any application. This is how it does things that aren't on the web and aren't in a file —…"
+description: "BOR can operate your actual Mac: see the screen, find UI elements, click, type, press keys, and open apps — for everything that isn't on the web and isn't in a file."
 ---
 
-BOR can operate your actual Mac: read the screen, find UI elements, and click, type, and press keys in *any* application. This is how it does things that aren't on the web and aren't in a file — "rename these layers in Figma", "send this in the Mail app", "click Run in Xcode". Computer-use tools live in `server/protocol/handlers/computer.js`.
+Bed of Roses can use your Mac the way you do: look at the screen, find the right button, click it, type, press shortcuts, and open applications. This is how it handles the things that aren't on the web and aren't in a file — "rename these layers in Figma", "send this in the Mail app", "click Run in Xcode".
 
-## The tools
+<!-- TODO: screenshot: BOR driving a native Mac app — the screen-capture card in the bubble next to the app being controlled -->
 
-| Tool | Purpose |
-|---|---|
-| `screen_capture` | Capture your real Mac screen and return a screenshot (BOR hides its own presence during capture by default, so you see your actual app). |
-| `locate_screen_element` | Use the configured vision model to find a visible UI element and return click coordinates. |
-| `computer_click` | Click at macOS coordinates (usually from `locate_screen_element`). |
-| `computer_type` | Type into the focused app. |
-| `computer_key` | Press a key / shortcut. |
-| `open_app` | Launch a macOS application. |
-| `computer_use` | A higher-level loop that combines the above to accomplish a goal. |
+## How it works
 
-## How it sees
+1. **It looks.** BOR captures your screen — hiding its own orb and bubble first, so it sees your apps, not itself. The capture appears as a card in the bubble, so you always see what it saw.
+2. **It finds.** A vision model locates the element you described ("the blue Share button") and returns exact click coordinates.
+3. **It acts.** Clicks, typed text, and keyboard shortcuts are delivered to the real app. Opening applications works by name.
+4. **It verifies.** A click only proves a click was *sent* — so BOR re-captures the screen and confirms what actually changed before claiming success.
 
-`screen_capture` returns an image of your screen. By default BOR **hides its own presence/thought bubble** during the capture, so the screenshot shows the app *underneath* — not BOR's overlay. The presence preview shows the captured image inline (so BOR doesn't double-fetch it).
-
-`locate_screen_element` then asks your configured provider's **vision model** "where is the blue Share button?" and returns both the model coordinate and macOS click coordinates you can hand straight to `computer_click`.
-
-## How it acts
-
-`computer_click` / `computer_type` / `computer_key` drive macOS through System Events. The "truth rule" BOR follows: a click/type result only proves the command was *sent* — not that anything succeeded. So BOR re-captures the screen to verify what actually happened before claiming a result.
-
-`computer_use` wraps this into a goal-directed loop: capture → locate → act → re-capture → repeat, until the goal is met or it hits a real blocker (then it asks you).
+For multi-step goals, BOR runs this see-find-act-verify loop on its own until the goal is met or it hits something only you can resolve (then it asks).
 
 ## Permissions
 
-Computer use needs macOS permissions:
+Computer use needs two macOS permissions, both requested during onboarding (and grantable later in System Settings → Privacy & Security):
 
-- **Screen Recording** — for `screen_capture` and `locate_screen_element` (the Electron/Terminal host must be allowed).
-- **Accessibility** — for `computer_click`/`type`/`key` (the host must be allowed).
+- **Screen Recording** — to see the screen.
+- **Accessibility** — to click and type.
 
-BOR can probe these (`/api/system/permissions`) and open the right settings pane (`/api/system/permissions/open`) so you can grant them.
+Vision-guided finding requires a vision-capable model on your configured provider.
 
-## Computer use vs. the browser
+## When BOR uses it
 
-- For **web** tasks, prefer [`browser_action`](the-browser.md) (a controlled headless browser) or the visible Browser app — faster and more reliable than operating a browser window by hand.
-- For **native app** tasks (Figma, Xcode, Mail, Finder, anything not web), computer use is the way.
+- **Native apps** — Figma, Xcode, Mail, Finder, anything that isn't a website.
+- **Last-resort web** — if a page defeats the [ambient browser](/features/ambient-browser), BOR can drive a visible browser by sight.
 
-When a browser task can't be done with `browser_action`, BOR can fall back to driving the *visible* browser with computer use.
+For anything a [connector](/features/connectors) covers (Gmail, Calendar, Slack…), BOR uses the connector — it never clicks through a UI when a real API is available.
 
-## Use cases
+## What to say
 
-- *"In Figma, select the frame tool."* → `screen_capture`, `locate_screen_element("the Figma frame tool")`, `computer_click`.
-- *"Open Xcode and click Run."* → `open_app`, then locate + click.
-- *"What's on my screen right now?"* → `screen_capture` and describe it.
-- *"Fill in this native form."* → locate each field, `computer_click` + `computer_type`, re-capture to verify.
+- "In Figma, select the frame tool."
+- "Open Xcode and click Run."
+- "What's on my screen right now?"
+- "Fill in this form in the app I have open."

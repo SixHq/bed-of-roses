@@ -1,0 +1,117 @@
+/* Theme: Cyberpunk — neon-noir night-city terminal.
+   Violet-black panels wireframed in glowing cyan, corners notched like
+   console bezels, magenta for the hot signal, acid lime for confirmations.
+   Dense mono telemetry. Everything hums slightly.
+
+   Hallmarks:
+     • #13091F panels on a #0A0612 void — violet-shifted, never neutral black
+     • 1px solid cyan #00E5FF wireframe border on every panel, radius 0,
+       corners NOTCHED via clip-path (the bezel cut)
+     • Neon glow shadows: inset cyan wash + outer cyan bloom
+     • Cyan = structure + primary. Magenta #FF2D9C = hot channel (active,
+       alerts, emphasis). Lime #A8FF3E = success ONLY.
+     • Chakra Petch 700 UPPERCASE display with cyan text-glow,
+       Space Grotesk body, JetBrains Mono telemetry
+
+   Palette + component recipes match the v2 presence spec in
+   host/presence.css (.presence[data-theme="cyberpunk"]). The structural
+   shell (shell/style.css) reads from these variables; extras.css applies
+   the clip-path notches, glows, and uppercase display treatment. */
+
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+  /* Surfaces — violet-black tiers. --surface-1 is the presence's literal
+     panel color; deeper tiers lift toward violet, never grey. */
+  --canvas:    #0A0612;
+  --surface-1: #13091F;   /* main panel — cards, modals, fields */
+  --surface-2: #1A0E2A;   /* elevated chips / hover */
+  --surface-3: #221336;   /* highest lift — selected backdrops */
+  --bloom:     #00E5FF;   /* cyan — the structural neon */
+
+  /* Neon channels — exposed for extras.css and LLM-generated widgets.
+     Hex values are LITERAL matches of the presence recipe. */
+  --neon-cyan:    #00E5FF;  /* structure, borders, primary action */
+  --neon-magenta: #FF2D9C;  /* hot channel — active, alerts, emphasis */
+  --neon-lime:    #A8FF3E;  /* success / confirm ONLY */
+  --on-neon:      #0A0612;  /* text color on a filled neon surface */
+
+  /* Hairlines — cyan wireframe. Strong is the presence's full-strength
+     solid cyan border; default and soft are the divider tiers. */
+  --hairline:        rgba(0, 229, 255, 0.55);
+  --hairline-strong: #00E5FF;
+  --hairline-soft:   rgba(0, 229, 255, 0.25);
+
+  /* Labels — pale violet-white with a cyan telemetry tier (presence
+     ladder, exact: label-3 is cyan — metadata reads as instrument text) */
+  --label:    #EDE5FF;
+  --label-2:  rgba(237, 229, 255, 0.70);
+  --label-3:  rgba(0, 229, 255, 0.65);
+  --label-4:  rgba(237, 229, 255, 0.28);
+
+  /* Translucent fills — cyan-keyed so frosted regions read as HUD glass */
+  --fill-1: rgba(0, 229, 255, 0.10);
+  --fill-2: rgba(0, 229, 255, 0.06);
+  --fill-3: rgba(0, 229, 255, 0.03);
+
+  /* Default presence — magenta, matching the presence aura channel
+     (the orb's hot diamond core). */
+  --avatar-color-rgb: 255, 45, 156;
+  --wallpaper: transparent;
+
+  /* Atmosphere — the void with faint city-glow washes: magenta smog top
+     right, cyan uplight bottom left. Kept dim so neon borders carry. */
+  --atmosphere:
+    radial-gradient(ellipse 70% 50% at 85% 0%,   rgba(255, 45, 156, 0.10), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 8% 100%,  rgba(0, 229, 255, 0.08), transparent 65%),
+    var(--canvas);
+
+  /* Halos — emissive neon. The medium tier is the presence's literal
+     panel glow (inset wash + outer bloom). Strong adds the magenta hum. */
+  --halo-soft:   inset 0 0 14px rgba(0, 229, 255, 0.06),
+                 0 0 18px rgba(0, 229, 255, 0.22);
+  --halo-medium: inset 0 0 18px rgba(0, 229, 255, 0.08),
+                 0 0 32px rgba(0, 229, 255, 0.30);
+  --halo-strong: inset 0 0 22px rgba(0, 229, 255, 0.10),
+                 0 0 44px rgba(0, 229, 255, 0.45);
+  --shadow-deep: 0 0 0 1px rgba(0, 229, 255, 0.55),
+                 0 0 52px rgba(0, 229, 255, 0.35),
+                 0 0 90px rgba(255, 45, 156, 0.18);
+
+  /* Spacing — shared 4px base. HUDs are grid-disciplined. */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-7: 32px; --s-8: 40px;
+  --s-9: 56px; --s-10: 72px; --s-11: 96px;
+
+  /* Radii — ZERO everywhere. Corners are notched with clip-path in
+     extras.css, never rounded. */
+  --r-input:  0;
+  --r-button: 0;
+  --r-bar:    0;
+  --r-tile:   0;
+  --r-modal:  0;
+
+  /* Type — Chakra Petch display (UPPERCASE, glowing), Space Grotesk body,
+     JetBrains Mono telemetry. Matches the presence recipe exactly. */
+  --font-display: "Chakra Petch", "Space Grotesk", sans-serif;
+  --font-system:  "Space Grotesk", "Geist", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", "IBM Plex Mono", ui-monospace, Menlo, monospace;
+
+  /* Type scale — display tightened; uppercase Chakra Petch reads large. */
+  --t-hero:     52px;
+  --t-display:  40px;
+  --t-title-1:  26px;
+  --t-title-2:  20px;
+  --t-headline: 16px;
+  --t-body:     14px;
+  --t-subhead:  13px;
+  --t-caption:  11px;
+  --t-micro:    10px;
+
+  /* Motion — quick, electrical. Panels snap on; nothing floats. */
+  --ease-standard: cubic-bezier(0.20, 0.00, 0.00, 1);
+  --ease-snap:     cubic-bezier(0.20, 0.00, 0.00, 1);
+  --d-micro:  100ms;
+  --d-pane:   240ms;
+  --d-layout: 420ms;
+}

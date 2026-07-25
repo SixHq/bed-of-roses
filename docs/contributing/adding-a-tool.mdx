@@ -71,7 +71,7 @@ That's it. `buildToolDocs()` renders the new tool into the system prompt automat
 
 ## 3. (Optional) render a custom card
 
-If you want a richer bubble card than the default activity row, handle your `event` in `v2/host/presence.js`:
+If you want a richer bubble card than the default activity row, handle your `event` in `host/presence.js`:
 
 - Add a `TOOL_META` entry (`my_tool: ['Label', 'subtitle', '◆']`).
 - Add a `tag_start` branch (open a card) and a result-event branch (finalize it) in `handleChatEvent`.
@@ -82,7 +82,7 @@ The browser, terminal, editor, and wait cards are all examples of this pattern.
 ## Notes & gotchas
 
 - **Children & attributes.** The new-harness shim treats children as flat string properties; tools whose children carry XML attributes need handler-side schema overrides. Prefer attributes for scalars.
-- **Opaque content tags.** If your tool's body is file-like content, the parser already handles CDATA robustly — anchor on your own close tag, not CDATA. See [The protocol](../concepts/the-protocol.md#robustness).
+- **Opaque content tags.** If your tool's body is file-like content, the parser already handles CDATA robustly — anchor on your own close tag, not CDATA.
 - **Audit.** Anything that mutates state should call `ctx.audit(...)`.
 - **Safety.** If your tool runs shell or writes files, route through the validator / path guards.
 

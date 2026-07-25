@@ -3,7 +3,7 @@
 // with role:"system". Note: ChatGPT subscriptions are billed separately
 // from API access — the user must add API billing at platform.openai.com.
 
-import { iterateSseStream } from './sse-util.js';
+import { httpStreamError, iterateSseStream, makeTruncatedStreamError, strictFinishEnabled } from './sse-util.js';
 import { toOpenAiContent } from './multimodal.js';
 import { providerMaxOutputTokens } from './limits.js';
 import { openAiReasoningParams } from './reasoning.js';
@@ -16,22 +16,25 @@ export default {
   id: 'openai',
   label: 'OpenAI',
   description: 'OpenAI API with GPT-5.x and ChatGPT-style model aliases. ChatGPT subscriptions do not include API access.',
-  defaultModel: 'gpt-5.4',
+  defaultModel: 'gpt-5.6-terra',
+  // Verified against developers.openai.com July 2026 — the GPT-5.6 family
+  // (Sol/Terra/Luna, released 2026-07-09) is the current production lineup.
   models: [
-    { id: 'gpt-5.5',       label: 'GPT-5.5',       note: 'Most capable' },
-    { id: 'gpt-5.4',       label: 'GPT-5.4',       note: 'Balanced (recommended)' },
+    { id: 'gpt-5.6-sol',   label: 'GPT-5.6 Sol',   note: 'Most capable' },
+    { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', note: 'Balanced (recommended)' },
+    { id: 'gpt-5.6-luna',  label: 'GPT-5.6 Luna',  note: 'Fast, cost-efficient' },
+    { id: 'gpt-5.5',       label: 'GPT-5.5',       note: 'Previous flagship' },
+    { id: 'gpt-5.5-pro',   label: 'GPT-5.5 Pro',   note: 'Deepest reasoning, premium' },
     { id: 'chat-latest',   label: 'ChatGPT latest', note: 'Latest Instant model used in ChatGPT' },
-    { id: 'gpt-5.3-chat-latest', label: 'GPT-5.3 Chat', note: 'ChatGPT snapshot' },
-    { id: 'gpt-5.4-mini',  label: 'GPT-5.4 mini',  note: 'Fast' },
-    { id: 'gpt-5.4-nano',  label: 'GPT-5.4 nano',  note: 'Cheapest' },
-    { id: 'gpt-4o',        label: 'GPT-4o',        note: 'Legacy' },
-    { id: 'gpt-4o-mini',   label: 'GPT-4o mini',   note: 'Legacy, cheap' },
+    { id: 'gpt-5.4',       label: 'GPT-5.4',       note: 'Legacy' },
+    { id: 'gpt-5.4-mini',  label: 'GPT-5.4 mini',  note: 'Legacy, fast' },
   ],
   signupUrl: 'https://platform.openai.com/api-keys',
   needsBaseUrl: false,
+  supportsDocuments: true,
   keyHint: 'sk-…',
 
-  async *stream({ apiKey, model, system, messages, signal }) {
+  async *stream({ apiKey, model, system, messages, signal, reasoning, emitReasoning }) {
     // Multimodal: each user/assistant message may contain a string or an
     // array of canonical content blocks. The helper translates to OpenAI's
     // {type:'text'|'image_url'} array shape.
@@ -39,10 +42,10 @@ export default {
     for (const m of messages) {
       nativeMessages.push({ role: m.role, content: await toOpenAiContent(m.content) });
     }
-    const selectedModel = model || 'gpt-5.4';
+    const selectedModel = model || 'gpt-5.6-terra';
     const body = {
       model: selectedModel,
-      ...openAiReasoningParams(selectedModel),
+      ...openAiReasoningParams(selectedModel, reasoning),
       max_tokens: providerMaxOutputTokens(),
       stream: true,
       messages: nativeMessages,
@@ -56,18 +59,22 @@ export default {
       body: JSON.stringify(body),
       signal,
     });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`OpenAI ${res.status}: ${err.slice(0, 400)}`);
-    }
+    if (!res.ok) throw await httpStreamError('OpenAI', res);
+    let finished = false;
     for await (const ev of iterateSseStream(res.body)) {
-      if (!ev.data || ev.data === '[DONE]') continue;
+      if (!ev.data) continue;
+      if (ev.data === '[DONE]') { finished = true; continue; }
       try {
         const j = JSON.parse(ev.data);
-        const delta = j.choices?.[0]?.delta?.content;
-        if (delta) yield delta;
+        if (j.choices?.[0]?.finish_reason) finished = true;
+        const d = j.choices?.[0]?.delta;
+        if (d?.content) yield d.content;
+        // Reasoning-capable gateways surface chain-of-thought summaries as
+        // `reasoning_content` (DeepSeek-style) on the delta.
+        else if (emitReasoning && d?.reasoning_content) yield { type: 'reasoning', text: d.reasoning_content };
       } catch { /* ignore malformed */ }
     }
+    if (strictFinishEnabled() && !finished) throw makeTruncatedStreamError('OpenAI');
   },
 
   /**

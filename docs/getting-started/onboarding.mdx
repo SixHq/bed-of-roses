@@ -1,52 +1,58 @@
 ---
 title: "Onboarding"
-description: "The first time you launch the v2 host (or run bor onboard), BOR opens an onboarding flow. It collects everything the presence needs to feel like yours. Onboarding writes to the presence's…"
+description: "The setup walkthrough: name your AI, pick a world and a presence, allow computer control, connect a model, and link your daily-life services."
 ---
 
-The first time you launch the v2 host (or run `bor onboard`), BOR opens an onboarding flow. It collects everything the presence needs to feel like *yours*. Onboarding writes to the presence's `config.json`; you can change any of it later.
+The first time you launch Bed of Roses (or any time you run `bor onboard`), a short setup flow collects everything the presence needs to feel like yours. Every choice can be changed later — by asking BOR, or by re-running onboarding.
 
-## Steps
+## The steps
 
-### 1. Choose a provider
+### 1. Welcome
 
-BOR is **provider-agnostic** and treats every provider as first-class (see the [provider parity](../providers/overview.md) principle). You'll pick one of:
-
-| Provider | Notes |
-|---|---|
-| **Bed of Roses credits** (`bor`) | Use BOR's metered credits — no key of your own required. |
-| **Anthropic** (`anthropic`) | Claude models. Bring an Anthropic API key. |
-| **OpenAI** (`openai`) | GPT models. Bring an OpenAI API key. |
-| **Google Gemini** (`gemini`) | Gemini models. Bring a Gemini key. |
-| **OpenAI-compatible** (`openai-compatible`) | Any endpoint that speaks the OpenAI API (local models, proxies, other vendors). Requires a base URL. |
-
-Each provider exposes a sign-up link if you don't have a key yet. You enter the key (and base URL for OpenAI-compatible), pick a model, and BOR validates it.
+A short introduction.
 
 ### 2. Name your AI
 
-Give the presence a name (this is what it calls itself and what the bubble shows). You can change it any time — the AI itself can do it with the `set_ai_name` tool, or you can ask.
+What the presence calls itself. Default: **Atlas**. You can rename it any time later ("call yourself Juniper from now on").
 
-### 3. Personality
+### 3. Pick a world
 
-Describe how it should behave — tone, verbosity, attitude. The default is *"Warm, exact, slightly understated. Brief by default. First person."* This becomes part of the system prompt, so it genuinely shapes every reply.
+Choose a starting theme from the eight base themes — Bloom (default), Cartoon Brutalist, Warm & Earthy, Neo Brutalist, Y2K Frutiger Aero, Liquid Glass, Pixel CRT, Risograph. Picking one restyles the rest of onboarding immediately so you preview it live. See [Themes](/features/themes).
 
-### 4. Avatar
+### 4. Choose a presence
 
-Pick an avatar. BOR's avatars are built on **DiceBear `avataaars`** (the Pablo Stanley illustration set). The avatar shows on the orb and in chat.
+Pick the orb's animated character — **Nova**, **Cipher**, **Aria**, or **Echo** — and a fallback color from eight swatches (Pearl, Amber, Ember, Bloom, Aurora, Frost, Lilac, Onyx).
 
-### 5. Theme
+### 5. Allow computer control
 
-Choose a starting theme. Themes restyle the presence *and* every surface BOR generates — see [Themes](../features/themes.md). You can switch themes later just by asking ("make it pixel-CRT").
+macOS permission prompts for **Automation + Accessibility** (so BOR can click and type) and **Screen Recording** (so it can see the screen). This step is optional and skippable — [computer use](/features/computer-use) just stays off until you grant them.
+
+### 6. Connect a model
+
+Pick at least one provider:
+
+| Provider | Bring |
+|---|---|
+| **Bed of Roses credits** | Nothing — buy credits, no API key. |
+| **Anthropic** | An Anthropic API key (Claude models). |
+| **OpenAI** | An OpenAI API key (GPT models). |
+| **Google Gemini** | A Gemini API key. |
+| **OpenAI-compatible** | A base URL + key. Quick presets fill in DeepSeek, Kimi (Moonshot), Z.ai (GLM), Groq, OpenRouter, Together, Mistral, Perplexity, Fireworks, DeepInfra, Cerebras, Ollama, LM Studio. |
+
+Each provider's panel lets you pick a model and a **reasoning effort** — Off, Low, Medium, High (recommended), or Max — which controls how much the model thinks before acting. You can connect several providers and [switch between them from the model chip](/features/presence#the-model-chip) later.
+
+### 7. Connect Bed of Roses to your daily life
+
+The final step is the connectors gallery: paste one Composio key and Gmail, Google Calendar, Drive, Docs, Sheets, Outlook, WhatsApp, YouTube, Slack, Notion, Linear, and GitHub become one-click sign-ins — plus a "More apps" browser with roughly a hundred more services, iMessage via Full Disk Access, and token fallbacks for Slack/Notion/GitHub. Everything here is optional and can be done later.
+
+<img src="/assets/link_bor_to_your_daily_life.png" alt="The final onboarding step: the connectors gallery with one-click sign-in cards" />
+
+See [Connect your daily life](/features/connectors) for the full picture.
+
+**Finish setup** saves everything and the orb appears over your desktop.
 
 ## After onboarding
 
-You land on the presence. Your choices are saved to `os-data/presences/<id>/config.json` (or `os-data/config.json` in single-tenant mode). Re-run onboarding any time with:
-
-```bash
-bor onboard
-```
-
-or from the presence by asking BOR to change its name, persona, theme, or provider.
-
-## Multiple presences
-
-Onboarding runs **per presence**. Each presence has its own provider, name, personality, avatar, theme, memory, and data root — they don't share anything. See [Multi-presence](../features/multi-presence.md).
+- Change anything by asking: name, personality, theme, provider.
+- Re-run any time: `bor onboard` (this creates a new presence — see [Multi-presence](/features/multi-presence)).
+- Onboarding runs **per presence**: each presence has its own model, name, look, memory, and connections.

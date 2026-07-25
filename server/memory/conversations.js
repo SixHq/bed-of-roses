@@ -2,9 +2,16 @@
 //
 // Each conversation is one JSON file: os-data/memory/conversations/<id>.json
 //   {
-//     id, title, createdAt, updatedAt, messageCount,
+//     id, title, preview, createdAt, updatedAt, messageCount,
+//     reasoning: [ { text, at, usersAfter, aisAfter }, ... ],   // collapsed reasoning cards
+//     thread: [ <serialized bubbleState.thread items> ],        // full rich thread (cards, terminals, …)
 //     messages: [ { role: 'user'|'assistant', content: string | block[] }, ... ]
 //   }
+// `preview` (last substantive message, ~100 chars), `reasoning`, and `thread`
+// were added later; readers tolerate their absence on older records. `thread`
+// is the presence's rendered timeline verbatim (say bubbles, editor/terminal/
+// image/browser cards, reasoning) so resume restores the full UI, not just
+// text; `reasoning`+`messages` remain the fallback for older records.
 //
 // The presence renderer already holds the canonical context array
 // (`taskMessages`) and saves it back here after every completed turn, so this
@@ -29,7 +36,96 @@ function safeId(id) {
   return s;
 }
 
-export async function saveConversation({ id, title, messages, createdAt, updatedAt } = {}) {
+// Sanitize the renderer's reasoning snapshot (see presence.js
+// reasoningSnapshot()): collapsed reasoning cards plus end-anchored position
+// counters so the presence can re-insert them chronologically on resume.
+function sanitizeReasoning(reasoning) {
+  if (!Array.isArray(reasoning)) return [];
+  const entries = [];
+  for (const note of reasoning) {
+    if (!note || typeof note.text !== 'string') continue;
+    const text = note.text.trim().slice(0, 20000);
+    if (!text) continue;
+    entries.push({
+      text,
+      at: Number(note.at) || null,
+      usersAfter: Math.max(0, Number(note.usersAfter) || 0),
+      aisAfter: Math.max(0, Number(note.aisAfter) || 0),
+    });
+    if (entries.length >= 200) break;
+  }
+  return entries;
+}
+
+// The renderer's serialized thread can carry heavy payloads (editor card
+// bodies, browser-card screenshots as data URLs). Cap items, drop oversized
+// data URLs, and bound total size so a conversation file stays loadable.
+const THREAD_MAX_ITEMS = 120;
+const THREAD_MAX_TOTAL_CHARS = 10_000_000;
+const THREAD_DATAURL_MAX = 1_500_000;
+const THREAD_STRING_MAX = 400_000;
+
+function shrinkThreadValue(value, depth = 0) {
+  if (depth > 8) return null;
+  if (typeof value === 'string') {
+    if (value.startsWith('data:') && value.length > THREAD_DATAURL_MAX) return '';
+    if (value.length > THREAD_STRING_MAX) return `${value.slice(0, THREAD_STRING_MAX)}\n[truncated]`;
+    return value;
+  }
+  if (Array.isArray(value)) return value.slice(0, 400).map((v) => shrinkThreadValue(v, depth + 1));
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [key, v] of Object.entries(value)) {
+      if (v === undefined || typeof v === 'function') continue;
+      out[key] = shrinkThreadValue(v, depth + 1);
+    }
+    return out;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean' || value === null) return value;
+  return null;
+}
+
+function sanitizeThread(thread) {
+  if (!Array.isArray(thread) || !thread.length) return [];
+  const items = [];
+  for (const raw of thread.slice(-THREAD_MAX_ITEMS)) {
+    if (!raw || typeof raw !== 'object' || typeof raw.type !== 'string') continue;
+    if (raw.type === 'thinking') continue;
+    const item = shrinkThreadValue(raw);
+    if (item && typeof item === 'object') items.push(item);
+  }
+  while (items.length && JSON.stringify(items).length > THREAD_MAX_TOTAL_CHARS) items.shift();
+  return items;
+}
+
+// Fallback preview for records saved before the `preview` field existed:
+// last non-empty message, assistant turns reduced to their spoken <say> text.
+function previewFromMessages(messages) {
+  if (!Array.isArray(messages)) return '';
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!message) continue;
+    let text = '';
+    if (message.role === 'assistant') {
+      const raw = String(message.content || '');
+      const says = [...raw.matchAll(/<say\b[^>]*>([\s\S]*?)<\/say>/gi)]
+        .map((m) => m[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim())
+        .filter(Boolean);
+      if (says.length) text = says.join(' ');
+      else if (!/<[a-zA-Z]/.test(raw)) text = raw;
+    } else if (typeof message.content === 'string') {
+      text = message.content;
+    } else if (Array.isArray(message.content)) {
+      const block = message.content.find((b) => b && b.type === 'text' && typeof b.text === 'string');
+      text = block?.text || '';
+    }
+    const normalized = String(text).replace(/\s+/g, ' ').trim();
+    if (normalized) return normalized.length > 100 ? `${normalized.slice(0, 99)}…` : normalized;
+  }
+  return '';
+}
+
+export async function saveConversation({ id, title, messages, createdAt, updatedAt, preview, reasoning, thread } = {}) {
   const safe = safeId(id);
   if (!safe) return { ok: false, reason: 'invalid id' };
   if (!Array.isArray(messages) || !messages.length) return { ok: false, reason: 'empty conversation' };
@@ -50,9 +146,12 @@ export async function saveConversation({ id, title, messages, createdAt, updated
   const record = {
     id: safe,
     title: String(title || '').slice(0, 200) || 'Conversation',
+    preview: String(preview || '').slice(0, 300) || previewFromMessages(messages),
     createdAt: firstSeen || updatedAt || now,
     updatedAt: updatedAt || now,
     messageCount: messages.length,
+    reasoning: sanitizeReasoning(reasoning),
+    thread: sanitizeThread(thread),
     messages,
   };
   await writeFile(path, JSON.stringify(record, null, 2));
@@ -76,6 +175,7 @@ export async function listConversations() {
       items.push({
         id: rec.id,
         title: rec.title || 'Conversation',
+        preview: rec.preview || previewFromMessages(rec.messages),
         createdAt: rec.createdAt || null,
         updatedAt: rec.updatedAt || rec.createdAt || null,
         messageCount: rec.messageCount || (Array.isArray(rec.messages) ? rec.messages.length : 0),

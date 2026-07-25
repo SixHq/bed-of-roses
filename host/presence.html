@@ -46,7 +46,11 @@
             </svg>
           </button>
           <button class="head-btn" id="minimize-task" type="button" title="Minimize">-</button>
-          <button class="head-btn" id="stop-task" type="button" title="Stop">■</button>
+          <button class="head-btn" id="stop-task" type="button" title="New thread" aria-label="New thread">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14"></path>
+            </svg>
+          </button>
           <button class="head-btn" id="close-thought" type="button" title="Close">×</button>
         </div>
       </header>
@@ -116,16 +120,63 @@
           </button>
           <span class="prompt-sigil" aria-hidden="true">$&gt;</span>
           <textarea class="prompt-input" id="prompt" rows="1" placeholder="Ask, or describe what you need..." autocomplete="off"></textarea>
-          <button class="iconbtn coming-soon" id="voice" type="button" title="Coming soon" aria-disabled="true" data-tooltip="Coming soon">
+          <button class="model-chip" id="model-chip" type="button" title="Change model">
+            <span id="model-chip-label">model</span>
+          </button>
+          <button class="iconbtn" id="prompt-menu-btn" type="button" title="Options" aria-label="Options" aria-haspopup="menu" aria-expanded="false">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.26" stroke-linecap="round">
-              <rect x="6" y="2" width="4" height="8" rx="2"></rect>
-              <path d="M3 8a5 5 0 0 0 10 0M8 13v2"></path>
+              <path d="M3 4.5h10"></path>
+              <path d="M3 8h10"></path>
+              <path d="M3 11.5h10"></path>
             </svg>
           </button>
           <button class="send" id="send" type="submit" title="Send" aria-label="Send">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 8h10M9 4l4 4-4 4"></path>
             </svg>
+          </button>
+        </div>
+        <div class="prompt-menu hidden" id="prompt-menu" role="menu" aria-label="Options">
+          <button class="prompt-menu-item" type="button" role="menuitem" data-menu-action="notifications">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M15 18a3 3 0 0 1-6 0"></path>
+              <path d="M19 14.7c-1.2-1.35-1.7-2.85-1.7-5.2a5.3 5.3 0 0 0-10.6 0c0 2.35-.5 3.85-1.7 5.2-.65.73-.1 1.8.88 1.8h12.24c.98 0 1.53-1.07.88-1.8Z"></path>
+            </svg>
+            <span class="prompt-menu-label">Notifications</span>
+            <span class="prompt-menu-badge hidden" id="prompt-menu-notification-count">0</span>
+          </button>
+          <button class="prompt-menu-item" type="button" role="menuitem" data-menu-action="history">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+              <path d="M3 3v5h5"></path>
+              <path d="M12 7v5l4 2"></path>
+            </svg>
+            <span class="prompt-menu-label">History</span>
+          </button>
+          <button class="prompt-menu-item" type="button" role="menuitem" data-menu-action="mcp">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path>
+              <path d="m3.3 7 8.7 5 8.7-5"></path>
+              <path d="M12 22V12"></path>
+            </svg>
+            <span class="prompt-menu-label">MCP Marketplace</span>
+          </button>
+          <button class="prompt-menu-item" type="button" role="menuitem" data-menu-action="apps">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="7" height="7" rx="1.6"></rect>
+              <rect x="14" y="3" width="7" height="7" rx="1.6"></rect>
+              <rect x="3" y="14" width="7" height="7" rx="1.6"></rect>
+              <rect x="14" y="14" width="7" height="7" rx="1.6"></rect>
+            </svg>
+            <span class="prompt-menu-label">App Library</span>
+          </button>
+          <span class="prompt-menu-divider" aria-hidden="true"></span>
+          <button class="prompt-menu-item" type="button" role="menuitem" data-menu-action="new-presence" title="Manage presences — create, delete, inspect logs">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="M12 8v8M8 12h8"></path>
+            </svg>
+            <span class="prompt-menu-label">New Presence</span>
           </button>
         </div>
       </div>

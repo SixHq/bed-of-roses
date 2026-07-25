@@ -15,7 +15,7 @@
 // Model names shown are OpenAI / Anthropic / DeepSeek; the backend maps them to
 // real deployments. See 6thsense-backend src/bor_stream/model_map.py.
 
-import { iterateSseStream } from './sse-util.js';
+import { httpStreamError, iterateSseStream, makeTruncatedStreamError, strictFinishEnabled } from './sse-util.js';
 import { toOpenAiContent } from './multimodal.js';
 import { providerMaxOutputTokens } from './limits.js';
 
@@ -43,11 +43,13 @@ export default {
   // The web login + buy-credits flow lives here; onboarding opens it in the browser.
   signupUrl: (local ? 'http://localhost:3000' : 'https://app.bedofroses.os') + '/credits',
   needsBaseUrl: false,
+  // The metered proxy accepts OpenAI's inline `file` content part.
+  supportsDocuments: true,
   keyHint: 'BOR account token (from sign-in)',
   // Marks this as the credit option onboarding surfaces first.
   isBorCredits: true,
 
-  async *stream({ apiKey, model, baseUrl, system, messages, signal }) {
+  async *stream({ apiKey, model, baseUrl, system, messages, signal, emitReasoning }) {
     if (!apiKey) throw new Error('Sign in to BOR and buy credits to use this provider.');
     const base = (baseUrl || DEFAULT_BASE).replace(/\/+$/, '');
     const selectedModel = model || 'claude-sonnet-4.5';
@@ -84,19 +86,23 @@ export default {
       body: JSON.stringify(body),
       signal,
     });
-    if (!res.ok) {
-      const err = await res.text();
-      // Surface the backend's structured errors (402 spend_cap_reached /
-      // insufficient_balance) so the chat loop can show them.
-      throw new Error(`BOR credits ${res.status}: ${err.slice(0, 400)}`);
-    }
+    // Surface the backend's structured errors (402 spend_cap_reached /
+    // insufficient_balance) so the chat loop can show them.
+    if (!res.ok) throw await httpStreamError('BOR credits', res);
+    let finished = false;
     for await (const ev of iterateSseStream(res.body)) {
-      if (!ev.data || ev.data === '[DONE]') continue;
+      if (!ev.data) continue;
+      if (ev.data === '[DONE]') { finished = true; continue; }
       try {
         const j = JSON.parse(ev.data);
-        const delta = j.choices?.[0]?.delta?.content;
-        if (delta) yield delta;
+        if (j.choices?.[0]?.finish_reason) finished = true;
+        const d = j.choices?.[0]?.delta;
+        if (d?.content) yield d.content;
+        // deepseek-reasoner (and other reasoning deployments behind the proxy)
+        // stream chain-of-thought as `reasoning_content`.
+        else if (emitReasoning && d?.reasoning_content) yield { type: 'reasoning', text: d.reasoning_content };
       } catch { /* ignore malformed */ }
     }
+    if (strictFinishEnabled() && !finished) throw makeTruncatedStreamError('BOR credits');
   },
 };

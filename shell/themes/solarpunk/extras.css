@@ -1,0 +1,194 @@
+/* Solarpunk — component-level overrides.
+   The shell's structure keeps its layout; this file warms it: moss-filled
+   primary actions, italic serif placeholders, dashed botanical rings, and
+   soft daylight shadows. Mirrors host/presence.css
+   (.presence[data-theme="solarpunk"]). */
+
+/* Headlines — DM Serif Display italic, like the presence's card titles. */
+.headline,
+.greeting,
+.modal-title {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.greeting em,
+.headline em {
+  color: var(--terracotta);
+  font-style: italic;
+}
+
+.wordmark span {
+  font-family: var(--font-display);
+  font-style: italic;
+}
+
+/* Buttons — pills. Primary is moss with cream text (presence .send). */
+.btn {
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-button);
+  background: var(--surface-1);
+  color: var(--label);
+  font-family: var(--font-system);
+  font-weight: 600;
+  box-shadow: var(--halo-soft);
+  transition: transform var(--d-micro) var(--ease-standard), box-shadow var(--d-micro) var(--ease-standard), background var(--d-micro) var(--ease-standard);
+}
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--halo-medium);
+}
+.btn-primary {
+  background: var(--moss);
+  border-color: var(--moss);
+  color: var(--surface-1);
+}
+.btn-primary:hover:not(:disabled) {
+  background: #4A6B44;
+  border-color: #4A6B44;
+  color: var(--surface-1);
+}
+.btn-secondary {
+  background: var(--surface-2);
+  color: var(--label);
+}
+
+/* Inputs — cream panels, hairline borders, italic serif placeholders
+   (presence .prompt-input::placeholder is DM Serif Display italic). */
+.field-input,
+.chat-input,
+input[type="text"],
+input[type="password"],
+input[type="number"],
+textarea {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-input);
+  color: var(--label);
+  font-family: var(--font-system);
+}
+textarea {
+  border-radius: 18px; /* pills don't suit multi-line fields */
+}
+.field-input:focus,
+.chat-input:focus,
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+textarea:focus {
+  outline: 0;
+  border-color: var(--moss);
+  box-shadow: 0 0 0 3px rgba(63, 93, 58, 0.18);
+}
+.field-input::placeholder,
+.chat-input::placeholder,
+textarea::placeholder {
+  color: var(--label-3);
+  font-family: var(--font-display);
+  font-style: italic;
+}
+.field-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--label-2);
+}
+
+/* Cards — provider / presence / theme pickers: warm panels that lift on
+   a soft daylight shadow. Selection is a moss ring, not a glow. */
+.provider-card,
+.presence-card,
+.theme-card {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--halo-soft);
+  transition: transform var(--d-micro) var(--ease-standard), box-shadow var(--d-micro) var(--ease-standard);
+}
+.provider-card:hover,
+.presence-card:hover,
+.theme-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--halo-medium);
+}
+.provider-card.selected,
+.presence-card.selected,
+.theme-card.selected {
+  border-color: var(--moss);
+  box-shadow: 0 0 0 2px rgba(63, 93, 58, 0.35), var(--halo-medium);
+}
+
+/* Botanical detailing — dashed leaf-green rings around small round
+   elements (presence orb wears a dashed orbit ring). */
+.color-swatch {
+  outline: 1px dashed rgba(31, 42, 26, 0.30);
+  outline-offset: 3px;
+}
+.color-swatch.selected {
+  outline-color: var(--moss);
+}
+
+/* Chips — pill, cream, moss when selected */
+.chip,
+.preset-chip {
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--surface-1);
+  color: var(--label-2);
+}
+.chip:hover,
+.preset-chip:hover {
+  border-color: var(--hairline-strong);
+  color: var(--label);
+}
+
+/* Tiles — widgets sit on lifted cream cards with daylight shadows */
+.tile-thumb {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-tile);
+  box-shadow: var(--halo-soft);
+}
+.tile:hover .tile-thumb {
+  box-shadow: var(--halo-medium);
+}
+.tile-name {
+  color: var(--label-2);
+  text-shadow: none;
+}
+
+/* Modal frame — the greenhouse pane */
+.modal-frame {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-modal);
+  box-shadow: var(--halo-strong);
+}
+
+/* Chat orb — pill prompt, moss send (presence recipe, exact) */
+.chat-orb {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--halo-medium);
+}
+.chat-orb .chat-input {
+  color: var(--label);
+}
+.chat-send {
+  background: var(--moss);
+  color: var(--surface-1);
+}
+
+/* Meta / HUD — mono eyebrows in leaf-green */
+.hud-meta,
+.hud-tick {
+  color: var(--label-3);
+  font-family: var(--font-mono);
+}
+
+::selection {
+  background: rgba(242, 213, 138, 0.60);
+  color: var(--leaf);
+}

@@ -1,0 +1,236 @@
+/* Memphis — component-level overrides.
+   The shell's structure keeps its layout; this file inks it: 2.5px navy
+   borders, asymmetric corners, flat accent blocks (yellow input bar, sky
+   bands, mint chips), a wobble for running states. Mirrors
+   host/presence.css (.presence[data-theme="memphis"]). */
+
+/* Headlines — Fraunces italic 900 (presence card titles, exact). */
+.headline,
+.greeting,
+.modal-title {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.greeting em,
+.headline em {
+  color: var(--memphis-pink);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 900;
+}
+
+.wordmark span {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 900;
+}
+
+/* Buttons — inked, asymmetric corners; primary is the navy-ink fill with
+   cream text (presence .send, exact). No blur anywhere. */
+.btn {
+  border: 2px solid var(--ink);
+  border-radius: var(--r-button);
+  background: var(--surface-1);
+  color: var(--ink);
+  font-family: var(--font-system);
+  font-weight: 700;
+  box-shadow: none;
+  transition: transform var(--d-micro) var(--ease-standard), background var(--d-micro) var(--ease-snap);
+}
+.btn:hover:not(:disabled) {
+  transform: translateY(-2px) rotate(-1deg);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px) rotate(0deg);
+}
+.btn-primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--memphis-cream);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--memphis-cream);
+}
+.btn-secondary {
+  background: var(--memphis-sky);
+  color: var(--ink);
+}
+.btn:disabled, .btn[disabled] {
+  border-color: rgba(26, 26, 46, 0.30);
+  color: rgba(26, 26, 46, 0.30);
+  background: var(--surface-1);
+  cursor: not-allowed;
+}
+
+/* Inputs — the YELLOW block (presence .prompt-shell is #FFE15B with a
+   2.5px ink border and 20/4 corners). Bold input text, italic placeholder. */
+.field-input,
+.chat-input,
+input[type="text"],
+input[type="password"],
+input[type="number"],
+textarea {
+  background: var(--memphis-yellow);
+  border: 2.5px solid var(--ink);
+  border-radius: var(--r-input);
+  color: var(--ink);
+  font-family: var(--font-system);
+  font-weight: 700;
+}
+.field-input:focus,
+.chat-input:focus,
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+textarea:focus {
+  outline: 0;
+  box-shadow: 0 0 0 3px var(--memphis-pink);
+}
+.field-input::placeholder,
+.chat-input::placeholder,
+textarea::placeholder {
+  color: rgba(26, 26, 46, 0.50);
+  font-family: var(--font-system);
+  font-style: italic;
+  font-weight: 500;
+}
+.field-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* Cards — paper panels with the 2.5px ink stroke and 24/4 corners
+   (presence .bubble, exact). Selection is a flat accent block. */
+.provider-card,
+.presence-card,
+.theme-card {
+  background: var(--surface-1);
+  border: 2.5px solid var(--ink);
+  border-radius: var(--r-tile);
+  box-shadow: none;
+  transition: transform var(--d-micro) var(--ease-standard), background var(--d-micro) var(--ease-snap);
+}
+.provider-card:hover,
+.presence-card:hover,
+.theme-card:hover {
+  transform: translateY(-2px) rotate(-0.5deg);
+}
+.provider-card.selected,
+.presence-card.selected,
+.theme-card.selected {
+  background: var(--memphis-yellow);
+  transform: rotate(-1deg);
+}
+.presence-card.selected::after,
+.theme-card.selected::after {
+  display: none; /* the yellow block + wonk is the selection cue */
+}
+
+.theme-swatches {
+  border: 2px solid var(--ink);
+  border-radius: 10px 2px 10px 2px;
+}
+.theme-label {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 900;
+  color: var(--ink);
+}
+.theme-tagline {
+  font-family: var(--font-mono);
+  color: var(--label-2);
+}
+
+/* Chips — mint blocks with ink strokes (presence .row .icon, exact
+   palette; 8/2 corners). */
+.chip,
+.preset-chip {
+  border: 2px solid var(--ink);
+  border-radius: 8px 2px 8px 2px;
+  background: var(--memphis-mint);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.chip:hover,
+.preset-chip:hover {
+  background: var(--memphis-sky);
+  transform: rotate(-1deg);
+}
+
+/* Tiles — every widget is an inked paper card; hover wobbles */
+.tile-thumb {
+  background: var(--surface-1);
+  border: 2.5px solid var(--ink);
+  border-radius: var(--r-tile);
+  box-shadow: none;
+  transition: transform var(--d-micro) var(--ease-standard);
+}
+.tile:hover .tile-thumb {
+  transform: translateY(-2px) rotate(-1deg);
+}
+.tile:active .tile-thumb {
+  transform: translateY(1px);
+}
+.tile-name {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  text-shadow: none;
+}
+
+/* Modal frame — the big inked sheet */
+.modal-frame {
+  background: var(--surface-1);
+  border: 2.5px solid var(--ink);
+  border-radius: var(--r-modal);
+  box-shadow: var(--shadow-deep);
+}
+
+/* Chat orb — the yellow prompt block with an ink send square */
+.chat-orb {
+  background: var(--memphis-yellow);
+  border: 2.5px solid var(--ink);
+  border-radius: var(--r-bar);
+  box-shadow: none;
+}
+.chat-orb .chat-input {
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+}
+.chat-send {
+  background: var(--ink);
+  color: var(--memphis-cream);
+  border-radius: 12px 3px 12px 3px;
+}
+
+/* Meta / HUD — mono ink */
+.hud-meta,
+.hud-tick {
+  color: var(--label-3);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* Wobble — the presence's thinking animation, reused for busy states */
+@keyframes memphis-wobble {
+  0%, 100% { transform: rotate(-2deg); }
+  50%      { transform: rotate(2deg); }
+}
+
+::selection {
+  background: var(--memphis-pink);
+  color: var(--memphis-cream);
+}

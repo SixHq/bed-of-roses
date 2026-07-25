@@ -3,82 +3,89 @@ title: "Troubleshooting"
 description: "Common issues and how to resolve them."
 ---
 
-Common issues and how to resolve them.
-
 ## Setup & launch
 
-**The app won't start / the runtime isn't reachable.**
-- Make sure Node ≥ 20 and `npm install` completed.
-- Check the port — another process may hold `:7777`. Set `PORT=8080`.
-- Attach the host to a running runtime with `BOR_RUNTIME_URL=http://127.0.0.1:7777 npm run v2` if you started the runtime separately.
+**The app won't start.**
+- Check Node ≥ 20 and that `npm install` completed (for source installs).
+- Port conflict: another process may hold `:7777`. Launch with `PORT=8080`.
 
-**Changes to code don't take effect.**
-- The Node runtime doesn't hot-reload. **Restart** the app (or use `npm run dev` for `--watch` on the classic runtime). A running v2 session keeps the old code until you relaunch.
+**Onboarding won't let me finish.**
+- The "Connect a model" step requires at least one working provider. Connecting services on the final "daily life" step is optional — you can skip all of it and link later.
 
-## Provider & models
+## Providers & models
 
 **"No AI provider is configured."**
-- Finish [onboarding](getting-started/onboarding.md), or set `defaultProvider` + the matching `providers` entry in `config.json`.
+- Finish [onboarding](/getting-started/onboarding), or open the model chip → provider Settings and add a key.
 
 **401 / invalid key.**
-- Re-check the key in onboarding or `config.json`. For OpenAI-compatible, also check the base URL.
+- Re-enter the key in the provider's settings. For OpenAI-compatible endpoints, also check the base URL.
 
 **404 model.**
-- The model id retired. Pick a **current** model from the provider's live docs — ids rotate every few months.
+- The model id retired. Pick a current one from the model picker — ids rotate every few months.
 
-**Vision features don't work (`locate_screen_element`, browser screenshots).**
-- Your chosen model must be vision-capable. Switch to one that is.
+**Vision features don't work (element finding, screenshots the model reasons about).**
+- Your model must be vision-capable. Switch models from the chip.
 
-## Commands & the browser
+**Image generation fails on Anthropic.**
+- Anthropic keys don't include image generation. Add an OpenAI or Gemini key alongside; BOR uses it for images.
 
-**A command "hangs" or seems to never finish.**
-- It doesn't — `execute_command` returns within 60 seconds. If a command is still running, it keeps running in the background and BOR follows it with `wait_until` + `read_command_tail`. For a dev server, use `background="true"`.
+## The browser
 
-**`cd X && npm …` does the wrong thing.**
-- Commands run through a real bash shell now, so `&&`, `cd`, pipes, and redirects all work. If you're on an old build where they didn't, restart on the latest code.
+**The ambient browser won't launch.**
+- BOR uses your installed Google Chrome, falling back to the bundled Chromium. If you have neither, run `npm run browser:install` once.
 
-**`browser_action` fails to launch.**
-- Install the bundled Chromium: `npm run browser:install`. BOR falls back to system Chrome (the `chrome` channel) when possible, otherwise it tells you to install.
+**BOR isn't signed in to a site it needs.**
+- Use **Open sign-in browser** on the Web browsing card in the [connectors gallery](/features/connectors), log in there once, and the ambient browser's profile stays signed in.
 
-**A dev server I started is gone.**
-- Background commands keep running but are killed on chat cancel or runtime exit. Restart it; or check for it with `lsof -i :PORT`.
+**Do I need the browser-use CLI?**
+- No. `browser-use` is an **optional fallback** — if it's installed on your PATH, BOR can use it to drive your real Chrome; if it isn't, the ambient browser handles everything. Nothing requires installing it.
+
+## Connectors
+
+**A service card says it needs Composio.**
+- One-click sign-ins go through Composio: create a free account at composio.dev, paste your project API key into the Composio card, and the Connect buttons light up.
+
+**Slack / Notion / GitHub without OAuth.**
+- Each accepts a manually created token as a fallback; BOR verifies it live before saving.
+
+**iMessage won't connect.**
+- It needs **Full Disk Access**: System Settings → Privacy & Security → Full Disk Access → enable Bed of Roses, then press Connect again.
+
+**BOR opens a browser for something I connected.**
+- It shouldn't — connected services are used directly. Check the connector still shows as connected; reconnect if the token expired.
 
 ## Computer use
 
 **Screen capture is black / clicks do nothing.**
-- Grant macOS permissions: **Screen Recording** (for capture/locate) and **Accessibility** (for click/type/key) to the Electron/Terminal host. BOR can open the right pane via `/api/system/permissions/open`.
+- Grant **Screen Recording** and **Accessibility** to Bed of Roses in System Settings → Privacy & Security (the onboarding "Allow computer control" step can be re-done there any time).
 
-## Surfaces
+## Commands
 
-**A generated app shows raw `${…}` or looks broken.**
-- That's usually a generated-code issue, not the parser — ask BOR to fix it. The file-write parser is hardened so internal tags and CDATA quirks never corrupt a write; if you ever *do* see BOR's internal tags (`<tool_results>` etc.) in a file, that's stripped now — restart on the latest code.
+**A command seems stuck.**
+- It isn't blocking the chat — commands return within 60 seconds and keep running in the background while BOR follows their output. Dev servers are left running deliberately; ask BOR to stop one ("kill the dev server").
+
+## Apps & surfaces
+
+**A generated app looks broken.**
+- Ask BOR to fix it — "the stats page renders wrong, fix it." Updates preserve the app's data.
 
 **An app needs an API key and silently fails.**
-- BOR builds a settings screen *inside* the surface for any required value. If one's missing, ask BOR to add the settings UI.
+- BOR builds a settings screen inside apps that need keys. If one's missing, ask BOR to add the settings UI.
 
 ## MCP
 
 **The marketplace is empty.**
-- It serves a cached catalog and falls back to stale-on-error, so this usually means the very first fetch failed. Click refresh, check connectivity, or override the source with `BOR_MCP_MARKETPLACE_URL`.
+- The catalog is cached and served stale on errors, so this usually means the very first fetch failed. Check connectivity and refresh; override the source with `BOR_MCP_MARKETPLACE_URL` if you host your own.
 
-**Ask AI returns nothing.**
-- Needs a configured provider. If the model genuinely found no match, rephrase the need or browse by category.
-
-**An installed MCP server isn't available.**
-- Check `.bor/mcp.json` (its path is in `GET /api/mcp/installed`), confirm the server entry, and that it isn't `disabled`. Restart the presence if a hand-edit didn't take.
+**An installed server isn't available.**
+- Check the presence's `.bor/mcp.json` for the entry and that it isn't `disabled`. Config changes hot-reload; if a hand-edit didn't take, restart the presence.
 
 ## Data & resetting
 
-**Start completely fresh (new-user state).**
-- Remove `os-data/`, `.bor/`, `.bed-of-roses/`, the `~/Applications` BOR `.app` wrappers, and `~/.bed-of-roses/`. Everything regenerates on next launch.
-
-**Clear one presence's projects.**
-- Remove `os-data/presences/<id>/.bor/`.
-
-**Delete a presence entirely.**
-- `bor delete <presence_id>` (removes its whole data dir).
+- **Fresh start:** remove `os-data/`, `.bor/`, `.bed-of-roses/`, `~/.bed-of-roses/`, and the BOR `.app` wrappers in `~/Applications`.
+- **One presence:** `bor delete <presence_id>` removes it and all its data.
+- See [Where your data lives](/concepts/storage-and-data).
 
 ## Still stuck?
 
-- Check the **audit log** at `os-data/.../logs/audit.jsonl` — it records every action BOR took.
-- Read the relevant concept page: [The runtime](concepts/the-runtime.md), [Chat loop](concepts/chat-loop.md), [Storage & data](concepts/storage-and-data.md).
+Check the audit log at `os-data/.../logs/audit.jsonl` — it records every action BOR took, including errors and refusals.

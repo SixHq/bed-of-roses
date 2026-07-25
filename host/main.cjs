@@ -8,18 +8,18 @@ const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { syncNativeApps, writeHostControlDiscovery, writeMainAppWrapper } = require('./native-apps.cjs');
 
-const ROOT = path.resolve(__dirname, '../..');
+const ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(ROOT, 'os-data');
-const ELECTRON_USER_DATA_DIR = path.join(ROOT, '.bed-of-roses', 'v2-electron');
-const HOST_STATE_PATH = path.join(DATA_DIR, 'v2-host.json');
-const WALLPAPER_DIR = path.join(DATA_DIR, 'v2-wallpaper');
+const ELECTRON_USER_DATA_DIR = path.join(ROOT, '.bed-of-roses', 'electron');
+const HOST_STATE_PATH = path.join(DATA_DIR, 'host.json');
+const WALLPAPER_DIR = path.join(DATA_DIR, 'wallpaper');
 const SERVER_ENTRY = path.join(ROOT, 'server', 'index.js');
 const DEFAULT_PORT = Number(process.env.PORT || 7777);
 const NODE_EXECUTABLE = process.env.BOR_NODE || process.env.npm_node_execpath || 'node';
 
 // ----- Multi-presence maps --------------------------------------------------
 // One Node runtime process + one orb window per presence, keyed by the registry
-// presence id (v2/host/presences.cjs). With exactly one presence the host looks
+// presence id (host/presences.cjs). With exactly one presence the host looks
 // and behaves identically to the old single-presence build.
 const runtimeUrls = new Map();        // presenceId -> 'http://127.0.0.1:PORT'
 const runtimeProcesses = new Map();   // presenceId -> ChildProcess
@@ -127,18 +127,18 @@ function log(message) {
   const line = `[bor-v2] ${message}`;
   console.log(line);
   try {
-    appendFileSync('/tmp/bor-v2-host.log', `${new Date().toISOString()} ${line}\n`);
+    appendFileSync('/tmp/bor-host.log', `${new Date().toISOString()} ${line}\n`);
   } catch { /* ignore */ }
 }
 
 process.on('uncaughtException', (error) => {
   console.error('[bor-v2] uncaught exception:', error);
-  try { appendFileSync('/tmp/bor-v2-host.log', `${new Date().toISOString()} [bor-v2] uncaught exception: ${error?.stack || error}\n`); } catch { /* ignore */ }
+  try { appendFileSync('/tmp/bor-host.log', `${new Date().toISOString()} [bor-v2] uncaught exception: ${error?.stack || error}\n`); } catch { /* ignore */ }
 });
 
 process.on('unhandledRejection', (reason) => {
   console.error('[bor-v2] unhandled rejection:', reason);
-  try { appendFileSync('/tmp/bor-v2-host.log', `${new Date().toISOString()} [bor-v2] unhandled rejection: ${reason?.stack || reason}\n`); } catch { /* ignore */ }
+  try { appendFileSync('/tmp/bor-host.log', `${new Date().toISOString()} [bor-v2] unhandled rejection: ${reason?.stack || reason}\n`); } catch { /* ignore */ }
 });
 
 function showDockForSetup() {
@@ -599,6 +599,22 @@ function sendControlJson(res, status, body) {
 // Capture hide/restore applies to ALL presence windows — a screen capture is a
 // global operation, so every orb must vanish for the screenshot and reappear
 // afterward. Depth is tracked with the host-global counter.
+//
+// Watchdog: the restore call comes from the runtime over HTTP. If it never
+// arrives (runtime crash, dropped request, tool error between hide and
+// restore) every presence window would stay hidden forever while the chat
+// stream keeps running — the "bubble vanished mid-task" failure. A capture
+// takes a couple of seconds at most, so after 15s we force-restore.
+const CAPTURE_RESTORE_WATCHDOG_MS = 15_000;
+let captureRestoreWatchdog = null;
+
+function forceRestorePresenceWindows() {
+  captureWasVisible = false;
+  for (const [id, win] of presenceWindows) {
+    if (win && !win.isDestroyed()) bringPresenceForward(id);
+  }
+}
+
 function hidePresenceForCapture() {
   if (captureHideDepth === 0) {
     captureWasVisible = false;
@@ -610,16 +626,23 @@ function hidePresenceForCapture() {
     }
   }
   captureHideDepth += 1;
+  clearTimeout(captureRestoreWatchdog);
+  captureRestoreWatchdog = setTimeout(() => {
+    if (captureHideDepth > 0) {
+      log(`capture watchdog: presence hidden for ${CAPTURE_RESTORE_WATCHDOG_MS}ms without restore — force restoring (depth was ${captureHideDepth})`);
+      captureHideDepth = 0;
+      if (captureWasVisible) forceRestorePresenceWindows();
+    }
+  }, CAPTURE_RESTORE_WATCHDOG_MS);
   return { ok: true, hidden: captureWasVisible, depth: captureHideDepth };
 }
 
 function restorePresenceAfterCapture() {
   if (captureHideDepth > 0) captureHideDepth -= 1;
-  if (captureHideDepth === 0 && captureWasVisible) {
-    captureWasVisible = false;
-    for (const [id, win] of presenceWindows) {
-      if (win && !win.isDestroyed()) bringPresenceForward(id);
-    }
+  if (captureHideDepth === 0) {
+    clearTimeout(captureRestoreWatchdog);
+    captureRestoreWatchdog = null;
+    if (captureWasVisible) forceRestorePresenceWindows();
   }
   return { ok: true, hidden: false, depth: captureHideDepth };
 }
@@ -679,7 +702,7 @@ async function startHostControlServer() {
 // host control server to open the surface; see native-apps.cjs.
 
 function resolveElectronBinary() {
-  // In `electron v2/host/main.cjs`, process.execPath IS the Electron binary.
+  // In `electron host/main.cjs`, process.execPath IS the Electron binary.
   return process.execPath;
 }
 
@@ -1015,7 +1038,7 @@ function hasOpenOnboarding() {
   return false;
 }
 
-function createOnboardingWindow(entry) {
+function createOnboardingWindow(entry, { settingsProvider = '', settingsConnectors = false } = {}) {
   const existing = onboardingWindows.get(entry.id);
   if (existing && !existing.isDestroyed()) {
     existing.show();
@@ -1024,7 +1047,9 @@ function createOnboardingWindow(entry) {
   }
 
   showDockForSetup();
-  allowOnboardingClose = false;
+  // Settings mode (provider-settings / connectors deep links) is freely
+  // closable — the presence already exists; this is just a config surface.
+  allowOnboardingClose = Boolean(settingsProvider || settingsConnectors);
   const win = new BrowserWindow({
     width: 1180,
     height: 820,
@@ -1083,31 +1108,71 @@ function createOnboardingWindow(entry) {
     log(`onboarding window closed (${entry.id})`);
     onboardingWindows.delete(entry.id);
   });
-  win.loadURL(`${runtimeUrls.get(entry.id)}/?host=v2`);
+  // The connectors pane opens real popups: OAuth sign-in windows (https:) and
+  // the macOS privacy pane (x-apple.systempreferences:). Without a window-open
+  // handler, window.open from this BrowserWindow silently does nothing.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https:')) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 520,
+          height: 720,
+          alwaysOnTop: true,
+          autoHideMenuBar: true,
+          webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false,
+          },
+        },
+      };
+    }
+    if (url.startsWith('x-apple.systempreferences:')) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    return { action: 'deny' };
+  });
+  // OAuth popups must FLOAT ABOVE the onboarding window. The onboarding
+  // window sits at screen-saver level (setAlwaysOnTop above), and a plain
+  // `alwaysOnTop: true` child lands at the lower floating level — buried
+  // behind the very panel that spawned it. Raise each popup one relative
+  // level above screen-saver and hand it focus.
+  win.webContents.on('did-create-window', (child) => {
+    try { child.setAlwaysOnTop(true, 'screen-saver', 1); } catch { /* best effort */ }
+    try { child.focus(); } catch { /* best effort */ }
+  });
+  const settingsQuery = (settingsProvider ? `&provider-settings=${encodeURIComponent(settingsProvider)}` : '')
+    + (settingsConnectors ? '&connectors=1' : '');
+  win.loadURL(`${runtimeUrls.get(entry.id)}/?host=v2${settingsQuery}`);
 
-  const timer = setInterval(async () => {
-    if (win.isDestroyed()) {
-      clearInterval(timer);
-      return;
-    }
-    try {
-      const config = await getPublicConfig(entry.id);
-      if (onboardingComplete(config)) {
+  // First-run onboarding auto-closes once setup completes. Settings mode must
+  // NOT run this poll — the config is already complete, so the poll would
+  // close the window ~1s after it opened.
+  if (!settingsProvider && !settingsConnectors) {
+    const timer = setInterval(async () => {
+      if (win.isDestroyed()) {
         clearInterval(timer);
-        allowOnboardingClose = true;
-        win.close();
-        await updatePresence(entry.id, { onboarded: true }).catch(() => {});
-        entry.onboarded = true;
-        await createPresenceWindow(entry);
-        syncWidgetPreviews(entry.id).catch((error) => log(`widget preview sync failed: ${error.message}`));
-        if (entry.id === defaultPresenceId) queueWallpaperApply(config);
-        // Only hide the dock once no onboarding window remains open.
-        if (!hasOpenOnboarding()) hideDockForPresence();
+        return;
       }
-    } catch {
-      // Runtime may still be settling.
-    }
-  }, 1200);
+      try {
+        const config = await getPublicConfig(entry.id);
+        if (onboardingComplete(config)) {
+          clearInterval(timer);
+          allowOnboardingClose = true;
+          win.close();
+          await updatePresence(entry.id, { onboarded: true }).catch(() => {});
+          entry.onboarded = true;
+          await createPresenceWindow(entry);
+          syncWidgetPreviews(entry.id).catch((error) => log(`widget preview sync failed: ${error.message}`));
+          // Only hide the dock once no onboarding window remains open.
+          if (!hasOpenOnboarding()) hideDockForPresence();
+        }
+      } catch {
+        // Runtime may still be settling.
+      }
+    }, 1200);
+  }
 
   return win;
 }
@@ -1312,16 +1377,27 @@ function installPresenceHotReload() {
   const files = ['presence.html', 'presence.css', 'presence.js', 'preload.cjs']
     .map((file) => path.join(__dirname, file));
   let timer = null;
+  const reloadAll = () => {
+    // Never hot-reload the presence renderer while a chat stream is active.
+    // A reload wipes the renderer's bubble/thread state while main's stream
+    // loop keeps running — the classic "thought bubble vanished but streaming
+    // continues" failure (only the orb + input field survive a reload). Defer
+    // until the stream finishes.
+    if (activeChatControllers.size > 0) {
+      log('hot reload deferred: chat stream active');
+      timer = setTimeout(reloadAll, 2000);
+      return;
+    }
+    log('hot reloading presence renderer');
+    for (const win of presenceWindows.values()) {
+      if (win && !win.isDestroyed()) win.webContents.reloadIgnoringCache();
+    }
+  };
   for (const file of files) {
     try {
       const watcher = watch(file, () => {
         clearTimeout(timer);
-        timer = setTimeout(() => {
-          log(`hot reloading ${path.basename(file)}`);
-          for (const win of presenceWindows.values()) {
-            if (win && !win.isDestroyed()) win.webContents.reloadIgnoringCache();
-          }
-        }, 120);
+        timer = setTimeout(reloadAll, 120);
       });
       if (typeof watcher.unref === 'function') watcher.unref();
     } catch (error) {
@@ -1372,7 +1448,7 @@ async function createPresenceWindow(entry) {
 
   const st = getPresenceState(entry.id);
   // Per-presence geometry now lives in the registry entry (bounds/anchor),
-  // not in v2-host.json. We always open collapsed.
+  // not in host.json. We always open collapsed.
   const saved = entry.bounds || null;
   st.anchor = entry.anchor || st.anchor;
   st.mode = 'collapsed';
@@ -1432,9 +1508,13 @@ async function createPresenceWindow(entry) {
   win.once('ready-to-show', () => {
     bringPresenceForward(entry.id, bounds);
   });
-  win.webContents.once('did-finish-load', () => {
-    sendPresenceLayout(entry.id, bounds);
-    bringPresenceForward(entry.id, bounds);
+  win.webContents.on('did-finish-load', () => {
+    // Every load — including hot reloads and crash recoveries — must get the
+    // current layout pushed, or a reloaded renderer boots in its default
+    // 'collapsed' markup inside a window still sized for 'thinking'.
+    if (win.isDestroyed()) return;
+    sendPresenceLayout(entry.id, win.getBounds());
+    bringPresenceForward(entry.id, win.getBounds());
   });
   win.webContents.on('render-process-gone', (_event, details) => {
     log(`presence[${entry.id}] render process gone: ${details.reason || 'unknown'}`);
@@ -2422,6 +2502,54 @@ function installIpcHandlers() {
     createOnboardingWindow(entry);
     return { ok: true };
   });
+  // Provider settings — the onboarding window deep-linked to the connect pane
+  // with one provider's drawer open (API key, model, reasoning, base URL).
+  ipcMain.handle('bor:open-provider-settings', async (event, providerId = '') => {
+    const id = presenceIdForEvent(event);
+    const reg = await readRegistry();
+    const entry = reg.presences[id];
+    if (!entry) return { ok: false, error: `unknown presence ${id}` };
+    createOnboardingWindow(entry, { settingsProvider: providerId || 'current' });
+    return { ok: true };
+  });
+  // Connector settings — the onboarding window deep-linked to the final
+  // connectors pane ("Connect Bed of Roses to your daily life").
+  ipcMain.handle('bor:open-connector-settings', async (event) => {
+    const id = presenceIdForEvent(event);
+    const reg = await readRegistry();
+    const entry = reg.presences[id];
+    if (!entry) return { ok: false, error: `unknown presence ${id}` };
+    createOnboardingWindow(entry, { settingsConnectors: true });
+    return { ok: true };
+  });
+  // Provider catalog + config save passthroughs for the presence's model chip.
+  ipcMain.handle('bor:provider-catalog', async (event) => {
+    const id = presenceIdForEvent(event);
+    const url = runtimeUrls.get(id);
+    if (!url) return { providers: [] };
+    try {
+      const res = await fetch(`${url}/api/providers`);
+      return await res.json();
+    } catch (error) {
+      return { providers: [], error: error.message };
+    }
+  });
+  ipcMain.handle('bor:save-provider-config', async (event, patch = {}) => {
+    const id = presenceIdForEvent(event);
+    const url = runtimeUrls.get(id);
+    if (!url) return { ok: false, error: 'no runtime' };
+    try {
+      const res = await fetch(`${url}/api/config`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      const json = await res.json();
+      return { ok: res.ok, ...json };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  });
   ipcMain.handle('bor:presence-mode', (event, mode) => {
     const id = presenceIdForEvent(event);
     const win = presenceWindows.get(id);
@@ -2447,9 +2575,22 @@ function installIpcHandlers() {
       event.sender.send('bor:chat-event', { requestId, event: 'error', data: { error: error.message } });
     });
   });
-  ipcMain.on('bor:chat-cancel', (event, { requestId } = {}) => {
+  ipcMain.on('bor:chat-cancel', (event, { requestId, byUser } = {}) => {
     const controller = activeChatControllers.get(requestId);
     if (controller) {
+      // Explicit user stop (Stop button / close during a run): tell the
+      // runtime before aborting so it can audit-log the interruption as a
+      // user action rather than a connection drop. Fire-and-forget.
+      if (byUser) {
+        const runtimeUrl = runtimeUrls.get(controller.presenceId || defaultPresenceId);
+        if (runtimeUrl) {
+          fetch(`${runtimeUrl}/api/chat/interrupted`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: '{}',
+          }).catch(() => {});
+        }
+      }
       controller.abort();
       activeChatControllers.delete(requestId);
     } else if (requestId) {
@@ -2465,6 +2606,51 @@ function installIpcHandlers() {
     try {
       if (typeof url === 'string' && /^https?:\/\//i.test(url)) shell.openExternal(url);
       return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // Reveal a file or folder the AI mentioned (clickable path links in the
+  // presence bubble) in Finder. Absolute paths pass through; `~/` resolves to
+  // the user's home; anything else resolves against the repo root, then the
+  // calling presence's data dir. If the exact path no longer exists, reveal
+  // the nearest existing parent directory instead. Electron `shell` only —
+  // never a child process.
+  ipcMain.handle('bor:reveal-path', async (event, rawPath) => {
+    try {
+      const input = String(rawPath || '').trim();
+      if (!input || input.includes('\0')) return { ok: false, error: 'invalid path' };
+      const candidates = [];
+      if (path.isAbsolute(input)) {
+        candidates.push(path.resolve(input));
+      } else if (input === '~' || input.startsWith('~/')) {
+        candidates.push(path.resolve(app.getPath('home'), input === '~' ? '.' : input.slice(2)));
+      } else {
+        candidates.push(path.resolve(ROOT, input));
+        try {
+          const entry = await getPresence(presenceIdForEvent(event));
+          if (entry?.dataDir) candidates.push(path.resolve(entry.dataDir, input));
+        } catch { /* no presence context — repo root candidate only */ }
+      }
+      for (const candidate of candidates) {
+        try {
+          await fs.stat(candidate);
+          shell.showItemInFolder(candidate);
+          return { ok: true, path: candidate };
+        } catch { /* not here — try next candidate */ }
+      }
+      // Nothing matched exactly — walk up from the primary candidate to the
+      // nearest directory that still exists and reveal that instead.
+      let dir = path.dirname(candidates[0]);
+      while (dir && dir !== path.dirname(dir)) {
+        try {
+          await fs.stat(dir);
+          shell.showItemInFolder(dir);
+          return { ok: true, path: dir, fallback: true };
+        } catch { dir = path.dirname(dir); }
+      }
+      return { ok: false, error: 'path not found' };
     } catch (err) {
       return { ok: false, error: err.message };
     }
@@ -2667,8 +2853,6 @@ async function boot() {
   startNativeAppSync().catch((err) => log(`native-apps: startup sync failed: ${err.message}`));
   if (defaultPresenceId && runtimeUrls.has(defaultPresenceId)) {
     await syncWidgetPreviews(defaultPresenceId).catch((error) => log(`widget preview sync failed: ${error.message}`));
-    const defConfig = await getPublicConfig(defaultPresenceId).catch(() => null);
-    if (defConfig && onboardingComplete(defConfig)) queueWallpaperApply(defConfig);
   }
 
   // Dock: hide if any presence is onboarded & shown; show if any onboarding open.

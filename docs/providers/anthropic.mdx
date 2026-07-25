@@ -1,28 +1,27 @@
 ---
 title: "Anthropic"
-description: "Use Claude models in BOR with an Anthropic API key. Adapter: server/providers/anthropic.js."
+description: "Use Claude models in BOR with an Anthropic API key."
 ---
 
-Use Claude models in BOR with an Anthropic API key. Adapter: `server/providers/anthropic.js`.
+Use Claude models in BOR with an Anthropic API key.
 
 ## Setup
 
-1. Get an API key from the Anthropic Console (the provider's `signupUrl` links there from onboarding).
-2. In [onboarding](../getting-started/onboarding.md), pick **Anthropic**, paste your key, and choose a model.
-3. BOR validates the key and you're in.
+1. Get an API key from the Anthropic Console (linked from onboarding).
+2. In [onboarding](/getting-started/onboarding) (or the model picker's provider Settings), pick **Anthropic**, paste your key, choose a model and a reasoning effort.
 
-## Choosing a model
+## Models
 
-Pick a **current** Claude model from Anthropic's live docs. Model ids change on a months-long cadence, so prefer the latest capable model rather than an old hardcoded id. A vision-capable model is recommended so features like `locate_screen_element`, screenshot feedback in the [browser](../features/the-browser.md), and image attachments work.
+The current list offered in BOR includes Claude Fable 5, Claude Opus 4.8 (recommended default), Claude Opus 4.7, Claude Sonnet 5, Claude Sonnet 4.6, and Claude Haiku 4.5. Model ids rotate on a months-long cadence — the picker always shows the live list.
 
 ## Notes
 
-- Anthropic supports prompt **caching** and image blocks; BOR's multimodal layer handles both.
-- Claude is strong at the tool-following BOR relies on (the XML protocol, the build→run→preview discipline).
-- Configure later by editing `providers.anthropic` in the presence's `config.json`, or just ask BOR to switch models.
+- Claude models are vision-capable, so screenshot-driven features ([computer use](/features/computer-use), browser screenshots, image attachments) work.
+- **No image generation** — Anthropic keys don't include an image model. Pair with an OpenAI or Gemini key if you want [generated images](/features/building-apps#svgs-and-images).
+- Reasoning effort (Off–Max) maps to Claude's extended thinking.
 
 ## Troubleshooting
 
-- **401 / invalid key** — re-check the key in onboarding or `config.json`.
-- **404 model** — the model id retired; pick a current one.
-- See [Troubleshooting](../troubleshooting.md).
+- **401 / invalid key** — re-enter the key in provider settings.
+- **404 model** — the id retired; pick a current one from the picker.
+- See [Troubleshooting](/troubleshooting).

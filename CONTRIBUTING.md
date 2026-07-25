@@ -26,19 +26,19 @@ npm install
 BOR has two surfaces that share the same Node runtime:
 
 ```bash
-npm run v2     # v2 Mac host: launches the Electron presence (spawns the runtime)
-npx bor        # alias of `npm run v2`
-npm start      # classic browser shell: runtime on http://localhost:7777
-npm run dev    # classic shell with --watch
+npm start           # launches BOR: the Electron presence (spawns the runtime)
+npx bor             # alias of `npm start`
+npm run server      # just the Node runtime + classic shell on http://localhost:7777
+npm run server:dev  # same, with --watch
 ```
 
-The classic shell is now used mainly for onboarding; the v2 Electron host in
-`v2/host/` is the primary product surface.
+The classic shell is now used mainly for onboarding; the Electron host in
+`host/` is the primary product surface.
 
 Useful env overrides while hacking:
 
 - `PORT` — runtime HTTP port (default `7777`)
-- `BOR_RUNTIME_URL=http://127.0.0.1:7777 npm run v2` — attach the host to an
+- `BOR_RUNTIME_URL=http://127.0.0.1:7777 npm start` — attach the host to an
   already-running runtime instead of spawning a new one
 - `BOR_LEGACY_LLM=1` — fall back to the legacy XML-tool harness (the native
   tool-calling harness in `server/llm/` is the default)
@@ -59,7 +59,7 @@ The real code lives in three trees (see `CLAUDE.md` for the full map):
 - `server/` — the Node runtime: stdlib-only HTTP server, LLM proxy, state
   persistence, and tool execution.
 - `shell/` — the classic vanilla HTML/CSS/JS browser display.
-- `v2/host/` — the Electron Mac host (presence window, native surfaces,
+- `host/` — the Electron Mac host (presence window, native surfaces,
   wallpaper).
 
 ## Conventions (please read before opening a PR)
@@ -114,13 +114,13 @@ expected baseline check for any change is a syntax pass:
 node --check server/index.js
 
 # or sweep the whole runtime
-find server v2/host bin -name '*.js' -o -name '*.cjs' | while read -r f; do
+find server host bin -name '*.js' -o -name '*.cjs' | while read -r f; do
   node --check "$f" || echo "FAILED: $f"
 done
 ```
 
 CI on `macos-latest` (Node 20 and 22) runs exactly this syntax sweep, so keep
-it green. Manually exercise UI-affecting changes via `npm run v2` and, for
+it green. Manually exercise UI-affecting changes via `npm start` and, for
 onboarding/shell changes, `npm start`.
 
 ## Pull request process

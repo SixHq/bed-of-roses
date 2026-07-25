@@ -13,8 +13,11 @@
 
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { resolvePath, PROJECT_ROOT } from '../paths.js';
-import { validateShellCommand } from '../../validator.js';
+import { validateShellCommand, matchBrowserUseHeredoc } from '../../validator.js';
+import { connectorEnv } from '../../runtime/connectors.js';
 
 const MAX_STDOUT_BYTES = 64 * 1024;
 const MAX_STDERR_BYTES = 32 * 1024;
@@ -104,66 +107,145 @@ function resolveTimeoutMs(attr) {
   return Math.min(MAX_TIMEOUT_MS, Math.round(seconds * 1000));
 }
 
-function commandAfterBrowserUse(cmd) {
-  const match = String(cmd || '').match(/\bbrowser-use\b\s*(.*)$/i);
-  if (!match) return '';
-  let rest = match[1].trim();
-  let previous = '';
-  while (rest && rest !== previous) {
-    previous = rest;
-    rest = rest.replace(/^(?:(?:--(?:profile|session|cdp-url)\s+(?:"[^"]+"|'[^']+'|\S+))|(?:--(?:headed|headless|json|mcp)))\s*/i, '').trim();
-  }
-  return rest.toLowerCase();
+// ---------- browser-use v3 (CLI 3.0) ----------
+//
+// The v2 verb subcommands (open/state/click/…) no longer exist. The scripted
+// interface is Python piped to stdin — a heredoc (`browser-use <<'PY' … PY`,
+// the only heredoc shape server/validator.js exempts from its general heredoc
+// refusal) or a printf/echo pipe — against a persistent CDP daemon attached to
+// the user's real Chrome (inherently visible; --headed/--headless are gone).
+// Flag-style survivors: --doctor, --version, --help, auth …, skill show.
+// Natural-language full-agent mode (`browser-use "book me a flight"`) stays
+// blocked: scripts only.
+
+// Commands run through /bin/bash -c with the app's inherited environment —
+// which, when Electron is launched from Finder, lacks the user's login PATH.
+// User-level tool dirs (uv/pipx installs like browser-use live in
+// ~/.local/bin) are appended so CLIs resolve the same as in a terminal.
+const EXTRA_PATH_DIRS = [
+  join(homedir(), '.local', 'bin'),
+  '/opt/homebrew/bin',
+  '/usr/local/bin',
+];
+
+function execEnv() {
+  const current = process.env.PATH || '';
+  const parts = current.split(':');
+  const additions = EXTRA_PATH_DIRS.filter((dir) => !parts.includes(dir));
+  const base = additions.length
+    ? { ...process.env, PATH: `${current}:${additions.join(':')}` }
+    : process.env;
+  // Connected API-key services (Slack/Notion/GitHub/Composio) are exposed as
+  // env vars so the model can curl their REST APIs directly.
+  let connectors = null;
+  try { connectors = connectorEnv(); } catch { /* never block command execution */ }
+  if (!connectors || !Object.keys(connectors).length) return base;
+  return { ...base, ...connectors };
 }
 
-function ensureBrowserUseVisibleCommand(cmd) {
-  const value = String(cmd || '');
-  if (!/\bbrowser-use\b/i.test(value)) return value;
-  if (!/^open\b/.test(commandAfterBrowserUse(value))) return value;
+const BROWSER_USE_SCRIPT_MAX_LINES = 60;
+const BROWSER_USE_SCRIPT_MAX_BYTES = 6 * 1024;
+const BROWSER_USE_SLEEP_MAX_S = 30;
+const BROWSER_USE_ALLOWED_FLAG_RE = /^(?:--doctor|--version|-V|--help|-h|auth(?:\s|$)|skill\s+show\b)/;
+// printf/echo … | browser-use [flags]
+const BROWSER_USE_PIPE_RE = /^\s*(?:printf|echo)\b([\s\S]*?)\|\s*browser-use(?:\s+--?[\w-]+)*\s*$/i;
 
-  let next = value.replace(/\s+--headless\b/ig, ' --headed');
-  if (/\s--headed\b/i.test(next)) return next;
-  return next.replace(/\bbrowser-use\b/i, (match) => `${match} --headed`);
+// True only when the command INVOKES browser-use — at the start of the
+// command or a chained segment (; && || | (), or as a pipe target. Commands
+// that merely MENTION it (`which -a browser-use`, `pip3 show browser-use`,
+// `ls ~/.bed-of-roses/skills/browser-use/`) are ordinary shell commands and
+// must not trip the v3 guard.
+const BROWSER_USE_INVOCATION_RE = /(^|[;&|(]\s*)browser-use\b/;
+function isBrowserUseCommand(cmd) {
+  return BROWSER_USE_INVOCATION_RE.test(String(cmd || '').trim());
+}
+
+// Returns { form: 'heredoc'|'pipe', script } for the two accepted scripted
+// shapes, or null (flag-style, natural-language, or malformed).
+function extractBrowserUseScript(cmd) {
+  const heredoc = matchBrowserUseHeredoc(cmd);
+  if (heredoc) return { form: 'heredoc', script: heredoc.body };
+  const pipe = String(cmd || '').match(BROWSER_USE_PIPE_RE);
+  if (pipe) {
+    // Expand the \n/\t escapes printf/echo -e emit so line counting and the
+    // foot-gun screen see roughly what browser-use will receive.
+    return { form: 'pipe', script: pipe[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t') };
+  }
+  return null;
+}
+
+// Size caps + foot-gun screen for the piped Python. Returns '' when fine, or
+// a refusal message.
+function browserUseScriptError(script) {
+  const text = String(script || '');
+  if (!text.trim()) {
+    return 'browser-use script is empty — pipe a short Python script that performs one atomic step and print()s what you need.';
+  }
+  const lines = text.split('\n').length;
+  const bytes = Buffer.byteLength(text, 'utf8');
+  if (lines > BROWSER_USE_SCRIPT_MAX_LINES || bytes > BROWSER_USE_SCRIPT_MAX_BYTES) {
+    return `browser-use script too large (${lines} lines / ${bytes} bytes; limit ${BROWSER_USE_SCRIPT_MAX_LINES} lines / ${BROWSER_USE_SCRIPT_MAX_BYTES} bytes). Split it into atomic steps — one short script per action (navigate, then inspect, then act). The daemon session persists between scripts, so state carries over.`;
+  }
+  if (/\bwhile\s+True\b/.test(text)) {
+    return 'browser-use script refused: `while True` can hang the persistent browser daemon. Do one bounded step per script and re-run a follow-up script to check progress instead.';
+  }
+  if (/\binput\s*\(/.test(text)) {
+    return 'browser-use script refused: input() would block the daemon waiting for terminal input that never comes. Scripts must run unattended — remove the input() call.';
+  }
+  const sleepRe = /\btime\.sleep\(\s*([0-9]+(?:\.[0-9]+)?)/g;
+  let m;
+  while ((m = sleepRe.exec(text)) !== null) {
+    if (Number(m[1]) > BROWSER_USE_SLEEP_MAX_S) {
+      return `browser-use script refused: time.sleep(${m[1]}) is too long (max ${BROWSER_USE_SLEEP_MAX_S}s per sleep). Sleep briefly, end the script, and re-inspect in a follow-up script instead.`;
+    }
+  }
+  return '';
+}
+
+function browserUseCommandError(cmd) {
+  const value = String(cmd || '');
+  if (!isBrowserUseCommand(value)) return '';
+  const scripted = extractBrowserUseScript(value);
+  if (scripted) return browserUseScriptError(scripted.script);
+  if (/<</.test(value)) {
+    return "browser-use heredoc must be exactly: browser-use <<'PY' … your Python … PY — single-quoted delimiter (so the shell cannot expand anything inside the script), and nothing else on the browser-use line.";
+  }
+  const rest = value.replace(/^[\s\S]*?\bbrowser-use\b\s*/i, '').trim();
+  if (BROWSER_USE_ALLOWED_FLAG_RE.test(rest)) return '';
+  return [
+    'browser-use natural-language agent mode is disabled in BOR, and the old v2 verb subcommands (open/state/click/…) no longer exist.',
+    "Write a short Python script and pipe it in instead: browser-use <<'PY' … PY (or printf '…' | browser-use).",
+    'Do one atomic step per script and print() what you need — e.g. print(page_info()) or take a screenshot.',
+    'Allowed flag-style invocations: --doctor, --version, --help, auth …, skill show.',
+  ].join(' ');
 }
 
 function modelStdoutPreviewLimit(cmd) {
-  const browserUse = commandAfterBrowserUse(cmd);
-  if (!browserUse) return MODEL_STDOUT_PREVIEW_CHARS;
-  if (/^(state\b|get\b)/.test(browserUse)) return MODEL_BROWSER_STATE_PREVIEW_CHARS;
-  return MODEL_BROWSER_STDOUT_PREVIEW_CHARS;
+  const kind = browserUseOutputKind(cmd);
+  if (kind === 'state') return MODEL_BROWSER_STATE_PREVIEW_CHARS;
+  if (kind === 'browser') return MODEL_BROWSER_STDOUT_PREVIEW_CHARS;
+  return MODEL_STDOUT_PREVIEW_CHARS;
 }
 
 function browserUseOutputKind(cmd) {
-  const browserUse = commandAfterBrowserUse(cmd);
-  if (!browserUse) return '';
-  if (/^state\b/.test(browserUse)) return 'state';
-  if (/^get\b/.test(browserUse)) return 'get';
+  if (!isBrowserUseCommand(cmd)) return '';
+  const scripted = extractBrowserUseScript(cmd);
+  if (!scripted) return 'cli'; // --doctor/--version/--help/auth/skill show
+  // Scripts that dump page/element state get the generous preview budget so
+  // deep fields (e.g. Gmail Compose's To/Subject/Body) survive compaction.
+  if (/page_info|browser_state|get_state\b|\bstate\(/.test(scripted.script)) return 'state';
   return 'browser';
 }
 
 function browserUsePostActionNote(cmd) {
-  const browserUse = commandAfterBrowserUse(cmd);
-  if (!/^(click|type|input|keys|select|upload|hover|dblclick|rightclick|scroll|eval|wait|back|tab\s+close)\b/.test(browserUse)) return '';
+  // Only for action scripts that did NOT already print page/element state.
+  if (browserUseOutputKind(cmd) !== 'browser') return '';
   return [
     '',
-    'Browser verification required: this command only proves the action was dispatched.',
-    'Run browser-use state, browser-use get, or browser-use screenshot next before claiming what page you are on, what is visible, or that the user task succeeded.',
-    'Not seeing the expected element/text/draft in THIS result is normal and expected — the page may still be rendering, or you have not re-fetched state yet. The correct next step is to re-inspect (state/get/screenshot), scroll, or wait, then continue the task in browser-use. Do NOT stop, do NOT declare the task blocked, and do NOT switch to computer-use just because something is not visible here — only switch after browser-use returns an explicit error or the same step fails repeatedly after re-inspecting.',
+    'Browser verification required: this result only proves the script ran.',
+    'Run a browser-use script that prints page_info() or takes a screenshot next before claiming what page you are on, what is visible, or that the user task succeeded.',
+    'Not seeing the expected element/text/draft in THIS result is normal and expected — the page may still be rendering, or you have not re-inspected yet. The correct next step is another short browser-use script that re-inspects (print(page_info()) / screenshot), scrolls, or waits briefly, then continues the task. Do NOT stop, do NOT declare the task blocked, and do NOT switch to computer-use just because something is not visible here — only switch after browser-use returns an explicit error or the same step fails repeatedly after re-inspecting.',
   ].join('\n');
-}
-
-function browserUseCommandError(cmd) {
-  if (!/\bbrowser-use\b/i.test(String(cmd || ''))) return '';
-  const browserUse = commandAfterBrowserUse(cmd);
-  if (!browserUse) return '';
-  if (/^--?version\b/.test(browserUse)) return '';
-  if (/^(doctor|setup|connect|close|state|screenshot|get|click|type|input|keys|select|upload|hover|dblclick|rightclick|scroll|eval|wait|cookies|back|open)\b/.test(browserUse)) return '';
-  if (/^(profile\s+(list|sync|update)|cloud\s+(connect|login|logout|signup)|sessions\b|config\b|tab\s+(new|switch|list|close))/.test(browserUse)) return '';
-  return [
-    'browser-use natural-language/unknown task mode is disabled in BOR.',
-    'Use explicit browser-use subcommands only: open, state, click <index>, input <index> <text>, keys, screenshot, scroll, or get.',
-    'If you need an element index, run browser-use state first and only act on visible/indexed elements from that state.',
-  ].join(' ');
 }
 
 function compactForModel(text, maxChars, { runId, stream }) {
@@ -248,7 +330,7 @@ function formatBrowserUseStateForModel(record, text, { captureTruncated, capture
   const raw = String(text || '').trim();
   const header = [
     `\n--browser-use state; source ${raw.length} chars${captureTruncated ? `; capture truncated at ${captureLimit} bytes` : ''}--`,
-    'Browser truth rule: only the URL/title, indexed elements, and text shown below are safe to reference. If a target is missing, re-run browser-use state/get/screenshot, scroll, or wait — do not guess an index.',
+    'Browser truth rule: only the URL/title, indexed elements, and text shown below are safe to reference. If a target is missing, run another browser-use script that prints page_info() or takes a screenshot, scroll, or wait — do not guess an index.',
   ];
 
   // Most state dumps are small (a few KB). Show them VERBATIM — the lossy
@@ -400,7 +482,7 @@ export async function executeWaitUntil(block, ctx) {
 }
 
 export async function execute(block, ctx) {
-  const cmd = ensureBrowserUseVisibleCommand((block.body || '').trim());
+  const cmd = (block.body || '').trim();
   if (!cmd) {
     return { ok: false, event: 'tool_error', payload: { tag: 'execute_command', reason: 'empty command' }, llmEcho: 'execute_command empty' };
   }
@@ -454,7 +536,7 @@ export async function execute(block, ctx) {
     // literally created directories named `&&`, `cd`, `npm`, `vite@latest`.
     // `detached:true` makes the child a process-group leader so killTree can
     // terminate the whole tree (npm/vite spawn their own children).
-    const child = spawn('/bin/bash', ['-c', cmd], { cwd, detached: true });
+    const child = spawn('/bin/bash', ['-c', cmd], { cwd, detached: true, env: execEnv() });
     let settled = false;
     const settle = (value) => { if (!settled) { settled = true; resolveP(value); } };
     const killTree = (sig = 'SIGTERM') => {

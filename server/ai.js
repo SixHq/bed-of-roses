@@ -20,8 +20,9 @@ import * as profile from './memory/profile.js';
 import * as surfaceRegistry from './memory/surfaces.js';
 import { renderSkillsBlock } from './runtime/skills.js';
 import { renderMcpBlock } from './runtime/mcp.js';
-import { getConnectivityStatus, isLikelyNetworkError, waitForOnline } from './connectivity.js';
-import { isRetryableFailureMessage, makeEmptyResponseError, retryAttemptsEnv, retryDelayMs, sleep } from './retry.js';
+import { renderConnectorsBlock } from './runtime/connectors.js';
+import { getConnectivityStatus, waitForOnline } from './connectivity.js';
+import { classifyStreamFailure, makeEmptyResponseError, retryAttemptsEnv, sleepWithAbort, streamRetryBudgetMs, streamRetryDelayMs } from './retry.js';
 import { DATA_DIR } from './protocol/paths.js';
 
 // ---------- Public API registry ----------
@@ -62,6 +63,9 @@ const EDITOR_PREVIEW_TAGS = new Set([
   'create_shortcut',
   'update_shortcut',
   'execute_command',
+  // Streams the JSON arguments of an MCP call into the presence's mcp card
+  // (same tag_delta pipeline the editor/terminal cards consume).
+  'use_mcp_tool',
 ]);
 
 function normalizeSayTone(tone) {
@@ -80,7 +84,37 @@ function normalizeStreamingToolBody(text) {
   return String(text || '')
     .replace(/^<!\[CDATA\[/, '')
     .replace(/\]\]>$/g, '')
-    .replace(/<\/(?:write_file|write_to_file|replace_in_file|edit_file|create_app|update_app|create_widget|update_widget|execute_command)[^>]*$/i, '');
+    .replace(/<\/(?:write_file|write_to_file|replace_in_file|edit_file|create_app|update_app|create_widget|update_widget|execute_command|use_mcp_tool)[^>]*$/i, '');
+}
+
+// Monotonic variant for streaming tag_delta slicing. Operates on the parser's
+// RAW partial body (CDATA markers intact — parser.js `rawBody`), which is
+// append-only across feeds. Every transform here is prefix-stable: it may only
+// trim a bounded SUFFIX (trimmed chars re-emit once the stream grows past
+// them), never rewrite earlier characters. unwrapCdata-based `partial.body`
+// breaks that guarantee (its "last ]]>" anchor moves), which used to drop or
+// duplicate characters at child-tag CDATA boundaries in create_app streams.
+// Inner CDATA markers are left in place — the presence scrubs them and the
+// surface-card extractor actually keys off `]]></html>` boundaries.
+const STREAM_CLOSE_TAG_RE = /<\/(?:write_file|write_to_file|replace_in_file|edit_file|create_app|update_app|create_widget|update_widget|create_shortcut|update_shortcut|execute_command|use_mcp_tool)[^>]*$/i;
+function monotonicStreamingToolBody(text) {
+  let out = String(text || '');
+  // Whole-body CDATA wrapper (write_file / execute_command style). Keep any
+  // leading whitespace — it may already have been emitted before the marker
+  // completed, and rewriting it would shift the high-water offset.
+  out = out.replace(/^(\s*)<!\[CDATA\[/, '$1');
+  // Trailing partial close tag (belt — the parser already strips these).
+  out = out.replace(STREAM_CLOSE_TAG_RE, '');
+  // Trailing partial/complete CDATA markers still streaming in.
+  for (const marker of ['<![CDATA[', ']]>']) {
+    for (let k = marker.length; k > 0; k -= 1) {
+      if (out.endsWith(marker.slice(0, k))) {
+        out = out.slice(0, out.length - k);
+        break;
+      }
+    }
+  }
+  return out;
 }
 
 function isChatAborted(ctx) {
@@ -205,7 +239,7 @@ function completionDeferralReason({ block, progress, lastUserMessage, feedbackAc
     progress.lastUnverifiedActionSeq
     && (!progress.lastInspectionSeq || progress.lastInspectionSeq < progress.lastUnverifiedActionSeq)
   ) {
-    return `browser-use ${progress.lastUnverifiedActionVerb || 'action'} has not been verified by a later browser-use state/get/screenshot result`;
+    return `browser-use ${progress.lastUnverifiedActionVerb || 'action'} has not been verified by a later browser-use script that prints page_info() or takes a screenshot`;
   }
   if (browserTaskNeedsMultiStepEvidence(lastUserMessage) && (progress.action || 0) < 2) {
     return 'the browser task needs more than setup plus one inspection step before it can be verified';
@@ -226,6 +260,10 @@ const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 60_000;
 // auto-memory. Power users can still set BOR_CHAT_MAX_PASSES=N for an
 // explicit safety ceiling.
 const DEFAULT_CHAT_MAX_PASSES = Number.POSITIVE_INFINITY;
+// Per-pass stream attempts. This now covers MID-STREAM recoveries too (a
+// stream that dies after producing partial output resumes or salvages, it no
+// longer kills the turn) — attempts are additionally bounded per turn by the
+// BOR_STREAM_RETRY_BUDGET_MS wall clock in retry.js.
 const DEFAULT_CHAT_STREAM_ATTEMPTS = 10;
 const DEFAULT_CHAT_TAG_CONTINUATIONS = 8;
 const DEFAULT_CONTINUATION_TAIL_CHARS = 7000;
@@ -315,9 +353,51 @@ function normalizeToolMedia(result) {
         url: String(item.url),
         mediaType: item.mediaType || undefined,
       });
+    } else if (item.type === 'document' && item.url) {
+      // PDFs read via read_file feed back as native document blocks so the
+      // model reads them directly instead of decoding bytes as text.
+      blocks.push({
+        type: 'document',
+        url: String(item.url),
+        mediaType: item.mediaType || 'application/pdf',
+        name: item.name || 'document.pdf',
+      });
     }
   }
   return blocks;
+}
+
+// Replace inline base64 payloads with a size marker so tool logs stay readable
+// and pasteable.
+function redactDataUrls(text) {
+  return String(text || '').replace(/data:([a-z0-9.+-]+\/[a-z0-9.+-]+)(;base64)?,[^"'\s)\]}]+/gi,
+    (m, mime) => `[data:${mime} ~${Math.round(m.length / 1024)}KB]`);
+}
+
+const TOOL_LOG_ECHO_CAP = 6000;
+
+// Console-log every tool result (and full error detail) for debugging.
+function logToolResult(block, result) {
+  const name = block?.name || 'tool';
+  if (name === 'say') return;
+  if (result?.ok === false || result?.event === 'tool_error') {
+    console.error(`[tool] ✗ ${name} ERROR — ${redactDataUrls(result?.payload?.reason || result?.llmEcho || 'unknown error')}`);
+    if (result?.payload) {
+      try { console.error(`[tool]   error payload: ${redactDataUrls(JSON.stringify(result.payload)).slice(0, 4000)}`); } catch { /* unserializable */ }
+    }
+    return;
+  }
+  const media = Array.isArray(result?.llmMedia)
+    ? result.llmMedia.map((m) => `${m.type}${m.mediaType ? `:${m.mediaType}` : ''} ~${Math.round(String(m.url || '').length / 1024)}KB`).join(', ')
+    : '';
+  console.log(`[tool] ✓ ${name} → event=${result?.event || '(none)'}${media ? ` media=[${media}]` : ''}`);
+  const echo = redactDataUrls(result?.llmEcho || '');
+  if (echo) {
+    const capped = echo.length > TOOL_LOG_ECHO_CAP
+      ? `${echo.slice(0, TOOL_LOG_ECHO_CAP)}\n[log truncated — full echo is ${echo.length} chars]`
+      : echo;
+    console.log(capped.split('\n').map((line) => `[tool]   ${line}`).join('\n'));
+  }
 }
 
 function pushToolMedia(target, result) {
@@ -329,12 +409,21 @@ function pushToolMedia(target, result) {
 }
 
 function toolResultsContent(toolResultsBlock, toolMediaBlocks = []) {
-  const text = `Tool results from your last actions. Continue the same request and emit XML tags only. Inspect these results before deciding whether the user's original request is complete. Do not quote, restate, or summarize stdout/page dumps before acting; extract only the needed IDs, element indexes, URLs, confirmations, or errors, then emit the next XML tag. Browser-use truth rule: the current page, visible text, and clickable elements are ONLY what the latest browser-use state/get/screenshot result proves. A click/input/keys result only proves the command was sent; it does not prove navigation, success, a page state, an email/OTP, or a visible element. If the target button/text is absent from the latest state/get/screenshot, that is normally a stale/early read — re-inspect with browser-use state/get/screenshot, scroll, or wait, then act; do NOT stop or switch to computer-use merely because something is not in this result (only fall back after an explicit browser-use error or the same step failing repeatedly). Never invent an element or say you are on a page that the latest result does not show. Browser-use setup, profile selection, connecting, or opening a page is not completion unless the user only asked for that setup. For browser tasks, keep using browser-use until the requested content/action is actually found, sent, posted, filled, verified, or you hit a real blocker. If you need the user's profile choice, app choice, OTP, MFA, CAPTCHA, credentials, permission, confirmation, manual click, or manual install/download, ask clearly and end the turn with <wait_for_human_input kind="short_reason"><![CDATA[what you need]]></wait_for_human_input>; do not call more tools while waiting for the user. If a compact command preview omits a line you truly need, call read_command_tail with the provided run_id/offset instead of reprinting the visible preview. If browser-use fails after a real attempt, do not loop around setup; fall back to Chrome with computer-use. Browser-use is fast and efficient; computer-use is slower but more reliable because it operates the visible browser directly. If the request is now fully handled, end with <attempt_completion><result>...</result></attempt_completion>; the result is visible to the user, so do not duplicate it in a final <say>. Do not call more tools after attempt_completion or wait_for_human_input.\n${toolResultsBlock || '(no tool results)'}`;
+  const text = `Tool results from your last actions. Continue the same request and emit XML tags only. Inspect these results before deciding whether the user's original request is complete. Do not quote, restate, or summarize stdout/page dumps before acting; extract only the needed IDs, element indexes, URLs, confirmations, or errors, then emit the next XML tag. Browser truth rule: the current page, visible text, and interactive elements are ONLY what the latest tool_result shows — for the ambient browser that is the LATEST snapshot (interact only with refs [ref=eN] from it; refs go stale after navigation), for browser-use scripts the latest printed page_info()/screenshot. An action that clicks/types/submits only proves it was dispatched; it does not prove navigation, success, a page state, an email/OTP, or a visible element. If the target button/text is absent from the latest result, that is normally a stale/early read — browser_wait then browser_snapshot (or scroll and re-read), then act; do NOT stop or switch tools merely because something is not in this result (only fall back after a hard error or the same step failing repeatedly against fresh state). Never invent an element or ref, or say you are on a page that the latest result does not show. Confirming it is OK to act in a signed-in session, or opening a page, is not completion unless the user only asked for that. For browser tasks, keep driving the browser until the requested content/action is actually found, sent, posted, filled, verified, or you hit a real blocker. If you need the user's profile choice, app choice, OTP, MFA, CAPTCHA, credentials, permission, confirmation, manual click, or manual install/download, ask clearly and end the turn with <wait_for_human_input kind="short_reason"><![CDATA[what you need]]></wait_for_human_input>; do not call more tools while waiting for the user. If a compact command preview omits a line you truly need, call read_command_tail with the provided run_id/offset instead of reprinting the visible preview. If the ambient browser hits a hard failure, do not loop on the same step; fall back to the browser-use CLI (if installed) and then to visible Chrome with computer-use. If the request is now fully handled, end with <attempt_completion><result>...</result></attempt_completion>; the result is visible to the user, so do not duplicate it in a final <say>. Do not call more tools after attempt_completion or wait_for_human_input.\n${toolResultsBlock || '(no tool results)'}`;
   if (!toolMediaBlocks.length) return text;
+  const hasImages = toolMediaBlocks.some((b) => b.type === 'image_url');
+  const hasDocs = toolMediaBlocks.some((b) => b.type === 'document');
+  const notes = [];
+  if (hasImages) {
+    notes.push('The image attachments below are the exact latest visual results returned by the tool call. Treat these pixels as the source of truth for what is visible right now; ignore any older visual assumptions.');
+  }
+  if (hasDocs) {
+    notes.push('The document attachment(s) below (e.g. a PDF) contain the FULL readable content of the file the tool read. You can read them directly, right now, in this conversation. Do NOT run execute_command, Python, or any terminal extraction on the file — that is slower, redundant, and forbidden when the document is already attached. Answer from the attached document.');
+  }
   return [
     {
       type: 'text',
-      text: `${text}\n\nThe image attachments below are the exact latest visual results returned by the tool call. Treat these pixels as the source of truth for what is visible right now; ignore any older visual assumptions.`,
+      text: `${text}\n\n${notes.join('\n\n')}`,
     },
     ...toolMediaBlocks,
   ];
@@ -345,14 +434,28 @@ function toolResultsContent(toolResultsBlock, toolMediaBlocks = []) {
 // arrays of {type:'text'|'image'} blocks; once a newer screenshot arrives the
 // old pixels are dead weight that only inflate token cost (and on a visual loop,
 // explode it). We keep text so the model still has the narrative trail.
+//
+// ONLY tool-result turns are pruned (marked `toolResults: true` when pushed).
+// Genuine user messages keep their attachments — a PDF or screenshot the user
+// attached via the + button IS the subject of the request, and stripping it
+// after the first pass forced the model to fall back to read_file on the raw
+// path. Document blocks in tool results are also kept: unlike screenshots they
+// never go stale, and re-reading a dropped PDF every pass would loop.
 function stripStaleMediaFromHistory(conversation) {
   for (const message of conversation) {
-    if (message.role !== 'user' || !Array.isArray(message.content)) continue;
-    if (!message.content.some((b) => b && b.type !== 'text')) continue;
-    const textBlocks = message.content.filter((b) => b && b.type === 'text');
-    message.content = textBlocks.length
-      ? [{ type: 'text', text: `${textBlocks.map((b) => b.text).join('\n')}\n\n[earlier image attachment(s) dropped to save context — rely on the latest capture]` }]
-      : '[earlier image attachment(s) dropped to save context]';
+    if (message.role !== 'user' || !message.toolResults || !Array.isArray(message.content)) continue;
+    if (!message.content.some((b) => b && b.type !== 'text' && b.type !== 'document')) continue;
+    const keptBlocks = message.content.filter((b) => b && (b.type === 'text' || b.type === 'document'));
+    const textBlocks = keptBlocks.filter((b) => b.type === 'text');
+    if (textBlocks.length) {
+      const lastText = textBlocks[textBlocks.length - 1];
+      lastText.text = `${lastText.text}\n\n[earlier image attachment(s) dropped to save context — rely on the latest capture]`;
+      message.content = keptBlocks;
+    } else if (keptBlocks.length) {
+      message.content = [{ type: 'text', text: '[earlier image attachment(s) dropped to save context]' }, ...keptBlocks];
+    } else {
+      message.content = '[earlier image attachment(s) dropped to save context]';
+    }
   }
 }
 
@@ -369,6 +472,40 @@ function buildOpenTagContinuationPrompt({ partial, rawAssistant, continuationInd
     tail,
     '</tail_of_previous_response>',
   ].join('\n');
+}
+
+// Mid-stream cutoff while a tag was still open: the retried request resumes
+// from the exact next character so already-voiced say text and already-shown
+// tool previews are never re-emitted (the parser and its stream IDs are kept
+// alive across the retry — same mechanism as the open-tag continuation).
+function buildStreamResumePrompt({ partial, rawAssistant }) {
+  const tag = partial?.name || 'tool';
+  const tail = String(rawAssistant || '').slice(-continuationTailChars());
+  return [
+    `Your previous response was cut off mid-stream by a transient connection error while an open <${tag}> XML tag was unfinished.`,
+    'Resume from the exact next character only.',
+    'Do not restart the tag. Do not repeat any text you already wrote. Do not add a new <say>. Do not mention the interruption.',
+    'Keep writing the unfinished XML/CDATA content until all opened tags are closed, then continue the task normally.',
+    '',
+    '<tail_of_previous_response>',
+    tail,
+    '</tail_of_previous_response>',
+  ].join('\n');
+}
+
+// Mid-stream cutoff with NO open tag: tools from the dying pass may have
+// already executed (execution is incremental — blocks run as they complete
+// during the stream). Restarting the pass would replay those side effects, so
+// instead the pass is salvaged: its executed tool results are carried into the
+// next pass via the normal <tool_results> turn, with this note appended.
+function streamInterruptionEcho(err, rawAssistant) {
+  const tail = String(rawAssistant || '').trim().slice(-1500);
+  return [
+    `stream_interrupted: your previous response was cut off mid-stream by a transient error (${String(err?.message || err).slice(0, 300)}).`,
+    'Every tag recorded above ALREADY EXECUTED — do not re-run any of them.',
+    'Continue the task from exactly where the response stopped.',
+    tail ? `Tail of the interrupted response:\n${tail}` : '',
+  ].filter(Boolean).join('\n');
 }
 
 // ---------- Glyph library (Feather-style line icons) ----------
@@ -835,6 +972,7 @@ async function buildSystemPrompt({ aiName, personality, widgets, registry, baseT
   const topSurfacesBlock = await surfaceRegistry.renderTopSurfaces(3);
   const skillsBlock = await renderSkillsBlock();
   const mcpBlock = await renderMcpBlock();
+  const connectorsBlock = await renderConnectorsBlock();
   const resolvedHostMode = hostMode === 'v2' || process.env.BOR_HOST_MODE === 'v2' ? 'v2' : 'classic';
   const hostBlock = resolvedHostMode === 'v2'
     ? `# CURRENT HOST MODE — MAC COMPANION
@@ -1071,7 +1209,7 @@ Tag-routing summary (tight reference — earlier sections have the nuance):
 - Long task → announce with \`<say>\`, chain tools, keep going until done or a real blocker.
 - Need user input/action → ask clearly, then end with \`<wait_for_human_input>\`. Do not use \`<attempt_completion>\` for this.
 - Mac app/UI control → \`<open_app>\` + \`<screen_capture>\` + \`<computer_click>\`/\`<computer_type>\`/\`<computer_key>\` or \`<computer_use>\` for multi-step flows.
-- Browser-required tasks (Gmail, X, Slack, Notion, dashboards, signups, checkouts) → \`<use_skill name="browser-use"/>\` first, then \`<execute_command>\` for \`browser-use\` CLI. Ask user for profile/account before acting by ending the turn with \`<wait_for_human_input kind="profile_choice">\`. If browser-use fails, fall back to visible Chrome via computer-use — don't loop on the same setup.
+- Browser-required tasks (web apps, dashboards, signups, checkouts, forms, logged-in sites) → CONNECTOR FIRST: if a connected MCP server covers the service (mail, calendar, docs, …), use its tools — never drive a browser at a service a connector already handles. Otherwise use the ambient browser: \`<browser_open url="…"/>\`, read the returned snapshot, then act by ref with \`<browser_click>\` / \`<browser_type>\` / \`<browser_fill_form>\` — every action returns a fresh snapshot; only refs from the LATEST snapshot are valid. Before any identity-touching action in a signed-in session (sending, posting, purchasing), confirm with \`<wait_for_human_input kind="profile_choice">\`. On a hard ambient-browser failure, fall back to the browser-use CLI (\`<use_skill name="browser-use"/>\`, only if it appears in SKILLS), then visible Chrome via computer-use.
 - Apps + shortcuts → \`<create_app>\` (full Mac window) / \`<create_shortcut>\` (bubble iframe card) or \`<update_*>\` if a similar surface exists. Always include a designed \`<thumbnail>\`. App requests need research first; shortcuts usually don't.
 - Existing surface → \`<launch_app id="…"/>\` or \`<launch_shortcut id="…"/>\`; data-only changes → \`<read_surface_data>\` + \`<mutate_surface_data>\`, never rewrite UI.
 - OS customization → \`<create_svg>\` for objects/stickers/mascots; \`<write_file path="shell/themes/${theme.id}/user-extras.css">\` for ambient CSS. \`<set_theme>\` only when the user explicitly asks for wallpaper/palette changes.
@@ -1106,7 +1244,20 @@ This tag is a hard stop. The runtime marks the task as waiting and will not call
 
 **There is no pass cap.** The loop runs until you call \`<attempt_completion>\` or \`<wait_for_human_input>\`. Take as many passes as the task needs — 5, 50, 500 — and do not artificially compress a multi-step workflow because you think you should be wrapping up. The model decides when the task is done or must pause for the user; that decision is communicated only by one of those terminal tags. If you are uncertain what to do next and do not need the user, do something: re-inspect state with a tool, take a screen capture, scan the surface list, search the web. Halting silently is never the right move.
 
-Never use \`<attempt_completion>\` in the same pass as a tool call whose result you have not read yet. After \`<execute_command>\`, \`<web_search>\`, \`<web_fetch>\`, \`<use_skill>\`, file tools, browser-use commands, or app/shortcut tools, wait for the tool_result pass, inspect it, and only then decide whether to continue, complete, or wait for the human. For browser-use workflows, \`browser-use doctor\`, \`browser-use profile list\`, \`browser-use connect\`, and \`browser-use open\` are setup/navigation steps. They do not satisfy tasks like finding reels, sending a message, creating an account, filling a form, or extracting information. Complete only after the final requested browser action has visible proof from \`browser-use state\`, \`get\`, \`screenshot\`, page text, a sent/post confirmation, or a clear blocker. If the next step requires user input or action, use \`<wait_for_human_input>\`. A browser-use failure is not automatically a blocker: if Chrome can plausibly do the task visually, use the computer-use fallback first.
+Never use \`<attempt_completion>\` in the same pass as a tool call whose result you have not read yet. After \`<execute_command>\`, \`<web_search>\`, \`<web_fetch>\`, \`<use_skill>\`, file tools, ambient-browser tags, or app/shortcut tools, wait for the tool_result pass, inspect it, and only then decide whether to continue, complete, or wait for the human. For browser workflows, \`<browser_open>\` on a page is a setup/navigation step. It does not satisfy tasks like finding reels, sending a message, creating an account, filling a form, or extracting information. Complete only after the final requested browser action has visible proof in the LATEST snapshot, a screenshot, or a sent/post confirmation — or you hit a clear blocker. If the next step requires user input or action, use \`<wait_for_human_input>\`. A browser failure is not automatically a blocker: re-inspect with a fresh \`<browser_snapshot>\` first; only after a hard failure fall back to the browser-use CLI (if installed) or computer-use.
+
+## Stop / resume markers — user-side, never yours
+
+Two markers can appear inside USER messages. They come from the presence UI; you never emit them.
+
+- \`<task_interrupted_by_user/>\` in history: the user pressed Stop and cancelled that task mid-run. The task is dead. Acknowledge briefly if relevant; do NOT resume it unprompted.
+- \`<task_resumed_by_user/>\` as the user's message: the user pressed Resume. Pick the most recent interrupted task back up exactly where it stopped and continue it.
+- A plain new message after an interruption: the old task stays cancelled — handle only the new request.
+- Exception: if the user's own words ask you to continue ("continue", "resume", "pick it back up", or similar), treat that as resumption even without the marker.
+
+## Complete tool bodies, always
+
+Every tool call you emit must carry its complete body: a \`<write_file>\`/\`<write_to_file>\`/\`<create_app>\` body is the ENTIRE file or app content, top to bottom, inside the tag (CDATA-wrapped). Never send an empty or placeholder body, and never end content with a truncation note of any kind — such calls are rejected, and you must re-emit the content in full, regenerated from scratch. If you ever see a compacted or annotated form of an old call in history, that is a display artifact — not a syntax to reuse.
 
 ## Narrate every action — open and close
 
@@ -1167,40 +1318,30 @@ ${skillsBlock}
 
 # CONNECTED MCP SERVERS
 
-MCP servers are live external capability providers. Use them for database access, custom backends, or connected tools that are not better handled by the browser-use CLI. For normal browser work, Gmail, social posting, DMs, dashboards, Notion, account creation, and form filling, use \`browser-use\` first; if browser-use fails, use visible Chrome through computer-use before calling the task blocked.
+MCP servers are live external capability providers. CONNECTOR FIRST: if a configured server covers the service a task touches (mail, calendar, docs, a database, a custom backend), use its tools instead of a browser — never drive a browser to send email when a mail tool exists. For web work no connector covers — dashboards, form filling, account creation, JS-heavy or signed-in sites — use the ambient browser tags (\`browser_open\` → snapshot → act by ref). Fall back to the browser-use CLI (if installed) and then visible Chrome via computer-use only when the ambient browser hard-fails.
 
 Configured right now:
 ${mcpBlock}
+${connectorsBlock ? `\n# CONNECTED LIFE SERVICES\n\nThe user linked these services during setup. Reach for them before any browser or generic workaround:\n${connectorsBlock}\n` : ''}
+If the user asks you to log into a site, create an account, create an API key in a dashboard, send Gmail/email, send a Twitter/X message, post socially, respond to a Slack/WhatsApp/Instagram/LinkedIn DM, use Notion, complete a checkout/purchase, submit a form, or do anything that plainly requires a real browser session, first check the connected MCP servers above — a connector that covers the service always beats a browser. When no connector covers it, the AMBIENT BROWSER tags are the default path: \`<browser_open url="…"/>\`, then act by ref on the returned snapshot.
 
-If the user asks you to log into a site, create an account, create an API key in a dashboard, send Gmail/email, send a Twitter/X message, post socially, respond to a Slack/WhatsApp/Instagram/LinkedIn DM, use Notion, complete a checkout/purchase, submit a form, or do anything that plainly requires a real browser session, \`browser-use\` is the default path unless a native app is already available and explicitly preferred.
+Ambient-browser ground truth is strict:
+- The current page, visible text, and interactive elements are ONLY what the LATEST snapshot (or screenshot) in a tool_result shows. Every browser_* action returns a fresh snapshot — read it before deciding the next action.
+- Interact only with refs (\`[ref=eN]\`) that appear in the LATEST snapshot. Refs go stale after navigation or page changes; never invent a ref and never reuse one from an older snapshot.
+- A click/type/submit only proves the input was dispatched. It does not prove navigation, success, an OTP/email, a created API key, or a sent message — the fresh snapshot must show that state before you claim it.
+- If the expected target is missing from the latest snapshot, do not guess and do NOT give up — it is almost always a too-early read, not a failure. \`<browser_wait text="…"/>\` or \`<browser_wait seconds="2"/>\` then \`<browser_snapshot/>\`, scroll with \`<browser_press_key key="PageDown"/>\`, or narrow with \`<browser_snapshot target="eN"/>\`, then act. Saying "I can't see X yet" is a signal to re-inspect, never a reason to stop or switch tools.
+- Use \`<browser_screenshot/>\` when visual layout matters or the snapshot alone is ambiguous (canvas, charts, complex editors); the snapshot remains what you act on.
 
-Browser-use ground truth is strict:
-- The current page, visible text, and available element indexes are only what the latest \`browser-use state\`, \`browser-use get\`, or \`browser-use screenshot\` proves.
-- A \`click\`, \`input\`, \`type\`, \`keys\`, \`scroll\`, or \`wait\` result only means the command was dispatched. It does not prove navigation, success, an OTP/email, a created API key, or the presence of a button.
-- Never say you are on a page, see a button, created a key, sent a message, or triggered an email unless the latest post-action browser-use inspection shows that exact page/result or a clear confirmation.
-- If the expected target is not in the latest state/get/screenshot, do not guess and do NOT give up. An element missing from one result is almost always a stale or too-early read, not a failure — the page may still be loading or you have not re-fetched state. Re-fetch with \`browser-use state\`/\`get\`/\`screenshot\`, scroll, \`browser-use wait\`, or navigate deliberately, then act. Saying "I can't see X yet" is a signal to re-inspect in browser-use, never a reason to stop the task or switch tools. Only consider computer-use after browser-use hits a HARD failure (see the fallback rule) — one click or one missing element is not that.
+Required identity gate before acting: the ambient browser uses a persistent BOR profile that may hold signed-in sessions. For any identity-touching task (email, DMs, logins, purchases, posting, dashboards, …), confirm it is OK to act — and in which account, if several — by ending the turn with \`<wait_for_human_input kind="profile_choice">\`, and wait for the user's explicit confirmation before sending, posting, creating accounts, purchasing, or submitting anything.
 
-Required profile gate before acting:
+Keep going until the original user task is complete. Do not summarize setup as success — opening a page is not completion. If the goal is to find media, return playable URLs verified from snapshots. If the goal is to send/post/update/create, verify the confirmation state in a fresh snapshot before completing. The ambient browser persists across tools and turns — do not close and reopen it between steps; \`<browser_end/>\` only when the web task is fully done.
 
-1. \`<use_skill name="browser-use"/>\`
-2. \`<execute_command>browser-use doctor</execute_command>\` if browser-use has not already been checked in this session.
-3. \`<execute_command>browser-use profile list</execute_command>\`
-4. Ask the user which browser/profile/account to use by ending the turn with \`<wait_for_human_input kind="profile_choice">\`. Always include a clean/profileless session option.
-5. Wait for the user's profile choice before navigating, sending, posting, creating accounts, purchasing, or submitting anything.
-6. Continue with \`<execute_command>\` commands such as \`browser-use connect\`, \`browser-use --headed --profile "Default" open https://...\`, \`browser-use --headed open https://...\`, \`browser-use state\`, \`browser-use click <index>\`, and \`browser-use input <index> "text"\`. Use headed browser-use opens only; the user must be able to see the browser session.
-7. Keep going until the original user task is complete. Do not summarize setup as success. If the goal is to find media, return playable URLs and use screenshots/state/text to verify them. If the goal is to send/post/update/create, verify the confirmation state before completing.
-
-Browser-use fallback rule:
-- Browser-use is the first choice because it is fast, indexed, and efficient. EXHAUST it before switching. Most browser tasks (compose+send an email, fill a form, post, DM) are fully doable in browser-use alone.
-- "I can't see X in browser-use yet" is NOT a reason to stop or switch tools. It means: run \`browser-use state\`/\`get\`/\`screenshot\`, scroll, or \`wait\`, then act. Make at least 2–3 genuine inspect-then-act cycles on a stuck step before you even consider a fallback. Example: after \`browser-use click\` on Compose, the draft will not be in the click result — run \`browser-use state\` to see the To/Subject/Body fields, then fill them. That is the normal flow, not a failure.
-- Switch to computer-use ONLY on a HARD browser-use failure: it cannot connect; a command returns an explicit error or timeout; the SAME click/input fails with stale or invalid indices 2+ times after re-fetching state; the site actively blocks automation; or the flow genuinely cannot proceed after real inspect-and-retry. Mere absence of an expected element in a single result is NOT a hard failure and is NOT grounds to fall back.
-- Never end the turn, declare the task blocked, or call it complete mid-browser-flow just because something was not immediately visible. Your only valid moves are: keep going in browser-use (re-inspect/scroll/wait/act), fall back to computer-use for the SAME task on a hard failure, or \`<wait_for_human_input>\` for something only the user can supply (OTP/MFA/credentials/profile/CAPTCHA).
-- Unindexed-but-visible element exception: if the page clearly shows a control (e.g. a todo's done-checkbox, a styled toggle, a canvas/drag handle) but \`browser-use state\` lists it only as text with NO \`[index]\`, browser-use cannot click it (its only click is \`click <index>\`; there is no eval/selector/coordinate). That single sub-action — not the whole task — should be done with computer-use ON THE BROWSER-USE WINDOW (see next bullet). After that click, return to browser-use \`state\` to verify and continue. Do not abandon the rest of the task.
-- CRITICAL — which browser the fallback uses: a headed \`browser-use\` session runs its OWN visible Chromium window, and that window is the ONLY browser holding your page, session, and the todos/data you just entered. If a browser-use session is already open, do NOT \`<open_app name="Google Chrome"/>\` — the user's regular Chrome is a DIFFERENT browser (it will show their other tabs, e.g. a dashboard, not your work). Instead \`<screen_capture/>\` the current screen (the browser-use Chromium window is already visible and frontmost from your last command) and use \`<locate_screen_element>\`/\`<computer_click>\`/\`<computer_type>\` directly on THAT window. Only \`<open_app name="Google Chrome"/>\` when there is NO active browser-use session and you are starting visual work fresh.
-- When falling back, briefly say so, then use \`<screen_capture/>\`, \`<locate_screen_element>\`, \`<computer_click>\`, \`<computer_type>\`, \`<computer_key>\`, and \`<computer_use>\` against the correct window (the browser-use Chromium if a session is open; otherwise a freshly opened Chrome) to perform the same original task. If the needed profile/account is ambiguous, use \`<wait_for_human_input kind="profile_choice">\` before taking account-affecting action.
-- Do not repeat \`browser-use doctor\`, \`profile list\`, \`connect\`, or \`open\` in a loop after the same class of failure. Switch paths.
-
-If \`browser-use connect\` fails because Chrome remote debugging is not available, offer the user the two choices from the browser-use skill with \`<wait_for_human_input>\` only when that is likely faster than visible Chrome: enable remote debugging for their real Chrome, or use managed Chromium with a selected Chrome profile. If the user needs the task done now, proceed with the visible Chrome computer-use fallback. If credentials are needed, MFA appears, or a site blocks both browser-use and computer-use, use \`<wait_for_human_input>\` to state what is needed. Do not pretend a browser action succeeded.
+Browser fallback ladder (only on a HARD failure — the same action failing 2+ times against a freshly-taken snapshot, the browser refusing to launch, or a site actively blocking automation; a missing element in one snapshot is NOT a hard failure):
+1. If the browser-use CLI is installed (it appears in the SKILLS list), \`<use_skill name="browser-use"/>\` and drive the user's real signed-in Chrome by piping small Python scripts to \`browser-use\` through \`<execute_command>\`, exactly as that skill instructs.
+2. Otherwise, or if browser-use also hard-fails, fall back to visible Chrome via computer-use: \`<screen_capture/>\`, \`<locate_screen_element>\`, \`<computer_click>\`, \`<computer_type>\`, \`<computer_key>\` on the browser window. When falling back, briefly say so.
+3. If credentials are needed, MFA/CAPTCHA appears, or a site blocks every path, use \`<wait_for_human_input>\` to state exactly what you need. Do not pretend a browser action succeeded.
+- Never end the turn, declare the task blocked, or call it complete mid-browser-flow just because something was not immediately visible. Your valid moves are: keep going in the ambient browser (wait/scroll/re-snapshot/act), step down the fallback ladder on a hard failure, or \`<wait_for_human_input>\` for something only the user can supply (OTP/MFA/credentials/account choice/CAPTCHA).
+- Do not repeat the same failing action or the same page-open in a loop after the same class of failure. Change the read (wait, scroll, narrow the snapshot) or switch paths.
 
 # THOUGHT BUBBLE — guidance for \`<say>\`
 
@@ -1416,6 +1557,7 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
   const providerId = config.defaultProvider;
   if (!providerId) {
     onEvent({ event: 'say', payload: { tone: 'apologetic', text: 'No provider is connected yet. Open settings and connect one first.' } });
+    onEvent({ event: 'provider_config_required', payload: { providerId: null, reason: 'no provider selected' } });
     return '';
   }
   const provider = getProvider(providerId);
@@ -1427,8 +1569,15 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
   const providerCfg = config.providers?.[providerId];
   if (!providerCfg || (!providerCfg.apiKey && !provider.id.includes('compatible'))) {
     onEvent({ event: 'say', payload: { tone: 'apologetic', text: `${provider.label} isn't configured. Add a key in settings.` } });
+    onEvent({ event: 'provider_config_required', payload: { providerId, reason: 'missing api key' } });
     return '';
   }
+
+  // Tool handlers adapt their output to what the active provider can ingest:
+  // read_file attaches PDFs as native document blocks on providers that view
+  // them inline, and returns extracted text on providers that can't
+  // (OpenAI-compatible endpoints drop document blocks at the wire).
+  ctx.providerCaps = { supportsDocuments: provider.supportsDocuments !== false };
 
   const registry = await loadRegistry();
   const system = await buildSystemPrompt({
@@ -1452,6 +1601,13 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
   const MAX_PASSES = chatMaxPasses();
   const STREAM_MAX_ATTEMPTS = chatStreamAttempts();
   const MAX_TAG_CONTINUATIONS = chatTagContinuations();
+  // Turn-level stream-recovery state. `retries` picks the backoff step;
+  // `firstFailureAt` starts the wall-clock budget for the current failure
+  // incident. Both reset on the next genuinely successful stream, so recovery
+  // late in a long turn gets a fresh budget.
+  const STREAM_RETRY_BUDGET_MS = streamRetryBudgetMs();
+  const streamRetryState = { retries: 0, firstFailureAt: null };
+  let streamFailedTerminally = false;
   const conversation = [...messages];
   const recordedTurns = [];
   const browserUseProgress = {
@@ -1472,6 +1628,16 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
   };
   let totalTagBlocks = 0;
   let usedFallback = false;
+  // Times we've steered the model back into the XML protocol after a
+  // prose-only pass mid-task (OpenAI-compatible models like Kimi sometimes
+  // emit a bare transition line between tool steps and end their turn).
+  // Uncapped by design — the loop's exit is attempt_completion — but a model
+  // that repeats the IDENTICAL prose is stuck, not transitioning, so that
+  // still ends the turn after a few tries.
+  let protocolNudges = 0;
+  const MAX_PROTOCOL_NUDGES = Infinity;
+  let lastProseOnlyText = '';
+  let identicalProseCount = 0;
   // No-progress guard. The loop has no pass cap (the model owns completion via
   // attempt_completion/wait_for_human_input), but a model can get stuck redoing
   // the SAME actionable tool every pass — e.g. relaunch→screen_capture forever.
@@ -1510,6 +1676,20 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
     const handleBlock = async (block) => {
       throwIfChatAborted(ctx);
       if (block.kind !== 'tag') return;
+      // Display-only: tell the presence the streamed MCP input is complete
+      // (final args, attrs) BEFORE the call executes, so the card stops its
+      // live caret while the — possibly slow — MCP round-trip runs. The
+      // existing use_mcp_tool / tool_error result event follows as usual.
+      if (block.name === 'use_mcp_tool') {
+        onEvent({
+          event: 'mcp_input_end',
+          payload: {
+            server: block.attrs?.server || '',
+            tool: block.attrs?.tool || '',
+            text: String(block.body || ''),
+          },
+        });
+      }
       const seq = ++blockSeq;
       const declaredFeedsBack = tagFeedsBack(block.name);
       if (declaredFeedsBack) {
@@ -1550,6 +1730,7 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
       const result = await executeBlock(block, ctx);
       throwIfChatAborted(ctx);
       if (!result) return;
+      logToolResult(block, result);
       pushToolMedia(toolMediaBlocks, result);
       trackBrowserUseCommand(browserUseProgress, block, result);
       onEvent({ event: result.event, payload: result.payload, ok: result.ok });
@@ -1603,6 +1784,7 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
     console.log(`\n[chat] ▶ ${providerId}/${providerCfg.model || provider.defaultModel} — pass ${pass + 1}/${MAX_PASSES}…`);
     console.log(`[chat] prompt approx — system ${system.length}c, messages ${promptMessageChars}c, total ${promptTotalChars}c, stream idle timeout ${idleTimeoutMs ? formatDuration(idleTimeoutMs) : 'disabled'}`);
     let streamCompleted = false;
+    let streamSalvaged = false;
     let streamMessages = conversation;
     let continuationCount = 0;
     let continuationFailed = false;
@@ -1635,12 +1817,23 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
           apiKey: providerCfg.apiKey,
           model: providerCfg.model || provider.defaultModel,
           baseUrl: providerCfg.baseUrl,
+          reasoning: providerCfg.reasoning || undefined,
+          emitReasoning: true,
           system,
           messages: streamMessages,
           signal: streamAbort.signal,
         })) {
           throwIfChatAborted(ctx);
           armIdleTimer();
+          if (chunk && typeof chunk === 'object') {
+            // Reasoning/thinking chunks are display-only: stream them to the
+            // client but keep them out of the recorded assistant text and the
+            // XML protocol parser.
+            if (chunk.type === 'reasoning' && chunk.text) {
+              onEvent({ event: 'reasoning_delta', payload: { streamId: `reasoning-${pass + 1}`, text: chunk.text } });
+            }
+            continue;
+          }
           rawAssistant += chunk;
           process.stdout.write(chunk);
           parser.feed(chunk);
@@ -1677,7 +1870,7 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
                 });
               }
             } else if (EDITOR_PREVIEW_TAGS.has(partial.name)) {
-              const fullText = normalizeStreamingToolBody(partial.body);
+              const fullText = monotonicStreamingToolBody(partial.rawBody ?? partial.body);
               if (fullText.length > activeToolTextLength) {
                 const text = fullText.slice(activeToolTextLength);
                 activeToolTextLength = fullText.length;
@@ -1738,24 +1931,54 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
         streamCompleted = true;
         break;
       } catch (err) {
+        // User abort is never retried — check it before any classification so
+        // Stop (and the <task_interrupted_by_user/> stop/resume flow that
+        // depends on aborts propagating cleanly) exits immediately.
         if (isChatAborted(ctx)) return recordedTurns.join('\n');
         if (streamTimedOut) {
           err = new Error(`Provider stream stopped responding for ${formatDuration(idleTimeoutMs)}. The request was aborted instead of hanging.`);
         }
+        const classification = classifyStreamFailure(err, { signal: ctx.signal });
         const attemptsLeft = streamAttempt < STREAM_MAX_ATTEMPTS - 1;
         const attemptProducedNothing = rawAssistant.length === attemptStartChars && tagBlocks === attemptStartTags;
-        const canRetryCleanly = attemptProducedNothing && attemptsLeft && isRetryableFailureMessage(err);
-        if (canRetryCleanly) {
-          console.warn(`[chat] stream attempt ${streamAttempt + 1}/${STREAM_MAX_ATTEMPTS} failed on pass ${pass + 1}: ${err.message}; retrying`);
+        if (!streamRetryState.firstFailureAt) streamRetryState.firstFailureAt = Date.now();
+        const budgetLeftMs = STREAM_RETRY_BUDGET_MS - (Date.now() - streamRetryState.firstFailureAt);
+        const canRetry = classification.retryable && attemptsLeft && budgetLeftMs > 0;
+        const stopNote = canRetry ? ''
+          : !classification.retryable ? ' (not retryable)'
+            : !attemptsLeft ? ' (attempts exhausted)'
+              : ' (retry budget exhausted)';
+        console.warn(`[chat] stream failure on pass ${pass + 1} attempt ${streamAttempt + 1}/${STREAM_MAX_ATTEMPTS}: ${err.message} — kind=${classification.kind} retryable=${classification.retryable}${stopNote}`);
+        if (canRetry) {
+          const delayMs = streamRetryDelayMs(streamRetryState.retries, { waitHintMs: classification.waitHintMs });
+          streamRetryState.retries += 1;
+          const resumed = !attemptProducedNothing;
+          // Quiet retry signal for the presence (unknown SSE events are
+          // ignored by older clients, so this is safe to emit).
+          onEvent({
+            event: 'stream_retry',
+            payload: {
+              attempt: streamAttempt + 1,
+              maxAttempts: STREAM_MAX_ATTEMPTS,
+              reason: String(err.message || '').slice(0, 300),
+              kind: classification.kind,
+              delayMs,
+              pass: pass + 1,
+              resumed,
+            },
+          });
           await ctx.audit({
-            kind: 'chat.retry.stream',
+            kind: 'chat.stream_retry',
             provider: providerId,
             reason: err.message,
+            classification: classification.kind,
             pass: pass + 1,
             attempt: streamAttempt + 1,
             maxAttempts: STREAM_MAX_ATTEMPTS,
+            delayMs,
+            resumed,
           });
-          if (attemptStartChars === 0 && attemptStartTags === 0) {
+          if (attemptStartChars === 0 && attemptStartTags === 0 && attemptProducedNothing) {
             rawAssistant = '';
             parser = new ProtocolParser({ allowedTags: ALLOWED_PARSER_TAGS, shouldAutoCloseTag: shouldAutoCloseToolTag });
             partialPushed = false;
@@ -1767,19 +1990,63 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
             activeToolTextLength = 0;
             activeToolStreamId = null;
           }
-          if (getConnectivityStatus().online === false || isLikelyNetworkError(err)) {
+          if (getConnectivityStatus().online === false || classification.kind === 'network') {
             onEvent({ event: 'connectivity', payload: { online: false, retrying: true, reason: err.message } });
-            const status = await waitForOnline({ timeoutMs: 120_000 });
-            if (status.online) {
-              onEvent({ event: 'connectivity', payload: { online: true, retrying: true } });
-              continue;
-            }
+            const status = await waitForOnline({ timeoutMs: 120_000, signal: ctx.signal });
+            if (isChatAborted(ctx)) return recordedTurns.join('\n');
+            if (status.online) onEvent({ event: 'connectivity', payload: { online: true, retrying: true } });
           }
-          await sleep(retryDelayMs(streamAttempt));
-          continue;
+          // Backoff must respect the abort signal: a Stop during the wait
+          // exits immediately with zero further attempts.
+          const waited = await sleepWithAbort(delayMs, ctx.signal);
+          if (!waited || isChatAborted(ctx)) return recordedTurns.join('\n');
+          if (attemptProducedNothing) continue;
+
+          const openPartial = parser.peekPartial();
+          if (openPartial) {
+            // Partial output with an open tag: resume from the exact next
+            // character. Parser + emit state (say/tool stream IDs) stay
+            // alive, so nothing already shown to the user is duplicated.
+            console.warn(`[chat] resuming interrupted stream mid-<${openPartial.name}> (retry ${streamRetryState.retries})`);
+            streamMessages = [
+              ...conversation,
+              { role: 'assistant', content: rawAssistant },
+              { role: 'user', content: buildStreamResumePrompt({ partial: openPartial, rawAssistant }) },
+            ];
+            continue;
+          }
+          // Partial output, no open tag: salvage the pass. Tools that already
+          // executed this pass must not be replayed — carry their results (plus
+          // an interruption note) into the next pass exactly as if the stream
+          // had ended here.
+          console.warn('[chat] salvaging interrupted pass — carrying executed tool results into the next pass');
+          toolEchoes.push(streamInterruptionEcho(err, rawAssistant));
+          sawFeedbackTool = true;
+          streamCompleted = true;
+          streamSalvaged = true;
+          break;
         }
-        onEvent({ event: 'say', payload: { tone: 'apologetic', text: `Stream error: ${err.message}` } });
-        await ctx.audit({ kind: 'chat.error', provider: providerId, reason: err.message, pass: pass + 1 });
+        streamFailedTerminally = true;
+        const attemptsUsed = streamAttempt + 1;
+        const userText = classification.retryable
+          ? `The connection to ${provider.label} kept failing (${attemptsUsed} attempt${attemptsUsed === 1 ? '' : 's'}${budgetLeftMs <= 0 ? ', retry budget exhausted' : ''}). Last error: ${err.message}`
+          : `Stream error: ${err.message}`;
+        onEvent({ event: 'say', payload: { tone: 'apologetic', text: userText } });
+        // Auth/config failures (bad key, expired key, wrong model for the key)
+        // are actionable: the presence opens the provider-settings screen.
+        if (classification.kind === 'auth'
+          || /\b401\b|\b403\b|unauthorized|invalid[ _-]?api[ _-]?key|incorrect api key|authentication/i.test(String(err.message || ''))) {
+          onEvent({ event: 'provider_config_required', payload: { providerId, reason: err.message.slice(0, 200) } });
+        }
+        await ctx.audit({
+          kind: 'chat.error',
+          provider: providerId,
+          reason: err.message,
+          classification: classification.kind,
+          pass: pass + 1,
+          attempts: attemptsUsed,
+          retries: streamRetryState.retries,
+        });
         break;
       } finally {
         clearTimeout(idleTimer);
@@ -1852,6 +2119,13 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
     }
 
     if (isChatAborted(ctx)) return recordedTurns.join('\n');
+    // A genuinely successful stream ends the current failure incident: the
+    // backoff schedule and the wall-clock retry budget start fresh for any
+    // later blip in this turn. Salvaged passes keep the incident open.
+    if (streamCompleted && !streamSalvaged && streamRetryState.firstFailureAt) {
+      streamRetryState.retries = 0;
+      streamRetryState.firstFailureAt = null;
+    }
     if (!explicitTaskDone && !sawFeedbackTool) {
       for (const block of parser.flush()) {
         await handleBlock(block);
@@ -1877,6 +2151,18 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
     }
 
     const recordedXml = recorded.join('\n');
+    // Assistant history must be VERBATIM — exactly the text the model
+    // streamed, full tool bodies included. Any synthetic rewrite of the
+    // model's own turns becomes a few-shot template it will imitate: the
+    // ` … [truncated N chars]` elision taught kimi-class models to truncate
+    // their own write_file bodies, and the body_chars="N" stub replacement
+    // taught them to emit bodyless stub calls — each guard just moved the
+    // fixation to the new shape. Sixth's ContextManager (the reference
+    // implementation) does the same: recent turns stay fully verbatim, and
+    // context pressure is relieved by dropping WHOLE old turns, never by
+    // rewriting call syntax. serializeBlock stubs remain only as a fallback
+    // for the rare pass where raw text is unavailable.
+    const assistantTurnText = rawAssistant.trim() ? rawAssistant.trimEnd() : recordedXml;
     const toolResultsBlock = toolEchoes.length ? formatToolResults(toolEchoes) : '';
     if (toolEchoes.length) {
       console.log(`[chat] tool results approx — ${toolEchoes.length} result(s), ${toolResultsBlock.length}c`);
@@ -1890,9 +2176,17 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
     if (toolMediaBlocks.length) {
       console.log(`[chat] tool media attachments — ${toolMediaBlocks.length} image(s)`);
     }
-    const recordedTurn = recordedXml + (toolResultsBlock ? `\n${toolResultsBlock}` : '');
+    const recordedTurn = assistantTurnText + (toolResultsBlock ? `\n${toolResultsBlock}` : '');
     if (recordedTurn.trim() || toolMediaBlocks.length) recordedTurns.push(recordedTurn);
     ctx.commitUxUiStrictGuidelines?.();
+
+    // Unrecoverable stream failure (non-retryable error, attempts exhausted,
+    // or retry budget spent): the user already got the apologetic say — end
+    // the turn instead of feeding whatever ran into another doomed pass.
+    if (streamFailedTerminally) {
+      console.warn('[chat] ending turn after unrecoverable stream failure');
+      break;
+    }
 
     // Tool results like search/fetch/read/skill-load/MCP should be available
     // to the model immediately, not one user turn later. Feed the just-ended
@@ -1936,7 +2230,7 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
       // tool-result turns; only the newest pass keeps its screenshots.
       stripStaleMediaFromHistory(conversation);
 
-      if (recordedXml.trim()) conversation.push({ role: 'assistant', content: recordedXml });
+      if (assistantTurnText.trim()) conversation.push({ role: 'assistant', content: assistantTurnText });
       let resultsContent = toolResultsContent(toolResultsBlock, toolMediaBlocks);
       if (repeatedActionCount >= NO_PROGRESS_NUDGE_AT) {
         const nudge = `NOTE: you have now repeated the same action ${repeatedActionCount + 1} times with no change in the result. Stop repeating it. Either try a genuinely different approach, or if you are blocked or need the user, end the turn with <wait_for_human_input kind="blocked"><![CDATA[explain what is stuck and what you need]]></wait_for_human_input>.`;
@@ -1946,7 +2240,54 @@ export async function handleChatStream({ config, messages, widgets, ctx, hostMod
           resultsContent[0].text = `${nudge}\n\n${resultsContent[0].text}`;
         }
       }
-      conversation.push({ role: 'user', content: resultsContent });
+      // `toolResults` marks this turn as prunable by stripStaleMediaFromHistory
+      // (providers only read role/content, so the extra key never hits the wire).
+      conversation.push({ role: 'user', content: resultsContent, toolResults: true });
+      continue;
+    }
+
+    // Protocol re-steer: the model emitted prose with NO tags in the middle of
+    // a task (earlier passes this turn DID run tools — totalTagBlocks > 0), so
+    // ending here would strand the work half-done ("HTML is on disk. Now the
+    // stylesheet —" …turn over). Push the prose as the assistant turn plus a
+    // corrective user turn, and run another pass. Capped so a model that only
+    // speaks prose can't loop forever; a prose-only FIRST pass (a genuine
+    // direct answer) still ends the turn normally.
+    if (
+      !explicitTaskDone &&
+      tagBlocks === 0 &&
+      rawAssistant.trim() &&
+      totalTagBlocks > 0 &&
+      protocolNudges < MAX_PROTOCOL_NUDGES
+    ) {
+      const proseText = rawAssistant.trim();
+      if (proseText === lastProseOnlyText) {
+        identicalProseCount += 1;
+      } else {
+        identicalProseCount = 0;
+        lastProseOnlyText = proseText;
+      }
+      if (identicalProseCount >= 3) {
+        console.warn('[chat] protocol re-steer abandoned — model repeated the identical prose 3x; ending turn');
+        await ctx.audit({ kind: 'chat.protocol_nudge_stuck', provider: providerId, pass: pass + 1 });
+        break;
+      }
+      protocolNudges += 1;
+      console.warn(`[chat] protocol re-steer ${protocolNudges}/${MAX_PROTOCOL_NUDGES} — prose-only pass mid-task; continuing`);
+      await ctx.audit({ kind: 'chat.protocol_nudge', provider: providerId, pass: pass + 1, nudge: protocolNudges });
+      conversation.push({ role: 'assistant', content: rawAssistant });
+      conversation.push({
+        role: 'user',
+        content: [
+          'Your last reply contained NO XML tags, so no tool ran and the task is still incomplete — you stopped mid-task.',
+          'Continue RIGHT NOW using the XML tool protocol only:',
+          '- Wrap any narration in <say tone="...">...</say>.',
+          '- Emit the next tool call (e.g. <write_file ...>, <execute_command ...>) to continue the work you described.',
+          '- Never end a reply without either a tool call or <attempt_completion> (or <wait_for_human_input> if blocked on the user).',
+          'Do not repeat work that already succeeded — pick up exactly where you stopped.',
+        ].join('\n'),
+        toolResults: true,
+      });
       continue;
     }
     break;
@@ -1965,17 +2306,34 @@ function serializeBlock(block) {
   const attrs = Object.entries(block.attrs || {})
     .map(([k, v]) => ` ${k}="${String(v).replace(/"/g, '&quot;')}"`)
     .join('');
-  const truncate = (s) => {
-    if (typeof s !== 'string') return '';
-    if (s.length <= 200) return s;
-    return `${s.slice(0, 200)} … [truncated ${s.length - 200} chars]`;
+  // NEVER put a truncation marker in history. Weak models IMITATE what they
+  // see: an earlier ` … [truncated N chars]` marker (then a reworded elision
+  // note) taught kimi-class models to end their own write_file bodies with a
+  // literal copy of the marker — and once several elided writes sat in
+  // context, the imitation FIXATED: the model kept transcribing its own
+  // rejected attempt back out of history, markers nesting, looping forever.
+  // The only representation a weak model can't imitate into a broken call is
+  // one with no body at all: long bodies become a self-closing stub carrying
+  // a `body_chars` count. Nothing is lost — the full content is echoed in the
+  // <tool_results> turn that immediately follows every call. Short bodies
+  // (≤200 chars) stay verbatim: they're useful context and imitating them is
+  // harmless. The write handlers additionally reject marker-bearing AND
+  // empty bodies (validator.js containsElisionMarker + handler guards) as a
+  // belt for conversations saved before this change.
+  const renderBody = (name, body, extraAttrs = '') => {
+    const s = typeof body === 'string' ? body : '';
+    if (!s) return `<${name}${extraAttrs}/>`;
+    if (s.length <= 200) return `<${name}${extraAttrs}>${s}</${name}>`;
+    return `<${name}${extraAttrs} body_chars="${s.length}"/>`;
   };
   if (block.children?.length) {
     const inner = block.children
-      .map((c) => `<${c.name}>${truncate(c.body)}</${c.name}>`)
+      .map((c) => renderBody(c.name, c.body))
       .join('');
     return `<${block.name}${attrs}>${inner}</${block.name}>`;
   }
   if (!block.body) return `<${block.name}${attrs}/>`;
-  return `<${block.name}${attrs}>${truncate(block.body)}</${block.name}>`;
+  const s = String(block.body);
+  if (s.length <= 200) return `<${block.name}${attrs}>${s}</${block.name}>`;
+  return `<${block.name}${attrs} body_chars="${s.length}"/>`;
 }

@@ -1,0 +1,67 @@
+---
+title: "The Presence"
+description: "The draggable, always-on-top companion orb — and everything inside its thought bubble: streaming reasoning, live code, stop and resume, history, notifications, model switching, and attachments."
+---
+
+The presence is how you live with Bed of Roses. It's a small orb that floats above your real desktop — always on top, visible on every Space (including full-screen apps), draggable anywhere. Click it (or press **Cmd+Option+Space**) to open the composer; type what you want and BOR gets to work. Left alone for five minutes, the orb goes to sleep until you move the mouse.
+
+## The thought bubble
+
+While BOR works, a thought bubble opens and shows you everything as it happens. It isn't a log — each piece of work is a live, streaming card:
+
+- **Reasoning cards** — the model's thinking streams token by token into a collapsible card ("reasoning" while live, "reasoned" when done). You can watch it plan or ignore it.
+- **Editor cards** — every file BOR writes streams in line by line, with the file path, a live caret, diff stats, and a saved/failed status.
+- **Terminal cards** — commands show the `$` prompt, live stdout and stderr, the working directory, and the exit status.
+- **MCP cards** — calls to connected services and MCP servers stream their arguments as they're composed, then show the result.
+- **Browser cards** — web sessions show the current page and an expandable console.
+- **Build cards** — apps and shortcut cards being generated show their build phase, then go live.
+- **Media, image, wait, and progress cards** — everything else BOR produces or waits on.
+
+<!-- TODO: screenshot: the thought bubble mid-task showing a reasoning card, an editor card streaming code, and a terminal card together -->
+
+The bubble is resizable from all eight edges (your size persists), and the minimize button collapses a running task to a small chip — the work continues, and clicking the chip brings the full thread back.
+
+## Stop and resume
+
+The square stop button cancels a running task immediately. When a task is stopped, the button becomes a play triangle — press it (or the "Resume" action in the footer) and BOR picks the task back up exactly where it left off, with full context of what it had already done.
+
+<!-- TODO: screenshot: the head of the thought bubble with the stop button, and the same spot after stopping showing the play (resume) triangle -->
+
+## History
+
+The history button reopens past conversations — not as plain text, but with every card restored: the code that was written, the terminals, the images, the browser steps. Reopening a conversation is a real resume; you can keep going from where it ended.
+
+## Notifications
+
+The bell opens the notifications inbox — where background tasks, scheduled jobs, and anything BOR wants to tell you later land. Unread items show as a badge on the orb and as a chip under the collapsed orb. Every notification has a **Continue in chat** action that opens a fresh conversation seeded with that notification's content, so "your 9am inbox summary is ready" becomes "…now draft replies to the two urgent ones" in one click. See [Background tasks](/features/background-tasks).
+
+<!-- TODO: screenshot: the notifications panel open with an unread item and its "Continue in chat" button -->
+
+## The model chip
+
+The input bar shows a chip with the active model's name. Click it to open the model picker: every provider you've connected, its models, and its connection state. Pick a row to switch models mid-conversation; unconfigured providers route you to their settings. Reasoning effort is set per provider in provider settings — see [Configuration](/getting-started/configuration).
+
+<!-- TODO: screenshot: the model chip in the input bar, and the opened model picker panel listing providers and models -->
+
+## Attaching context
+
+Two ways to give BOR files:
+
+- **Drag and drop** any file, image, folder — even a fresh macOS screenshot thumbnail — onto the composer or the bubble. The orb visibly catches the drop.
+- **The + button** opens a native file picker.
+
+Images (up to 8 MB) and PDFs (up to 20 MB) are read directly into the conversation; everything else — HEIC photos, folders, large files, any other type — is attached by path, and BOR reads it with its [file tools](/features/files). Attachments appear as removable chips above the input, and you can send attachments with no text at all ("Use the attached context." is implied).
+
+<!-- TODO: screenshot: a file being dragged onto the presence with the drop highlight, and the resulting attachment chips above the input -->
+
+## It behaves like part of the desktop
+
+- BOR applies generated wallpapers to your real macOS desktop.
+- The presence hides itself during screen captures, so screenshots show your apps, not the orb.
+- File paths in BOR's replies are links — click one to reveal it in Finder.
+
+## Related
+
+- [Building apps](/features/building-apps) — what the presence builds.
+- [Themes](/features/themes) — restyling the orb, bubble, and cards.
+- [Multi-presence](/features/multi-presence) — running several orbs at once.

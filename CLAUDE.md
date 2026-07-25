@@ -8,26 +8,28 @@ Bed of Roses (BOR) — an AI-native macOS companion. A draggable presence lives 
 
 The repo has two surfaces:
 - **Classic browser shell** (`shell/` + `server/`) — original browser-hosted "empty OS" served at http://localhost:7777. Still used for onboarding.
-- **v2 Mac host** (`v2/host/`) — Electron wrapper that owns a frameless always-on-top presence window, opens generated surfaces as native windows, and applies macOS wallpapers. Reuses the same Node runtime under the hood.
+- **v2 Mac host** (`host/`) — Electron wrapper that owns a frameless always-on-top presence window, opens generated surfaces as native windows, and applies macOS wallpapers. Reuses the same Node runtime under the hood.
 
 See `README.md` for product framing and `HANDOFF-2026-05-20-v2-mac-presence-lifecycle.md` for the v2 migration context.
 
 ## Commands
 
 ```bash
-npm start              # classic: run Node runtime on :7777 (open http://localhost:7777)
-npm run dev            # classic: same with --watch
-npm run v2             # v2: launch Electron host (spawns the Node runtime itself)
-npx bor                # v2 launcher (alias of npm run v2)
+npm start              # launch BOR: Electron host (spawns the Node runtime itself)
+npx bor                # alias of npm start
+npm run server         # run just the Node runtime on :7777 (open http://localhost:7777)
+npm run server:dev     # same with --watch
 npm run browser:install  # install Playwright Chromium for MCP browser automation
 npm run browser:mcp    # run the Playwright MCP browser service standalone
 ```
 
-No build step, no test suite, no lint config. Node ≥ 20. Runtime is stdlib-only except for `electron` and `@modelcontextprotocol/sdk` + `@playwright/mcp`.
+No build step, no test suite, no lint config. Node ≥ 20. Runtime dependencies are minimal: `electron`, `@modelcontextprotocol/sdk` + `@playwright/mcp`, `croner`, and the file-extraction stack ported from Sixth (`pdf-parse`, `mammoth`, `exceljs`, `jschardet`, `iconv-lite`, `isbinaryfile`).
+
+The user's other project at `/Users/mac/sixth-vscode-v2` (the "Sixth" AI VSCode extension) is the standing reference implementation — when building or overhauling agent capabilities (tools, file handling, context management, result formatting), scan the corresponding mechanism there first and port the proven approach.
 
 Useful env overrides:
 - `PORT` — runtime HTTP port (default 7777)
-- `BOR_RUNTIME_URL=http://127.0.0.1:7777 npm run v2` — attach v2 host to an already-running runtime instead of spawning one
+- `BOR_RUNTIME_URL=http://127.0.0.1:7777 npm start` — attach the host to an already-running runtime instead of spawning one
 - `BOR_BROWSER_HEADLESS=1`, `BOR_BROWSER_EXECUTABLE_PATH=…`, `BOR_BROWSER_CHANNEL=chrome` — control the user-facing Browser app
 - `BOR_CHAT_MAX_PASSES`, `BOR_CHAT_STREAM_ATTEMPTS`, `BOR_TOOL_MAX_ATTEMPTS`, `BOR_STREAM_IDLE_TIMEOUT_MS` — chat loop tuning (see `server/ai.js`, `server/retry.js`)
 
@@ -61,7 +63,7 @@ Stdlib-only HTTP server. Single process serves the shell, proxies LLM calls, per
 - `server/validator.js` — static checks for AI-generated widget/app HTML and shell commands. Blocks `eval`, `Function`, `parent.*` (except `parent.postMessage`), `localStorage`, external `<script src>`, heredocs, etc. Belt-and-suspenders alongside the iframe sandbox.
 - `server/widget-host.js` — bridge API the iframe widgets call via `parent.postMessage` → server.
 - `server/memory/` — `sessions.js`, `widgets.js`, `profile.js`, plus dream/consolidation (currently disabled in `index.js`).
-- `server/runtime/` — `skills.js` (loads `.bed-of-roses/skills/`), `mcp.js` (loads `.bed-of-roses/mcp/servers.json` and dispatches MCP tool calls), `browser.js` (resolves Chrome/Chromium for the user-facing Browser app).
+- `server/runtime/` — `skills.js` (loads `.bed-of-roses/skills/`), `mcp.js` (loads `.bed-of-roses/mcp/servers.json` + per-presence `.bor/mcp.json`, dispatches MCP tool calls, `upsertBorMcpServer`/`removeBorMcpServer`), `browser.js` (resolves Chrome/Chromium + profile dirs), `browser-agent.js` (**the ambient browser** — in-process `@playwright/mcp` `createConnection` over an InMemory transport; a11y-snapshot + `[ref=eN]` tool surface behind the `browser_*` tags; persistent profile `.bed-of-roses/browser/profile`), `connectors.js` (the "Connect BOR to your daily life" catalog — declarative manifests drive the onboarding gallery, live probes, verify-then-persist storage under config `connectors`, Composio-managed Google OAuth for gmail/gcalendar with MCP wiring into `.bor/mcp.json`, `connectorEnv()` injected into `execute_command` env, `renderConnectorsBlock()` in the system prompt), `browser-use.js` (detection for the now **fallback-only** browser-use CLI).
 - `server/tools/` — `web-search.js`, `web-fetch.js`, `images.js` (generate_image).
 - `server/connectivity.js`, `server/retry.js` — network status + retry/backoff helpers shared by chat loop and tool executor.
 - `server/api-registry.md` — Markdown reference of public web APIs the LLM is told about. Loaded into the system prompt by `ai.js`.
@@ -75,12 +77,12 @@ Vanilla HTML/CSS/JS served by the Node runtime. No build, no framework.
 - `shell/themes/` — theme handbooks + CSS. `themes/index.js` lists base themes; `design-guideline/<theme>.md` is the canonical handbook the LLM must read before generating a surface for that theme.
 - `shell/memoji.js` — avatar wrapper around DiceBear `avataaars`. Never reintroduce canvas drawing here.
 
-### `v2/host/` — Electron Mac host
+### `host/` — Electron Mac host
 
-- `v2/host/main.cjs` — Electron main process. Spawns or attaches to the Node runtime, owns the onboarding window + draggable presence window, opens generated apps/widgets as native windows, applies macOS wallpaper best-effort. Runs a small local "host control" HTTP server (`BOR_HOST_CONTROL_URL` / `BOR_HOST_CONTROL_TOKEN`) so the runtime can call back into the host.
-- `v2/host/presence.{html,js,css}` — the always-on-top presence. Collapsed orb, expanded prompt, thought bubble, tool-call visualization. This is the v2 product surface — the browser shell is reduced to onboarding.
-- `v2/host/surface-preload.cjs` — lets a generated app/widget loaded as a top-level BrowserWindow keep using the same `parent.postMessage` bridge by forwarding messages to `/api/widgets/:id/state` etc.
-- `v2/host/preload.cjs` — exposes `window.borHost` to the presence renderer.
+- `host/main.cjs` — Electron main process. Spawns or attaches to the Node runtime, owns the onboarding window + draggable presence window, opens generated apps/widgets as native windows, applies macOS wallpaper best-effort. Runs a small local "host control" HTTP server (`BOR_HOST_CONTROL_URL` / `BOR_HOST_CONTROL_TOKEN`) so the runtime can call back into the host.
+- `host/presence.{html,js,css}` — the always-on-top presence. Collapsed orb, expanded prompt, thought bubble, tool-call visualization. This is the v2 product surface — the browser shell is reduced to onboarding.
+- `host/surface-preload.cjs` — lets a generated app/widget loaded as a top-level BrowserWindow keep using the same `parent.postMessage` bridge by forwarding messages to `/api/widgets/:id/state` etc.
+- `host/preload.cjs` — exposes `window.borHost` to the presence renderer.
 
 ### User data
 
@@ -103,7 +105,7 @@ To add a tool:
 2. Add an entry in `server/protocol/registry.js` `TAGS`: `description`, `params` schema, `examples`, `voiced`, optional `feedsBack: true` (legacy harness only — the new harness loops on tool-use blocks instead).
 3. The legacy prompt docs + executor and the new shim/registry both pick it up automatically.
 
-Top-level tags currently include: `say` (stream-only — never a tool), `attempt_completion`, `get_ux_ui_strict_guidelines`, `create_app`/`update_app`/`launch_app`/`delete_app`, `create_widget`/`update_widget`/`launch_widget`/`delete_widget`/`rename_widget`, `create_svg`, `set_theme`/`reset_theme`, `set_ai_name`, `reset_chat`, `list_surfaces`, `read_surface_data`/`mutate_surface_data`, file ops (`read_file`, `read_file_in_chunks`, `read_batch`, `write_file`, `write_to_file`, `replace_in_file`, `delete_file`, `list_files`, `search_files`, `list_code_definition_names`), `remember`/`recall`/`forget`, `use_skill`, MCP (`list_mcp_servers`, `list_mcp_tools`, `use_mcp_tool`, `access_mcp_resource`), computer-use (`screen_capture`, `locate_screen_element`, `computer_click`, `computer_type`, `computer_key`, `open_app`, `computer_use`), `web_search`, `web_fetch`, `view_image`, `generate_image`, `execute_command` (now supports `timeout_seconds`, default 5 min, up to 30 min, stdout cap 64 KB, stderr cap 32 KB), `read_command_tail`, `list_recent_commands`.
+Top-level tags currently include: `say` (stream-only — never a tool), `attempt_completion`, `get_ux_ui_strict_guidelines`, `create_app`/`update_app`/`launch_app`/`delete_app`, `create_widget`/`update_widget`/`launch_widget`/`delete_widget`/`rename_widget`, `create_svg`, `set_theme`/`reset_theme`, `set_ai_name`, `reset_chat`, `list_surfaces`, `read_surface_data`/`mutate_surface_data`, file ops (`read_file`, `read_file_in_chunks`, `read_batch`, `write_file`, `write_to_file`, `replace_in_file`, `delete_file`, `list_files`, `search_files`, `list_code_definition_names`), `remember`/`recall`/`forget`, `use_skill`, MCP (`list_mcp_servers`, `list_mcp_tools`, `use_mcp_tool`, `access_mcp_resource`), computer-use (`screen_capture`, `locate_screen_element`, `computer_click`, `computer_type`, `computer_key`, `open_app`, `computer_use`), ambient browser (`browser_open`, `browser_snapshot`, `browser_click`, `browser_type`, `browser_press_key`, `browser_select`, `browser_fill_form`, `browser_back`, `browser_tabs`, `browser_screenshot`, `browser_wait`, `browser_end` — act ONLY on refs from the latest snapshot; default path for interactive/signed-in web work, ahead of browser-use CLI and computer-use), `web_search`, `web_fetch`, `view_image`, `generate_image`, `execute_command` (now supports `timeout_seconds`, default 5 min, up to 30 min, stdout cap 64 KB, stderr cap 32 KB), `read_command_tail`, `list_recent_commands`.
 
 ### New-harness shim limitations
 
@@ -116,4 +118,5 @@ The shim treats every child as a flat string property. Tags whose children carry
 - **Avatar = DiceBear avataaars only.** Extend `shell/memoji.js`; never hand-roll canvas drawing.
 - The default file root for AI-created files (when the user didn't supply a path) is `.bor/`, not the project tree.
 - Widgets/apps are sandboxed iframes. They have no DOM access outside their frame; all I/O goes through `parent.postMessage` → `widget-host.js` and is validated server-side.
+- **Web-access priority order** (baked into the prompt doctrine in `ai.js`): connected MCP/connector tools first (never a browser for email when a mail tool exists) → `web_fetch` for plain readable pages → ambient `browser_*` tags for interactive/JS/signed-in work → browser-use CLI (opt-in fallback, only when installed) → computer-use. The final onboarding pane is the connectors gallery (`/api/connectors` routes; `?connectors=1` deep link reopens it).
 - Audit everything that mutates state — call `ctx.audit({ kind, … })` from handlers.

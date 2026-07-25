@@ -66,7 +66,7 @@ or include it in bug reports or screenshots.
 
 In scope:
 
-- The BOR runtime (`server/`), the Electron host (`v2/host/`), the classic
+- The BOR runtime (`server/`), the Electron host (`host/`), the classic
   shell (`shell/`), and the `bor` CLI (`bin/`).
 - Sandbox escapes, validator bypasses, audit-log evasion, and local privilege
   or data-exfiltration issues.

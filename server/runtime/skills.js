@@ -16,103 +16,83 @@ const SUPPORT_DOC_NAMES = ['README.md', 'EXAMPLES.md', 'REFERENCE.md'];
 
 const DEFAULT_BROWSER_USE_SKILL = `---
 name: browser-use
-description: BOR's default browser automation skill. Use it for any task that requires driving a real browser — navigating sites, signing in to authenticated web apps, sending email or DMs, social posting, Notion, Slack, WhatsApp, Twitter/X, Gmail, account creation, dashboard/API-key work, form filling, screenshots, web UI testing, and extracting data from JavaScript-rendered pages. Run the CLI through execute_command.
+description: BOR's default browser automation skill. Use it for any task that requires driving a real browser — navigating sites, signing in to authenticated web apps, sending email or DMs, social posting, Notion, Slack, WhatsApp, Twitter/X, Gmail, account creation, dashboard/API-key work, form filling, screenshots, web UI testing, and extracting data from JavaScript-rendered pages. Drive it by piping small Python scripts to the browser-use CLI through execute_command.
 allowed-tools: Bash(browser-use:*)
 ---
 
-# Browser Automation With browser-use CLI
+# Browser Automation With browser-use CLI (v3)
 
-Run \`browser-use\` through the \`execute_command\` tool. The harness gives you up to 30 minutes per command via \`timeout_seconds\` and captures stdout up to 64 KB for the terminal UI and recent-command buffer. The model-facing tool_result is a compact preview; if a state dump omits relevant lines, call \`read_command_tail\` with the \`run_id\` and offset shown in the preview.
+browser-use v3 ("CLI 3.0, Browser Harness") runs a persistent daemon that ATTACHES TO THE USER'S REAL RUNNING CHROME over CDP — their actual signed-in profile, cookies, and open tabs. The browser is inherently visible to the user; there are no headed/headless flags and no managed Chromium. The old v2 verb subcommands (\`open\`, \`state\`, \`get\`, \`click\`, \`input\`, \`type\`, \`keys\`, \`scroll\`, \`wait\`, \`screenshot\`, \`profile list\`, \`connect\`) NO LONGER EXIST — do not use them.
 
-## Visible browser requirement
+You drive it by piping a SMALL Python script to \`browser-use\` on stdin via the \`execute_command\` tool:
 
-The user must be able to see what you are doing. Every \`browser-use open\` command MUST include \`--headed\`, including clean/profileless sessions and managed profile sessions. Never use \`--headless\`. The shell executor also enforces this by rewriting \`browser-use open\` to a headed launch if the flag is missing.
+\`\`\`
+browser-use <<'PY'
+new_tab("https://example.com")
+print(page_info())
+PY
+\`\`\`
 
-## First-touch setup
+Each command runs fast (~50 ms per call against the daemon). The harness gives you up to 30 minutes per command via \`timeout_seconds\` and captures stdout up to 64 KB. The model-facing tool_result is a compact preview; if a printed page dump omits lines you need, call \`read_command_tail\` with the \`run_id\` and offset shown in the preview.
 
-Before the first browser action in a session, run \`browser-use doctor\` once so you know which features are available. Treat tunnel-only failures as non-blocking.
+## How to write scripts
 
-## Ground truth — no visual guessing
+- **One small atomic script per command.** Hard cap ~40 lines. One logical step per script — but combining a navigation with an immediate read (\`new_tab(...)\` then \`print(page_info())\`) is fine and encouraged; it saves a round trip.
+- **Always \`print(...)\` the state or data you need back.** A script that acts but prints nothing tells you nothing — stdout is your ONLY channel for results.
+- Helper functions cover 20+ categories: navigation (\`new_tab\` etc.), page inspection (\`page_info\`), clicking, form filling, JS execution, screenshots, cookies/session, waits. Use ONLY the helpers documented by \`browser-use skill show\` (see first-touch below) — do not invent function names.
+- **Forbidden:** natural-language task mode — \`browser-use "<some English task>"\` hands the whole task to browser-use's opaque internal agent, which BOR cannot narrate or supervise; never invoke it. Also forbidden: long monolithic scripts that try to do the whole task in one command, and infinite loops or long sleeps inside a script. Split work into steps and reason between them.
+- Cloud daemons (\`BU_NAME\`) are not needed for BOR's default flows; stay on the local daemon.
 
-The headed browser is the user's source of truth, but your source of truth is the latest \`browser-use state\`, \`browser-use get\`, or \`browser-use screenshot\` result.
+## First-touch setup (once per session)
 
-- A \`click\`, \`input\`, \`type\`, \`keys\`, \`scroll\`, or \`wait\` result only means the command was dispatched. It does NOT prove navigation, success, an OTP/email, a created API key, or that a button is visible.
-- Never say you are on a page, see a button, created a key, sent a message, or triggered an email unless the latest post-action \`state\`/\`get\`/\`screenshot\` proves it.
-- If the target element or confirmation is missing from the latest state preview, do not infer it from memory or the website's usual layout. Inspect again, scroll, navigate deliberately, call \`read_command_tail\` if the compact preview omitted needed state lines, or fall back to visible Chrome computer-use after a real attempt.
-- When the visible headed browser and browser-use output disagree, trust the latest visible inspection path: use \`browser-use screenshot\` or switch to computer-use.
+1. Run \`browser-use --doctor\` once so you know the daemon can attach to the user's Chrome and which features are available. Treat warnings that don't block attaching as non-blocking.
+2. If the CLI supports it, ALSO run \`browser-use skill show\` once. It prints the official, up-to-date function reference for the helper API — follow that printed reference over your memory of helper names or signatures. This is deliberate: it keeps BOR current when upstream changes the helpers.
 
-## Profile choice — MANDATORY GATE
+## Ground truth — verify after act
 
-Any task that touches a user identity needs an explicit profile choice up front. That includes (non-exhaustive): sending email or DMs, checking messages, logging in or signing up anywhere, replying to comments, posting on social, account creation, checkouts/purchases, billing, dashboards, API-key creation, OAuth flows, profile/settings changes, Notion, Slack, WhatsApp, Twitter/X, Gmail, LinkedIn, Instagram, TikTok, banking, calendars, file uploads to identity-bound services.
+The browser on screen is the user's real Chrome, but YOUR source of truth is only what your latest script printed or captured.
 
-### Branch 1 — the user explicitly named a profile
+- A script that clicks, types, or submits only proves those calls were dispatched. It does NOT prove navigation, success, an OTP/email, a created API key, or that a button is visible.
+- **After ANY acting script (click/type/submit/JS), the NEXT script must read state — \`print(page_info())\` or a screenshot — BEFORE you claim anything happened.**
+- Never say you are on a page, see a button, created a key, sent a message, or triggered an email unless the latest post-action printed output or screenshot proves it.
+- If the expected element or confirmation is missing from the latest output, do not infer it from memory or the site's usual layout. Run another small script that waits, scrolls, or navigates deliberately and prints fresh state; call \`read_command_tail\` if the compact preview truncated the lines you need.
+- Fall back to computer-use on the visible Chrome window only after a real error (explicit exception, daemon cannot attach, the same step failing repeatedly against fresh state) — never merely because one read didn't show what you expected.
 
-Examples: "send via my trysixth account", "use my work Chrome", "log in with my personal Google". Extract the profile name and use \`--profile "Name"\` directly. Skip to the core workflow.
+## Identity confirmation — MANDATORY GATE
 
-### Branch 2 — the user did NOT name a profile
+The daemon acts inside the user's REAL signed-in Chrome. Any identity-touching task requires explicit confirmation FIRST. That includes (non-exhaustive): sending email or DMs, checking messages, logging in or signing up anywhere, replying to comments, posting on social, account creation, checkouts/purchases, billing, dashboards, API-key creation, OAuth flows, profile/settings changes, Notion, Slack, WhatsApp, Twitter/X, Gmail, LinkedIn, Instagram, TikTok, banking, calendars, file uploads to identity-bound services.
 
-You MUST do this, in this exact order:
+Before the first identity-touching action, you MUST:
 
-1. Run \`execute_command\` with body \`browser-use profile list\` (no other flags).
-2. Read the output. It returns a list of available Chrome profiles on this machine.
-3. Emit one \`<wait_for_human_input kind="profile_choice">\` whose body:
-   - Names every profile from the list, one per line, with whatever identifying info \`profile list\` returned (account email, profile label, last-used date, etc.).
-   - Asks the user which one to use.
-   - Mentions that a profileless/clean session is also an option for tasks that don't need an account.
-4. **STOP. End the turn. Emit no more tool calls.** Do not pick a default for the user. Do not "guess the most plausible one." The turn ends here. The user replies with their choice in their next message, and you continue from there.
+1. Emit one \`<wait_for_human_input kind="profile_choice">\` whose body:
+   - States plainly that browser-use will act inside their signed-in, running Chrome — real accounts, real cookies, real sessions.
+   - Asks them to confirm that is OK for this specific task.
+   - If several Chrome profile windows are running, names them and asks which one to act in.
+2. **STOP. End the turn. Emit no more tool calls.** Do not pick a default for the user. Do not "guess the most plausible one." The turn ends here. The user replies with their confirmation/choice in their next message, and you continue from there.
 
-This gate exists because using the wrong account is a real harm (sent from wrong identity, logged in to wrong session, leaked context). \`<wait_for_human_input>\` is the explicit stop signal; use it instead of \`<attempt_completion>\` whenever the next step depends on the user.
-
-### Branch 3 — the task explicitly doesn't need an account
-
-User says "open Wikipedia", "check if this URL is alive", "scrape this public page". Use \`browser-use --headed open <url>\` (no profile flag) — visible clean profileless browser.
-
-### Acceptable invocation shapes
-
-- \`browser-use --headed --profile "ProfileName" open <url>\` — visible managed Chromium with the named profile.
-- \`browser-use connect\` — attach to a real Chrome with remote debugging enabled.
-- \`browser-use --headed open <url>\` — visible clean profileless browser (Branch 3 only).
+This gate exists because acting as the wrong identity is a real harm (sent from the wrong account, posted to the wrong profile, leaked context). \`<wait_for_human_input>\` is the explicit stop signal; use it instead of \`<attempt_completion>\` whenever the next step depends on the user. If the user already explicitly confirmed earlier in this task ("yes, use my Chrome", "send it from my work profile window"), that counts — don't re-ask on every step. Read-only public browsing ("open Wikipedia", "check if this URL is alive", "scrape this public page") needs no gate.
 
 ## Core workflow — STEP BY STEP ONLY
 
-You drive browser-use yourself, one atomic command at a time. **Never invoke \`browser-use "<natural language task>"\` mode** — that hands the entire task to browser-use's own internal AI agent, which is opaque to BOR, can't be narrated, and routinely stops half-way. You must run the explicit verb subcommands and reason between them.
+1. **Narrate** what you are about to do in one short \`<say>\`.
+2. Run **one** small browser-use Python script via \`execute_command\` (stdin heredoc as above).
+3. Read the tool_result. Element references, URLs, and confirmations come from what YOU printed — not guesses.
+4. Repeat until the outcome is verified.
 
-Allowed commands (this is the WHOLE surface):
+Do not copy full page dumps into \`<say>\` or restate the page before acting. Extract the needed URL, text, confirmation, or element, then run the next script. Fetch more captured output via \`read_command_tail\` only when the preview omits something the next step requires.
 
-- \`browser-use --headed [--profile "..."] open <url>\` — open a visible page
-- \`browser-use state\` — get the current element-index map (read this before clicking/typing)
-- \`browser-use click <index>\` — click element by index from the last \`state\`
-- \`browser-use input <index> "text"\` — type into the input element at index
-- \`browser-use keys "<sequence>"\` — press keys (Tab, Enter, Cmd+Enter, etc.)
-- \`browser-use screenshot\` — capture the current viewport (PNG)
-- \`browser-use scroll <direction|index>\` — scroll
-- \`browser-use close\` — close the managed browser
-- \`browser-use doctor\`, \`browser-use profile list\`, \`browser-use connect\` — setup-only
+For email specifically: one script to open Gmail and \`print(page_info())\`; one to click Compose and print fresh state; one or two to fill recipient/subject/body (printing state after); one to click Send; one final read that proves the sent confirmation. Five to eight small scripts, each preceded by a one-sentence \`<say>\`.
 
-**Forbidden**: \`browser-use "Go to Gmail and compose an email to..."\` (NL prompt mode). \`browser-use\` followed by a quoted English sentence routes the task to a black-box agent; you must use the explicit verbs.
-
-Loop pattern:
-
-1. **Narrate** what you are about to do in one \`<say>\`.
-2. Run **one** browser-use verb subcommand via \`execute_command\`.
-3. Read the tool_result. Index references come from \`state\` output, not guesses.
-4. Repeat.
-
-Do not copy browser-use page/state output into \`<say>\` or restate the full page before acting. Extract the needed URL, text, confirmation, or element index, then emit the next XML action. Fetch more captured output only when the preview omits an index or line required for the next action.
-
-For email specifically: open Gmail → \`state\` → click Compose by index → \`state\` → input recipient index → \`keys "Tab"\` → input subject index → \`keys "Tab"\` → input body index → click Send by index → \`state\` to verify the Sent confirmation. Six to ten atomic steps. Each preceded by a one-sentence \`<say>\`.
-
-If a command fails, run \`browser-use close\` once, then retry the minimal next command. If you genuinely cannot make progress without the user (MFA prompt, CAPTCHA, blocked automation, missing credentials), use \`<wait_for_human_input>\` with a clear request — don't loop on setup, don't fall through to NL prompt mode.
+If a script errors, fix THAT script and retry the minimal next step. If you genuinely cannot make progress without the user (MFA prompt, CAPTCHA, blocked automation, missing credentials), use \`<wait_for_human_input>\` with a clear request — don't loop on setup, and never fall through to natural-language task mode.
 
 ## Rules
 
-- Always run \`browser-use state\` before clicking or typing by index.
-- **Completion = outcome verified, then call \`attempt_completion\`.** For any task tied to an outcome (send, post, submit, reply, create, purchase, save), call \`attempt_completion\` ONLY after you have run \`browser-use state\` or \`browser-use screenshot\` AFTER the final action and confirmed the outcome — sent-confirmation banner, redirect to /sent or /inbox, success toast, or the recorded value present where it should be. "I typed the recipient" is NOT done. "The Send button was clicked and the URL changed to /sent" IS done. When verified, call \`attempt_completion\` with a \`result\` summary.
-- For email specifically: typing recipient → typing subject → typing body → clicking Send → verifying the message is in Sent (or the compose window closed with a success indicator). Skipping any step before the verification is half-done — do NOT call \`attempt_completion\`.
-- Narrate every action briefly in a \`<say>\` before each tool call. The user sees nothing during \`browser-use\` execution — short narrations keep them oriented.
-- Pause for MFA, real CAPTCHAs, missing credentials, or genuinely ambiguous account choice. Use \`<wait_for_human_input>\` describing what you need from the user, then stop.
-- When the user only asks for setup ("open Gmail in Chrome"), opening the page IS the completion. Call \`attempt_completion\`.
-- Use Browserbase only if the user explicitly asks for it.
+- **Completion = outcome verified, then call \`attempt_completion\`.** For any task tied to an outcome (send, post, submit, reply, create, purchase, save), call \`attempt_completion\` ONLY after a post-action script has printed or screenshotted the proof — sent-confirmation banner, redirect to /sent, success toast, or the recorded value present where it should be. "I ran the click" is NOT done. "The follow-up page_info() shows the Sent confirmation" IS done.
+- For email specifically: fill recipient → subject → body → click Send → verify the message is sent (confirmation banner, compose window closed, or the thread in Sent). Skipping the verification read is half-done — do NOT call \`attempt_completion\`.
+- Narrate every action briefly in a \`<say>\` before each command. The user sees nothing during execution — short narrations keep them oriented.
+- Pause for MFA, real CAPTCHAs, missing credentials, or genuinely ambiguous account choice. Use \`<wait_for_human_input>\` describing what you need, then stop.
+- When the user only asks for setup ("open Gmail"), opening the page — verified by a printed \`page_info()\` — IS the completion. Call \`attempt_completion\`.
+- Use \`browser-use --doctor\` when the connection misbehaves; use Browserbase only if the user explicitly asks for it.
 `;
 
 const DEFAULT_BROWSERBASE_SKILL = `---

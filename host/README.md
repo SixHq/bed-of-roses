@@ -7,7 +7,7 @@ The existing Node server remains the brain: providers, protocol parsing,
 app/widget generation, files, browser launching, image generation, and long
 tasks still live in `server/`.
 
-The new v2 host in `v2/host/` wraps that runtime with Electron so Bed of Roses
+The new v2 host in `host/` wraps that runtime with Electron so Bed of Roses
 can behave like a real desktop companion:
 
 - first launch opens the existing onboarding window
@@ -22,7 +22,7 @@ can behave like a real desktop companion:
 
 ```bash
 npm install
-npm run v2
+npm start
 ```
 
 or, once linked/published:
@@ -31,23 +31,23 @@ or, once linked/published:
 npx bor
 ```
 
-`BOR_RUNTIME_URL=http://127.0.0.1:7777 npm run v2` attaches the host to an
+`BOR_RUNTIME_URL=http://127.0.0.1:7777 npm start` attaches the host to an
 already-running runtime instead of spawning a new one.
 
 ## Architecture
 
-`v2/host/main.cjs`
+`host/main.cjs`
 
 Starts or attaches to the Node runtime, owns native windows, streams chat over
 IPC, opens generated surfaces, and applies macOS wallpapers.
 
-`v2/host/presence.html`
+`host/presence.html`
 
 The only always-present UI after onboarding. It is a transparent, frameless,
 always-on-top draggable window. It sends chat turns to the runtime and opens
 generated surfaces when the model creates them.
 
-`v2/host/surface-preload.cjs`
+`host/surface-preload.cjs`
 
 Lets generated apps/widgets run as top-level desktop windows. It intercepts the
 same `postMessage` bridge calls generated surfaces already use and forwards them

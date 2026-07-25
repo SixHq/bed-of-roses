@@ -38,6 +38,43 @@ export async function readBorMcpServerNames() {
   return Object.keys(await readConfig(BOR_MCP_PATH));
 }
 
+// Read the raw .bor/mcp.json, tolerating a missing or corrupt file. Returns
+// the whole document with a guaranteed `mcpServers` object.
+async function readBorMcpDocument() {
+  try {
+    const raw = JSON.parse(await readFile(BOR_MCP_PATH, 'utf8'));
+    if (raw && typeof raw === 'object' && raw.mcpServers && typeof raw.mcpServers === 'object') return raw;
+  } catch { /* missing or corrupt — start fresh */ }
+  return { mcpServers: {} };
+}
+
+/**
+ * Add or replace one server in this presence's .bor/mcp.json (creating dirs
+ * and the file as needed). Hot-reloaded: getConnection() diffs the config
+ * signature on the next call, so no restart is required.
+ */
+export async function upsertBorMcpServer(name, config) {
+  if (!name || typeof name !== 'string') throw new Error('MCP server name required');
+  if (!config || typeof config !== 'object') throw new Error('MCP server config required');
+  const doc = await readBorMcpDocument();
+  doc.mcpServers[name] = config;
+  await mkdir(dirname(BOR_MCP_PATH), { recursive: true });
+  await writeFile(BOR_MCP_PATH, JSON.stringify(doc, null, 2), 'utf8');
+}
+
+/**
+ * Remove one server from .bor/mcp.json. Returns true when an entry was
+ * removed, false when it was absent. Tolerates a missing/corrupt file.
+ */
+export async function removeBorMcpServer(name) {
+  const doc = await readBorMcpDocument();
+  if (!(name in doc.mcpServers)) return false;
+  delete doc.mcpServers[name];
+  await mkdir(dirname(BOR_MCP_PATH), { recursive: true });
+  await writeFile(BOR_MCP_PATH, JSON.stringify(doc, null, 2), 'utf8');
+  return true;
+}
+
 const _connections = new Map(); // name -> { signature, client, transport }
 
 const TEMPLATE = {

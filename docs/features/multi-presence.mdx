@@ -1,50 +1,36 @@
 ---
 title: "Multi-presence"
-description: "BOR can run many presences at once — each a fully isolated companion with its own runtime, data root, port, config, provider, name, personality, theme, memory, and cron. They share nothing. One…"
+description: "Run as many presences as you like — each a fully separate companion with its own model, memory, apps, connectors, theme, and personality."
 ---
 
-BOR can run **many presences** at once — each a fully isolated companion with its own runtime, data root, port, config, provider, name, personality, theme, memory, and cron. They share nothing. One can be your "work" assistant on Claude; another your "home" assistant on Gemini, with different memory and a different look.
+One Bed of Roses is a companion. Several are a team. BOR can run many presences at once, and each is completely its own: its own model and provider, its own memory, its own apps, its own connectors, its own look and name.
 
-## How isolation works
+<img src="/assets/run_as_many_presence_as_you_like_.png" alt="Multiple presence orbs running in parallel, each an isolated companion" />
 
-The v2 host launches **one runtime process per presence**:
+## Truly separate
 
-- A registry file, `os-data/presences.json`, lists every presence (id, nickname, data dir, port, anchor, bounds, onboarded).
-- Each presence's data lives under `os-data/presences/<id>/`, and its runtime is spawned with `BOR_DATA_DIR` pointed there.
-- Each gets its own orb window, on its own port. There is no cross-talk.
+Each presence runs as its own local runtime process on its own port, with its own data folder. Nothing is shared — not memory, not chat history, not connected accounts, not scheduled jobs, not themes. Your work presence on Claude with Slack and GitHub connected knows nothing about your home presence on Gemini with WhatsApp and YouTube.
 
-The registry + per-presence spawning live in `v2/host/presences.cjs` and `v2/host/main.cjs`. Deleting a presence only ever removes a directory under `os-data/presences/`, guarded against deleting anything else.
+## Why you'd want more than one
 
-## The Main BOR app
+- **Separate contexts** — work vs. personal, with different memory, different connectors, different tone.
+- **Different models** — Claude for one, Gemini or DeepSeek for another, side by side.
+- **Different looks** — a Pixel CRT terminal orb and a Liquid Glass orb at once.
+- **Throwaway** — spin one up to experiment, delete it when done.
 
-There's a **Main BOR app** (`v2/host/main-app.*`) — a window for managing presences: see them all, create, open, and delete. It's also wrapped as `~/Applications/Bed of Roses.app` so you can launch the whole thing from Finder or Spotlight.
+## Managing presences
+
+The **Main Bed of Roses app** (also in `~/Applications`, launchable from Spotlight) shows all your presences — create, open, rename, delete. Or use the CLI:
+
+```bash
+bor onboard               # create a new presence with full onboarding
+bor create "Work"         # register a presence headlessly
+bor list                  # list presences (alias: bor ls)
+bor delete <presence_id>  # delete a presence and all its data
+```
+
+`bor delete` removes that presence's entire data directory — apps, memory, config, everything — and only ever touches that presence's folder. See [Command line](/cli/command-line).
 
 ## Native app wrappers
 
-Apps BOR builds are mirrored as `.app` wrappers in `~/Applications` (via `v2/host/native-apps.cjs`), so a BOR-built "Meal Journal" is launchable from Finder/Spotlight like any Mac app. A registry at `~/.bed-of-roses/native-apps.json` tracks which wrappers BOR created (so cleanup only ever touches BOR's own). The host wrapper and app wrappers carry `com.bedofroses.*` bundle identifiers.
-
-## Managing presences (CLI)
-
-The `bor` CLI manages presences headlessly:
-
-```bash
-bor onboard               # launch the host and create a new presence with onboarding
-bor create [name]         # register a new presence (headless); prints its id
-bor delete <presence_id>  # delete a presence + its data dir (headless)
-bor list                  # list presences (alias: bor ls)
-```
-
-See [Command line](../cli/command-line.md) for details. `bor delete` removes the presence's entire data directory.
-
-## When to use multiple presences
-
-- **Separate contexts** — work vs. personal, with different memory and tone.
-- **Different providers** — try Claude on one, Gemini on another, side by side.
-- **Different looks** — a pixel-CRT terminal presence and a liquid-glass presence at once.
-- **Throwaway** — spin one up to test something, delete it when done.
-
-## Resetting
-
-- Clear one presence's generated projects: remove `os-data/presences/<id>/.bor/`.
-- Delete one presence entirely: `bor delete <id>` (removes its data dir).
-- Start completely fresh: remove `os-data/`, `.bor/`, `.bed-of-roses/`, the `~/Applications` BOR wrappers, and `~/.bed-of-roses/`. Everything regenerates on next launch.
+Apps a presence builds are mirrored as real `.app` wrappers in `~/Applications`, so a BOR-built "Meal Journal" launches from Finder or Spotlight like any Mac app. BOR tracks which wrappers it created, so cleanup never touches anything else.

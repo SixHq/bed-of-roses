@@ -8,6 +8,8 @@ const notificationChipSubject = document.getElementById('notification-chip-subje
 const promptInput = document.getElementById('prompt');
 const chipRail = document.getElementById('chip-rail');
 const attachButton = document.getElementById('attach');
+const modelChip = document.getElementById('model-chip');
+const modelChipLabel = document.getElementById('model-chip-label');
 const thought = document.getElementById('thought');
 const thoughtMode = document.getElementById('thought-mode');
 const thoughtBody = document.getElementById('thought-body');
@@ -27,7 +29,9 @@ const surfaceDrawer = document.getElementById('surface-drawer');
 const surfaceList = document.getElementById('surface-list');
 const setupButton = document.getElementById('setup');
 const historyButton = document.getElementById('history');
-const voiceButton = document.getElementById('voice');
+const promptMenuButton = document.getElementById('prompt-menu-btn');
+const promptMenu = document.getElementById('prompt-menu');
+const promptMenuNotificationCount = document.getElementById('prompt-menu-notification-count');
 
 let currentMode = 'collapsed';
 let currentRequestId = null;
@@ -37,7 +41,12 @@ let activeSayStreamId = null;
 let activeSayText = '';
 let activeSayItem = null;
 let activeThinkingItem = null;
+let activeReasoningItem = null;
 let activeCardItem = null;
+// Whether the outer thought-body auto-follows the bottom during streaming.
+// Cleared when the user scrolls up; restored when they scroll back down or a
+// new turn starts.
+let followBottom = true;
 let dragState = null;
 let idleTimer = null;
 let elapsedTimer = null;
@@ -54,6 +63,12 @@ let presenceResizeInFlight = false;
 let renderedMediaUrls = new Set();
 let notificationsOpen = false;
 let notificationReturnState = null;
+let promptMenuOpen = false;
+let modelPickerOpen = false;
+let modelPickerReturnState = null;
+let providerCatalogCache = null;
+let publicConfigCache = null;
+let browserInstallKicked = false;
 let notificationsState = { notifications: [], unread: 0 };
 let selectedNotificationId = null;
 // Stable id for the conversation currently in the bubble. Set when a fresh
@@ -158,7 +173,21 @@ const bubbleState = {
   thread: [],
   footer: null,
   done: false,
+  // True after the user manually stopped a running task. The Stop head button
+  // becomes a Resume (play) button, and the footer offers Resume. Cleared by
+  // resuming, sending a new message, or starting a new turn.
+  interrupted: false,
 };
+
+// Stop/resume protocol markers. These are USER-side history markers sent to
+// the model verbatim — never rendered as raw XML in the thread (a quiet
+// "Stopped"/"Resumed" status line stands in for them).
+const TASK_INTERRUPTED_TAG = '<task_interrupted_by_user/>';
+const TASK_RESUMED_TAG = '<task_resumed_by_user/>';
+
+function isInterruptMarkerText(text) {
+  return text === TASK_INTERRUPTED_TAG || text === TASK_RESUMED_TAG;
+}
 
 const PRESENCE_CHOICES = [
   {
@@ -285,6 +314,7 @@ const TOOL_META = {
   computer_key: ['Press shortcut', 'keyboard control', '⌘'],
   open_app: ['Open app', 'macOS launch services', '↗'],
   computer_use: ['Control Mac app', 'computer use loop', '⌖'],
+  use_mcp_tool: ['Call MCP tool', 'MCP server call', '◍'],
   generate_image: ['Generate image', 'painting canvas', '◐'],
   create_svg: ['Add wallpaper item', 'placing SVG', '✦'],
   set_theme: ['Update theme', 'wallpaper + visual state', '✦'],
@@ -301,6 +331,7 @@ const TOOL_META = {
 const FILE_EDIT_TAGS = new Set(['write_file', 'write_to_file', 'edit_file', 'replace_in_file']);
 const SURFACE_BUILD_TAGS = new Set(['create_app', 'update_app', 'create_shortcut', 'update_shortcut']);
 const COMMAND_TAGS = new Set(['execute_command']);
+const MCP_TAGS = new Set(['use_mcp_tool']);
 const EDITOR_VISIBLE_LINE_LIMIT = 260;
 const TASK_MESSAGE_LIMIT = 28;
 const TASK_MEDIA_LIMIT = 6;
@@ -403,6 +434,32 @@ function applyPresenceConfig(config = {}) {
     root.style.setProperty('--presence-y2k-3', colorHex);
     root.style.setProperty('--presence-pixel', colorHex);
   }
+  // Keep the composer's model chip in sync with the active provider/model.
+  if (config.defaultProvider !== undefined || config.providers) {
+    publicConfigCache = config;
+    refreshModelChip();
+    if (!providerCatalogCache) {
+      loadModelPickerData().then(refreshModelChip).catch(() => {});
+    }
+  }
+  // Onboarding chose "Let BOR install it": run the browser-use installation
+  // as the presence's first task, once, then clear the flag.
+  if (config.browserInstall === 'llm' && !browserInstallKicked) {
+    browserInstallKicked = true;
+    window.borHost.saveProviderConfig?.({ browserInstall: null }).catch(() => {});
+    window.setTimeout(() => {
+      if (currentRequestId || hasThoughtSession()) return; // don't interrupt real work
+      startTask([
+        'Install the browser-use CLI on this Mac so you can drive a real browser. Do it now, step by step:',
+        '1. Check if it is already installed: `command -v browser-use`. If found, skip straight to step 4.',
+        '2. Preferred install: `uv tool install browser-use`. If `uv` is missing (`command -v uv` fails), install it first with `curl -LsSf https://astral.sh/uv/install.sh | sh`, then use `$HOME/.local/bin/uv tool install browser-use` if PATH has not refreshed.',
+        '3. If uv fails, fall back to `pipx install browser-use`, then `python3 -m pip install --user browser-use`.',
+        '4. Verify with `browser-use --version` and then `browser-use --doctor` (use the full path if needed). This is CLI 3.0: there are no verb subcommands like `open` or `click` — you drive it by piping small Python scripts to stdin, and it attaches to the user\'s running Chrome.',
+        "5. Warm up and verify the daemon + Chrome attach by running a trivial piped script:\nbrowser-use <<'PY'\nprint(\"ok\")\nPY\nIt should print ok (the first run may take a few seconds while the daemon starts).",
+        'Keep the user informed briefly at each step, and finish with a clear statement of whether browser-use is installed, which install method worked, what `--doctor` reported about the connection, and whether the daemon warm-up printed ok.',
+      ].join('\n'));
+    }, 1200);
+  }
 }
 
 async function refreshPresenceConfig() {
@@ -432,6 +489,26 @@ function applyPresenceLayout(layout = {}) {
       .catch(() => {});
     return;
   }
+  // Inverse guard (boot/stale-layout hardening): never adopt 'thinking' from
+  // the host while there is nothing to show — no visible thought session and
+  // no notifications/history panel open. Every legitimate 'thinking' request
+  // un-hides the bubble or sets a panel flag BEFORE calling setPresenceMode,
+  // so this only catches stale host state (e.g. a renderer reload while the
+  // bubble was open). Without it the presence can boot into a large empty
+  // 'thinking' window with the bubble hidden.
+  if (
+    layout.mode === 'thinking' &&
+    !minimizedTask &&
+    !notificationsOpen &&
+    !historyOpen &&
+    !(surfaceDrawer && !surfaceDrawer.classList.contains('hidden')) &&
+    !hasVisibleThoughtSession()
+  ) {
+    window.borHost.setPresenceMode(collapsedModeForNotifications())
+      .then(applyPresenceLayout)
+      .catch(() => {});
+    return;
+  }
   if (layout.anchor) {
     currentAnchor = layout.anchor;
     root.dataset.anchor = layout.anchor;
@@ -447,6 +524,9 @@ function applyPresenceLayout(layout = {}) {
 }
 
 function setMode(mode) {
+  // The options drop-up only makes sense while the composer is on screen —
+  // drop it before the window shrinks around it.
+  if (promptMenuOpen && isClosedMode(mode)) closePromptMenu();
   const alreadyLocal = currentMode === mode;
   currentMode = mode;
   root.dataset.mode = mode;
@@ -686,7 +766,7 @@ function endBubbleResize(event) {
 }
 
 function dragBlocked(target) {
-  return Boolean(target.closest('#prompt, .send, .iconbtn, #setup, .surface-tile, .bubble, .task-chip, .notification-chip, .chip-rail, .context-chip'));
+  return Boolean(target.closest('#prompt, .send, .iconbtn, .model-chip, .prompt-menu, #setup, .surface-tile, .bubble, .task-chip, .notification-chip, .chip-rail, .context-chip'));
 }
 
 function togglePresence() {
@@ -695,6 +775,22 @@ function togglePresence() {
   if (surfaceDrawer && !surfaceDrawer.classList.contains('hidden')) {
     surfaceDrawer.classList.add('hidden');
     setMode(collapsedModeForNotifications());
+    return;
+  }
+  // Same for the notifications / history panels: the orb click dismisses the
+  // panel and restores whatever was underneath. Without this, minimizing while
+  // a panel is open leaves its `open` flag set, and every later restore
+  // re-renders the panel instead of the thread — the bubble looks stuck.
+  if (notificationsOpen) {
+    closeNotifications();
+    return;
+  }
+  if (historyOpen) {
+    closeHistory();
+    return;
+  }
+  if (modelPickerOpen) {
+    closeModelPicker();
     return;
   }
   if (isClosedMode() && hasVisibleThoughtSession()) {
@@ -706,10 +802,12 @@ function togglePresence() {
     return;
   }
   if (isClosedMode()) {
-    if (!hasVisibleThoughtSession() && (Number(notificationsState.unread) || 0) > 0) {
-      showNotifications().catch(() => {});
-      return;
-    }
+    // NOTE: the orb click always opens the prompt — it must NEVER auto-open
+    // the notifications panel. Unread notifications persist server-side across
+    // restarts, so auto-opening here made a fresh launch land on the
+    // notifications page (inside an otherwise-empty thought bubble) instead of
+    // the clean input. Notifications open only via the explicit bell button or
+    // the notification chip.
     if (!currentRequestId && !hasThoughtSession()) hideThought();
     minimizedTask = false;
     taskChip.classList.add('hidden');
@@ -718,6 +816,18 @@ function togglePresence() {
   }
   if (!currentRequestId) hideThought();
   setMode(collapsedModeForNotifications());
+}
+
+// Decorated themes paint the orb BEYOND its clickable button (neo-brutalist's
+// ::before overhangs 8px; cartoon/memphis auras similarly). A click on that
+// visual overhang lands on the composer, so target-containment alone misses
+// it and the click appears dead. Treat any near-orb press as an orb press.
+function pointNearOrb(event) {
+  if (!orb) return false;
+  const r = orb.getBoundingClientRect();
+  const pad = 12;
+  return event.clientX >= r.left - pad && event.clientX <= r.right + pad
+    && event.clientY >= r.top - pad && event.clientY <= r.bottom + pad;
 }
 
 function startDrag(event) {
@@ -730,7 +840,7 @@ function startDrag(event) {
     startY: event.screenY,
     bounds: null,
     moved: false,
-    startedOnOrb: Boolean(event.target.closest('#orb')),
+    startedOnOrb: Boolean(event.target.closest('#orb')) || pointNearOrb(event),
   };
   try { composer.setPointerCapture(event.pointerId); } catch { /* noop */ }
   window.borHost.getPresenceBounds()
@@ -741,6 +851,17 @@ function startDrag(event) {
 }
 
 composer.addEventListener('pointerdown', startDrag);
+
+// The orb's decorative overhang (theme auras, neo-brutalist's ::before) can
+// extend past the composer's bounds onto the bare presence root, which has no
+// handler — clicks there felt dead. A near-orb press on the root toggles.
+root.addEventListener('pointerdown', (event) => {
+  if (event.button !== 0 || event.target !== root) return;
+  if (pointNearOrb(event)) {
+    event.preventDefault();
+    togglePresence();
+  }
+});
 
 composer.addEventListener('pointermove', (event) => {
   if (!dragState || dragState.pointerId !== event.pointerId || !dragState.bounds) return;
@@ -776,6 +897,67 @@ function escapeHtml(value) {
     "'": '&#039;',
   })[char]);
 }
+
+// ---- Clickable file links --------------------------------------------------
+// The model wraps file/folder paths it mentions in
+// <hyper_link_file>PATH</hyper_link_file> (see the `say` tag docs in
+// server/protocol/registry.js). We turn those — plus bare `.bor/…`,
+// `os-data/…`, `~/…`, `/Users/…` paths as a fallback — into anchors that
+// reveal the file in Finder via window.borHost.revealPath. Input to
+// linkifyFileRefs is ALREADY escapeHtml'd, so the wrapped form appears as
+// `&lt;hyper_link_file&gt;…&lt;/hyper_link_file&gt;`. One combined regex,
+// single pass, so the bare-path alternative can never re-match inside an
+// anchor generated for the wrapped form.
+const FILE_REF_RE = /&lt;hyper_link_file&gt;\s*([\s\S]*?)\s*&lt;\/hyper_link_file&gt;|(?<![\w.~/-])((?:\.bor|os-data|~|\/Users)(?:\/[\w@%+~-]+(?:\.[\w@%+~-]+)*)+\/?)/gi;
+
+function linkifyFileRefs(escapedText) {
+  return String(escapedText || '').replace(FILE_REF_RE, (match, wrapped, bare) => {
+    const target = String(wrapped ?? bare ?? '').trim();
+    if (!target) return match;
+    return `<a class="file-link" data-reveal-path="${target}" title="Reveal in Finder">${target}</a>`;
+  });
+}
+
+// During streaming a say_delta can end mid-tag (`…saved it to <hyper_li`).
+// Strip any unterminated trailing open/close fragment — and a completed open
+// tag whose close hasn't streamed yet — so raw tag text never flashes in the
+// bubble. Operates on RAW (pre-escape) say text; lossless because the full
+// text is re-rendered from the accumulated item on every delta.
+function stripIncompleteFileLinkTag(text) {
+  const value = String(text || '');
+  const lastLt = value.lastIndexOf('<');
+  if (lastLt === -1) return value;
+  const tail = value.slice(lastLt);
+  const lower = tail.toLowerCase();
+  if (!tail.includes('>')) {
+    if ('<hyper_link_file'.startsWith(lower) || '</hyper_link_file'.startsWith(lower)) {
+      return stripIncompleteFileLinkTag(value.slice(0, lastLt));
+    }
+    return value;
+  }
+  if (lower.startsWith('<hyper_link_file>') && !lower.includes('</hyper_link_file>')) {
+    return value.slice(0, lastLt);
+  }
+  return value;
+}
+
+// Escape + linkify pipeline for user-facing message text (say bubbles,
+// notification bodies).
+function renderMessageHtml(text) {
+  return linkifyFileRefs(escapeHtml(stripIncompleteFileLinkTag(text)));
+}
+
+// Separate delegated listener for file links (deliberately NOT part of the
+// main thought-body click listener). Capture phase + stopPropagation so a
+// link inside e.g. a notification list row reveals the file instead of also
+// triggering the row's open-detail action.
+thoughtBody.addEventListener('click', (event) => {
+  const link = event.target.closest('[data-reveal-path]');
+  if (!link || !thoughtBody.contains(link)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  window.borHost?.revealPath?.(link.dataset.revealPath || '');
+}, true);
 
 function shortText(value, max = 72) {
   const normalized = String(value || '').replace(/\s+/g, ' ').trim();
@@ -1197,9 +1379,14 @@ function rememberTaskMedia({ url = '', title = '', kind = 'image', mediaType = '
 }
 
 function attachedContextText(items = []) {
-  // Images and PDFs attach as content blocks (see userContentForTask), not
-  // text — skip them in the text manifest. Errors also skip.
-  const valid = items.filter((item) => item && item.path && item.kind !== 'error' && item.kind !== 'image' && item.kind !== 'document');
+  // Images and PDFs that inlined successfully attach as content blocks (see
+  // userContentForTask) and are skipped here. Everything else the user
+  // attached MUST still appear in this manifest — an attachment the model is
+  // never told about reads as "I can't see any attachment" to the user.
+  const valid = items.filter((item) => item
+    && item.path
+    && item.kind !== 'error'
+    && !((item.kind === 'image' || item.kind === 'document') && item.dataUrl));
   if (!valid.length) return '';
   const blocks = valid.map((item, index) => {
     if (item.kind === 'folder') {
@@ -1211,10 +1398,18 @@ function attachedContextText(items = []) {
         'Use <read_file>, <read_file_in_chunks>, <list_files>, or <search_files> on exact paths from this tree when you need file contents.',
       ].join('\n');
     }
+    if (item.kind === 'image' || item.kind === 'document') {
+      // Attached but could not be inlined (oversize, conversion failure).
+      return [
+        `${index + 1}. ${item.kind === 'image' ? 'IMAGE' : 'DOCUMENT'} "${item.name}"${item.size ? ` (${item.size})` : ''} — attached by the user but not inlined${item.error ? ` (${item.error})` : ''}`,
+        `Path: ${item.path}`,
+        'Use <read_file> on this exact path — it handles PDFs, images, and Office formats natively. If it refuses (e.g. over the size limit), tell the user why and what to do instead; never claim no file was attached.',
+      ].join('\n');
+    }
     return [
       `${index + 1}. FILE "${item.name}"${item.size ? ` (${item.size})` : ''}`,
       `Path: ${item.path}`,
-      'Use <read_file> for normal files. Use <read_file_in_chunks> if the file is large or read_file truncates.',
+      'Use <read_file> — it natively reads code/text, PDFs, images, Word/Excel/PowerPoint, audio/video metadata, and archives. Use <read_file_in_chunks> if a text file is large or read_file truncates.',
     ].join('\n');
   });
   return [
@@ -1242,6 +1437,9 @@ function attachedContextDocumentBlocks(items = []) {
       url: item.dataUrl,
       mediaType: item.mediaType || 'application/pdf',
       name: item.name || 'document.pdf',
+      // Providers that can't ingest PDFs inline surface this path so the model
+      // can still work with the file via tools.
+      path: item.path || '',
     }));
 }
 
@@ -1362,36 +1560,105 @@ function normalizeEditorBody(value) {
     .replace(/<\/(?:write_file|write_to_file|edit_file|replace_in_file|create_app|update_app|create_shortcut|update_shortcut)[^>]*$/i, '');
 }
 
-function extractChildCdata(value, childName) {
-  const source = String(value || '');
-  const open = new RegExp(`<${childName}\\b[^>]*>\\s*<!\\[CDATA\\[`, 'i');
-  const match = open.exec(source);
-  if (!match) return '';
-  let text = source.slice((match.index || 0) + match[0].length);
-  const close = new RegExp(`\\]\\]>\\s*</${childName}>[\\s\\S]*$`, 'i');
-  text = text.replace(close, '');
-  text = text.replace(new RegExp(`</${childName}[^>]*$`, 'i'), '');
-  return text;
+// Scrub CDATA markers and streaming tail fragments from an extracted child
+// segment. The server's streaming unwrap strips CDATA markers inconsistently
+// across child boundaries (only the first open / last close), so stray full
+// or partial markers can land anywhere in the accumulated text — legit
+// widget code never contains them, so a global strip is safe.
+function stripCdataArtifacts(text) {
+  return String(text || '')
+    .replace(/<!\[CDATA\[?/g, '')
+    .replace(/\]\]>/g, '')
+    .replace(/\]\]$/, '')
+    // Trailing partial tag while the segment is still streaming (`</thumb`,
+    // a lone `<`) — transient; the next delta completes or removes it.
+    .replace(/<\/?[a-zA-Z]{0,12}$/, '')
+    .replace(/^\n+/, '');
+}
+
+// Incremental extractor for the streamed body of create_app / update_app /
+// create_shortcut / update_shortcut. The raw tag_delta text interleaves the
+// child tags (<name>, <thumbnail>, <html>, <doc>) — this splits them into
+// fields without leaking tag soup into the code preview. Children arrive in
+// document order, so each child's segment is consumed wholesale before
+// scanning for the next open tag; that keeps inner `<html>` (thumbnail docs)
+// and the app document's own `</html>` from confusing the split. Not a full
+// XML parser by design — it must tolerate half-streamed markers.
+function parseSurfaceChildren(raw) {
+  const text = String(raw || '');
+  const fields = { name: '', thumbnail: '', html: '', doc: '' };
+  let active = null;
+  const openRe = /<(name|thumbnail|html|doc)\b[^>]*>/gi;
+  let cursor = 0;
+  while (cursor < text.length) {
+    openRe.lastIndex = cursor;
+    const open = openRe.exec(text);
+    if (!open) break;
+    const child = open[1].toLowerCase();
+    const start = open.index + open[0].length;
+    let end = -1;
+    let next = -1;
+    if (child === 'html') {
+      // The html child's content is a full document that ends with its own
+      // `</html>` — the wrapper close is `]]></html>`.
+      end = text.indexOf(']]></html>', start);
+      if (end !== -1) {
+        next = end + ']]></html>'.length;
+      } else {
+        // The streaming CDATA unwrap can eat the `]]>`. Once the next child
+        // (or the tool close) has arrived the segment is bounded — take the
+        // LAST `</html>` inside it as the wrapper close. Until then the
+        // segment is still streaming.
+        const boundary = text.slice(start).search(/<doc\b|<\/(?:create_app|update_app|create_shortcut|update_shortcut)>/i);
+        if (boundary !== -1) {
+          const segment = text.slice(start, start + boundary);
+          const lastClose = segment.lastIndexOf('</html>');
+          end = lastClose === -1 ? start + boundary : start + lastClose;
+          next = start + boundary;
+        }
+      }
+    } else {
+      end = text.indexOf(`</${child}`, start);
+      if (end !== -1) {
+        const gt = text.indexOf('>', end);
+        next = gt === -1 ? text.length : gt + 1;
+      }
+    }
+    if (end === -1) {
+      fields[child] = text.slice(start);
+      active = child;
+      break;
+    }
+    fields[child] = text.slice(start, end);
+    cursor = next;
+  }
+  for (const key of Object.keys(fields)) fields[key] = stripCdataArtifacts(fields[key]);
+  return { ...fields, active };
+}
+
+// Per-card parse cache — editorBodyFor runs several times per render and the
+// accumulated body only changes between deltas, so re-parse only when the
+// body string is a new reference.
+const surfaceParseCache = new WeakMap();
+
+function surfaceChildrenFor(card = {}) {
+  const body = normalizeEditorBody(card.body);
+  const cached = surfaceParseCache.get(card);
+  if (cached && cached.body === body) return cached.parts;
+  const parts = parseSurfaceChildren(body);
+  surfaceParseCache.set(card, { body, parts });
+  return parts;
 }
 
 function normalizeSurfaceCodeBody(value) {
-  const raw = normalizeEditorBody(value);
-  const html = extractChildCdata(raw, 'html');
-  if (html) return html;
-  const thumbnail = extractChildCdata(raw, 'thumbnail');
-  if (thumbnail) return thumbnail;
-  const doc = extractChildCdata(raw, 'doc');
-  if (doc) return doc;
-  return raw
-    .replace(/^<thumbnail\b[^>]*>/i, '')
-    .replace(/^<html\b[^>]*>/i, '')
-    .replace(/^<doc\b[^>]*>/i, '');
+  const parts = parseSurfaceChildren(normalizeEditorBody(value));
+  return parts.html || parts.thumbnail || parts.doc || '';
 }
 
 function editorBodyFor(card = {}) {
-  return SURFACE_BUILD_TAGS.has(card.tag)
-    ? normalizeSurfaceCodeBody(card.body)
-    : normalizeEditorBody(card.body);
+  if (!SURFACE_BUILD_TAGS.has(card.tag)) return normalizeEditorBody(card.body);
+  const parts = surfaceChildrenFor(card);
+  return parts.html || parts.thumbnail || parts.doc || '';
 }
 
 function normalizeTerminalText(value) {
@@ -1545,14 +1812,30 @@ function surfaceCodePathFor(tag, attrs = {}) {
 
 function appendSurfaceEditorDelta(data = {}) {
   const tag = SURFACE_BUILD_TAGS.has(data.name) ? data.name : 'create_app';
-  const path = surfaceCodePathFor(tag, data.attrs || {});
-  const card = ensureEditorCard({ tag, path, status: 'running' });
+  // Reuse the running surface card directly instead of round-tripping through
+  // ensureEditorCard's path check — the path legitimately refines mid-stream
+  // (update_* learns the display name from the streamed <name> child), and a
+  // path change there would split the stream across two cards.
+  const running = activeCardItem?.card?.type === 'editor'
+    && activeCardItem.card.status !== 'done'
+    && SURFACE_BUILD_TAGS.has(activeCardItem.card.tag)
+    ? activeCardItem.card
+    : null;
+  const card = running || ensureEditorCard({ tag, path: surfaceCodePathFor(tag, data.attrs || {}), status: 'running' });
+  // Accumulate RAW text — child-tag extraction happens at render time in
+  // editorBodyFor. Per-chunk CDATA stripping here corrupted markers that
+  // straddled chunk boundaries.
   card.body = typeof data.fullText === 'string'
-    ? normalizeEditorBody(data.fullText)
-    : `${normalizeEditorBody(card.body)}${normalizeEditorBody(data.text)}`;
+    ? data.fullText
+    : `${card.body || ''}${data.text || ''}`;
   card.status = 'running';
   card.tag = tag;
-  card.path = path;
+  const streamedName = surfaceChildrenFor(card).name.trim();
+  card.path = surfaceCodePathFor(tag, {
+    ...(data.attrs || {}),
+    name: data.attrs?.name || streamedName || data.attrs?.id,
+  });
+  bubbleState.card = card;
   return card;
 }
 
@@ -1658,6 +1941,81 @@ function completeTerminalCard(data = {}, status = null) {
   });
 }
 
+function normalizeMcpText(value) {
+  return String(value || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/^<!\[CDATA\[/, '')
+    .replace(/\]\]>$/g, '')
+    .replace(/<\/use_mcp_tool[^>]*$/i, '');
+}
+
+function mcpHeaderFor(card = {}) {
+  const server = String(card.server || '').trim();
+  const tool = String(card.tool || '').trim();
+  if (!server && !tool) return 'MCP call';
+  return `MCP · ${server || '?'} · ${tool || '?'}`;
+}
+
+function mcpStatusLabelFor(card = {}) {
+  if (card.status === 'error') return 'failed';
+  if (card.status === 'running') return 'streaming';
+  return 'called';
+}
+
+function ensureMcpCard({ server = '', tool = '', status = 'running' } = {}) {
+  const existing = activeCardItem?.card?.type === 'mcp' && activeCardItem.card.status === 'running'
+    ? activeCardItem.card
+    : null;
+  const card = {
+    ...(existing || {}),
+    type: 'mcp',
+    server: server || existing?.server || '',
+    tool: tool || existing?.tool || '',
+    args: existing?.args ?? '',
+    status,
+    result: existing?.result || '',
+  };
+  bubbleState.width = 'wide';
+  setThreadCard(card);
+  return card;
+}
+
+function appendMcpDelta(data = {}) {
+  const card = ensureMcpCard({
+    server: data.attrs?.server || '',
+    tool: data.attrs?.tool || '',
+    status: 'running',
+  });
+  card.args = `${normalizeMcpText(card.args)}${normalizeMcpText(data.text)}`;
+  card.status = 'running';
+  return card;
+}
+
+// The streamed input is complete — freeze the card on the final args. The
+// subsequent use_mcp_tool / tool_error event appends the result line.
+function completeMcpInput(data = {}) {
+  const card = ensureMcpCard({
+    server: data.server || '',
+    tool: data.tool || '',
+    status: 'running',
+  });
+  if (typeof data.text === 'string' && data.text) card.args = normalizeMcpText(data.text);
+  card.status = 'done';
+  return card;
+}
+
+// Attach the call outcome to the most recent mcp card. The result event
+// always follows the input stream for the same call within a pass, so the
+// latest card without a result line is the right one.
+function attachMcpResult({ ok = true, reason = '' } = {}) {
+  const item = findThreadCardItem('mcp', (card) => !card.result);
+  if (!item?.card) return null;
+  item.card.result = ok ? 'ok' : `error${reason ? ` · ${shortText(reason, 80)}` : ''}`;
+  if (!ok) item.card.status = 'error';
+  else if (item.card.status === 'running') item.card.status = 'done';
+  return item.card;
+}
+
 function uniqueId(prefix = 'item') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
@@ -1686,8 +2044,17 @@ function scrollThoughtToBottom() {
     thoughtBody.querySelectorAll('.terminal-body[data-live="true"]').forEach((node) => {
       node.scrollTop = node.scrollHeight;
     });
+    thoughtBody.querySelectorAll('.mcp-body[data-live="true"]').forEach((node) => {
+      node.scrollTop = node.scrollHeight;
+    });
+    thoughtBody.querySelectorAll('.reasoning-body[data-live="true"]').forEach((node) => {
+      node.scrollTop = node.scrollHeight;
+    });
   };
   const scroll = () => {
+    // Respect the user's position: while they are scrolled up, never yank
+    // the outer bubble back to the bottom. Inner live cards keep tailing.
+    if (!followBottom) return;
     thoughtBody.scrollTop = thoughtBody.scrollHeight;
   };
   scroll();
@@ -1704,6 +2071,15 @@ function scrollThoughtToBottom() {
   window.setTimeout(scroll, 240);
   window.setTimeout(scroll, 600);
 }
+
+// User-scroll detection for the outer bubble. Scrolling up past the threshold
+// pauses auto-follow; returning to the bottom resumes it. Programmatic
+// bottom-scrolls re-enter this handler at ~0 distance, so they keep
+// `followBottom` true without special-casing.
+thoughtBody.addEventListener('scroll', () => {
+  const distance = thoughtBody.scrollHeight - thoughtBody.scrollTop - thoughtBody.clientHeight;
+  followBottom = distance < 48;
+}, { passive: true });
 
 function keepMediaScrollAtBottom() {
   thoughtBody.querySelectorAll('img, video, iframe').forEach((node) => {
@@ -1722,10 +2098,12 @@ function scheduleBubbleRender(delay = 140) {
 
 function appendUserMessage(text) {
   removeThinkingLine();
+  finalizeReasoningItem();
   activeSayItem = null;
   activeSayStreamId = null;
   activeSayText = '';
   activeCardItem = null;
+  followBottom = true;
   appendThreadItem({ type: 'user', text });
 }
 
@@ -1743,6 +2121,20 @@ function removeThinkingLine() {
   const id = activeThinkingItem.id;
   bubbleState.thread = bubbleState.thread.filter((item) => item.id !== id);
   activeThinkingItem = null;
+}
+
+function ensureReasoningItem() {
+  if (activeReasoningItem && activeReasoningItem.status === 'running') return activeReasoningItem;
+  activeReasoningItem = appendThreadItem({ type: 'reasoning', text: '', status: 'running', expanded: false });
+  return activeReasoningItem;
+}
+
+// Reasoning ends the moment the model starts producing visible output (say
+// text, a tool tag, completion). The card stays in the thread, collapsed.
+function finalizeReasoningItem() {
+  if (!activeReasoningItem) return;
+  activeReasoningItem.status = 'done';
+  activeReasoningItem = null;
 }
 
 function findThreadCardItem(type, predicate = () => true) {
@@ -1879,6 +2271,7 @@ function resetBubbleState() {
   bubbleState.thread = [];
   bubbleState.footer = null;
   bubbleState.done = false;
+  bubbleState.interrupted = false;
   activeSayStreamId = null;
   activeSayText = '';
   activeSayItem = null;
@@ -2009,7 +2402,7 @@ function renderMode() {
 function renderStream() {
   if (!bubbleState.stream) return '';
   const cursor = currentRequestId && !bubbleState.done ? '<span class="stream-cursor"></span>' : '';
-  return `<div class="stream">${escapeHtml(bubbleState.stream)}${cursor}</div>`;
+  return `<div class="stream">${renderMessageHtml(bubbleState.stream)}${cursor}</div>`;
 }
 
 function renderIntent() {
@@ -2047,6 +2440,7 @@ function renderCardByType(card) {
     case 'build': return renderBuildCard(card);
     case 'editor': return renderEditorCard(card);
     case 'terminal': return renderTerminalCard(card);
+    case 'mcp': return renderMcpCard(card);
     case 'image': return renderImageCard(card);
     case 'web': return renderWebCard(card);
     case 'browser': return renderBrowserCard(card);
@@ -2072,7 +2466,7 @@ function renderThreadItem(item) {
     return `
       <article class="thread-msg ai-msg" data-tone="${escapeHtml(item.tone || 'warm')}">
         <div class="thread-label">BOR</div>
-        <div class="stream">${escapeHtml(item.text || '')}${cursor}</div>
+        <div class="stream">${renderMessageHtml(item.text || '')}${cursor}</div>
       </article>
     `;
   }
@@ -2082,6 +2476,28 @@ function renderThreadItem(item) {
         <span class="aurora-thinking">thinking<span class="thinking-dots"></span></span>
       </div>
     `;
+  }
+  if (item.type === 'reasoning') {
+    const live = item.status === 'running';
+    return `
+      <div class="thread-card thread-card-reasoning" data-item-id="${escapeHtml(item.id)}">
+        <div class="card reasoning${item.expanded ? ' expanded' : ''}${live ? ' live' : ''}" data-reasoning-id="${escapeHtml(item.id)}">
+          <button class="reasoning-head" type="button" data-reasoning-toggle="${escapeHtml(item.id)}" aria-expanded="${item.expanded ? 'true' : 'false'}">
+            <span class="reasoning-dot"></span>
+            <span class="reasoning-title">${live ? 'reasoning' : 'reasoned'}</span>
+            <span class="reasoning-chevron" aria-hidden="true"></span>
+          </button>
+          <div class="reasoning-body" data-live="${live ? 'true' : 'false'}">
+            <div class="reasoning-text">${escapeHtml(item.text || '')}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  if (item.type === 'status') {
+    // Quiet system-style line ("Stopped" / "Resumed") — stands in for the
+    // stop/resume protocol markers so raw XML never renders as a user bubble.
+    return `<div class="thread-status">${escapeHtml(item.text || '')}</div>`;
   }
   if (item.type === 'completion') {
     return `
@@ -2099,7 +2515,7 @@ function renderThreadItem(item) {
   }
   if (item.type === 'card') {
     const type = item.card?.type ? ` thread-card-${item.card.type}` : '';
-    return `<div class="thread-card${escapeHtml(type)}">${renderCardByType(item.card)}</div>`;
+    return `<div class="thread-card${escapeHtml(type)}" data-item-id="${escapeHtml(item.id)}">${renderCardByType(item.card)}</div>`;
   }
   if (item.type === 'shortcut') {
     if (!item.isLive) {
@@ -2277,19 +2693,31 @@ function renderBuildCard(card) {
   `;
 }
 
+function editorRowsHtml(rows, status) {
+  let caretIndex = -1;
+  rows.forEach((row, index) => {
+    if (row.kind !== 'gap') caretIndex = index;
+  });
+  return rows.map((row, index) => `
+    <div class="ln ${escapeHtml(row.kind || '')}">
+      <span class="num">${escapeHtml(row.num)}</span>
+      <span class="src">${escapeHtml(row.text)}${status === 'running' && index === caretIndex ? '<span class="caret"></span>' : ''}</span>
+    </div>
+  `).join('');
+}
+
+function editorRangeLabel(rows, stats) {
+  const shown = Math.max(0, rows.length - (stats.hidden ? 1 : 0));
+  return stats.total
+    ? (stats.hidden ? `showing latest ${shown.toLocaleString()} / ${stats.total.toLocaleString()} loc` : `${stats.total.toLocaleString()} loc`)
+    : 'waiting';
+}
+
 function renderEditorCard(card) {
   const path = card.path || 'device:/file.txt';
   const status = card.status || 'running';
   const { rows, stats } = editorPreviewFor(card);
   const statusLabel = status === 'done' ? 'saved' : status === 'error' ? 'failed' : 'streaming';
-  const shown = Math.max(0, rows.length - (stats.hidden ? 1 : 0));
-  const rangeLabel = stats.total
-    ? (stats.hidden ? `showing latest ${shown.toLocaleString()} / ${stats.total.toLocaleString()} loc` : `${stats.total.toLocaleString()} loc`)
-    : 'waiting';
-  let caretIndex = -1;
-  rows.forEach((row, index) => {
-    if (row.kind !== 'gap') caretIndex = index;
-  });
   return `
     <div class="card editor">
       <div class="editor-head">
@@ -2299,20 +2727,71 @@ function renderEditorCard(card) {
         <span class="editor-tag">${escapeHtml(editorStatusFor(card))}</span>
       </div>
       <div class="editor-body" data-live="${status === 'running' ? 'true' : 'false'}" tabindex="0" aria-label="Streaming file edit preview">
-        ${rows.map((row, index) => `
-          <div class="ln ${escapeHtml(row.kind || '')}">
-            <span class="num">${escapeHtml(row.num)}</span>
-            <span class="src">${escapeHtml(row.text)}${status === 'running' && index === caretIndex ? '<span class="caret"></span>' : ''}</span>
-          </div>
-        `).join('')}
+        ${editorRowsHtml(rows, status)}
       </div>
       <div class="editor-foot">
         <span class="diff-stat"><span class="add">+${escapeHtml(stats.added)}</span> <span class="rem">-${escapeHtml(stats.removed)}</span></span>
-        <span>${escapeHtml(rangeLabel)}</span>
+        <span>${escapeHtml(editorRangeLabel(rows, stats))}</span>
         <span class="${status === 'error' ? 'rem' : 'ok'}">${escapeHtml(card.reason || statusLabel)}</span>
       </div>
     </div>
   `;
+}
+
+/**
+ * In-place streaming update for the live editor card. Rebuilding the entire
+ * bubble via innerHTML on every code chunk recreated the card header many
+ * times a second (visible glitch) and destroyed the user's scroll position in
+ * the outer bubble. Code chunks only grow the card's own fixed-height body, so
+ * we patch that node directly and leave the rest of the bubble alone; the
+ * outer auto-scroll waits for the next non-editor content. Returns false when
+ * the card's DOM isn't present (new card, panel open) so the caller can fall
+ * back to a full render.
+ */
+function updateLiveEditorCardDOM(card) {
+  if (notificationsOpen || historyOpen || modelPickerOpen) return false;
+  if (!activeCardItem || activeCardItem.card !== card) return false;
+  const wrap = thoughtBody.querySelector(`[data-item-id="${activeCardItem.id}"]`);
+  const el = wrap?.querySelector('.editor');
+  if (!el) return false;
+  const body = el.querySelector('.editor-body');
+  if (!body) return false;
+  const { rows, stats } = editorPreviewFor(card);
+  const status = card.status || 'running';
+  const setText = (node, text) => {
+    if (node && node.textContent !== text) node.textContent = text;
+  };
+  setText(el.querySelector('.editor-mode'), editorTitleForTag(card.tag || 'write_file'));
+  setText(el.querySelector('.editor-path'), card.path || 'device:/file.txt');
+  setText(el.querySelector('.editor-tag'), editorStatusFor(card));
+  body.dataset.live = status === 'running' ? 'true' : 'false';
+  body.innerHTML = editorRowsHtml(rows, status);
+  body.scrollTop = body.scrollHeight;
+  const foot = el.querySelector('.editor-foot');
+  if (foot) {
+    const spans = foot.querySelectorAll(':scope > span');
+    setText(foot.querySelector('.diff-stat .add'), `+${stats.added}`);
+    setText(foot.querySelector('.diff-stat .rem'), `-${stats.removed}`);
+    setText(spans[1], editorRangeLabel(rows, stats));
+    const statusLabel = status === 'done' ? 'saved' : status === 'error' ? 'failed' : 'streaming';
+    setText(spans[2], card.reason || statusLabel);
+  }
+  return true;
+}
+
+/**
+ * In-place streaming update for the live reasoning card — same rationale as
+ * updateLiveEditorCardDOM: reasoning tokens arrive fast, and only the card's
+ * own body changes.
+ */
+function updateLiveReasoningDOM(item) {
+  if (notificationsOpen || historyOpen || modelPickerOpen) return false;
+  const body = thoughtBody.querySelector(`[data-reasoning-id="${item.id}"] .reasoning-body`);
+  const textEl = body?.querySelector('.reasoning-text');
+  if (!textEl) return false;
+  textEl.textContent = item.text || '';
+  body.scrollTop = body.scrollHeight;
+  return true;
 }
 
 function renderTerminalCard(card) {
@@ -2359,6 +2838,74 @@ function renderTerminalCard(card) {
       </div>
     </div>
   `;
+}
+
+function mcpBodyHtml(card) {
+  const status = card.status || 'running';
+  const args = normalizeMcpText(card.args || '');
+  const caret = status === 'running' ? '<span class="caret"></span>' : '';
+  return `<pre>${escapeHtml(args || (status === 'running' ? 'waiting for arguments' : '{}'))}${caret}</pre>`;
+}
+
+function renderMcpCard(card) {
+  const status = card.status || 'running';
+  const statusLabel = mcpStatusLabelFor(card);
+  const args = normalizeMcpText(card.args || '');
+  return `
+    <div class="card mcp">
+      <div class="mcp-head">
+        <span class="mcp-dot"></span>
+        <span class="mcp-mode">${escapeHtml(mcpHeaderFor(card))}</span>
+        <span class="mcp-tag ${status === 'error' ? 'err' : ''}">${escapeHtml(statusLabel)}</span>
+      </div>
+      <div class="mcp-body" data-live="${status === 'running' ? 'true' : 'false'}" tabindex="0" aria-label="Streaming MCP tool arguments">
+        ${mcpBodyHtml(card)}
+      </div>
+      <div class="mcp-foot">
+        <span>${escapeHtml(args ? `${args.length.toLocaleString()} chars` : 'no arguments')}</span>
+        <span class="${status === 'error' ? 'rem' : 'ok'}">${escapeHtml(card.result || statusLabel)}</span>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * In-place streaming update for the live mcp card — same rationale as
+ * updateLiveEditorCardDOM: argument chunks only grow the card's own
+ * fixed-height body, so patch that node directly instead of rebuilding
+ * the whole bubble per delta.
+ */
+function updateLiveMcpCardDOM(card) {
+  if (notificationsOpen || historyOpen || modelPickerOpen) return false;
+  if (!activeCardItem || activeCardItem.card !== card) return false;
+  const wrap = thoughtBody.querySelector(`[data-item-id="${activeCardItem.id}"]`);
+  const el = wrap?.querySelector('.mcp');
+  if (!el) return false;
+  const body = el.querySelector('.mcp-body');
+  if (!body) return false;
+  const status = card.status || 'running';
+  const setText = (node, text) => {
+    if (node && node.textContent !== text) node.textContent = text;
+  };
+  setText(el.querySelector('.mcp-mode'), mcpHeaderFor(card));
+  const tag = el.querySelector('.mcp-tag');
+  setText(tag, mcpStatusLabelFor(card));
+  if (tag) tag.classList.toggle('err', status === 'error');
+  body.dataset.live = status === 'running' ? 'true' : 'false';
+  body.innerHTML = mcpBodyHtml(card);
+  body.scrollTop = body.scrollHeight;
+  const foot = el.querySelector('.mcp-foot');
+  if (foot) {
+    const spans = foot.querySelectorAll(':scope > span');
+    const args = normalizeMcpText(card.args || '');
+    setText(spans[0], args ? `${args.length.toLocaleString()} chars` : 'no arguments');
+    setText(spans[1], card.result || mcpStatusLabelFor(card));
+    if (spans[1]) {
+      spans[1].classList.toggle('rem', status === 'error');
+      spans[1].classList.toggle('ok', status !== 'error');
+    }
+  }
+  return true;
 }
 
 function renderImageCard(card) {
@@ -2590,6 +3137,7 @@ function renderNotificationDetail(item) {
         </div>
         <div class="notification-actions">
           <button type="button" class="notification-back" data-notification-action="list">Back</button>
+          <button type="button" data-notification-action="continue-chat" data-notification-id="${escapeHtml(item.id)}">Continue in chat</button>
           ${item.readAtMs ? '' : `<button type="button" data-notification-action="mark-read" data-notification-id="${escapeHtml(item.id)}">Mark read</button>`}
           <button type="button" data-notification-action="remove" data-notification-id="${escapeHtml(item.id)}">Delete</button>
         </div>
@@ -2609,7 +3157,7 @@ function renderNotificationDetail(item) {
         ${item.body ? `
           <div class="notification-detail-section">
             <small>Body</small>
-            <p>${escapeHtml(item.body)}</p>
+            <p>${renderMessageHtml(item.body)}</p>
           </div>
         ` : ''}
         <div class="notification-detail-meta">
@@ -2650,9 +3198,10 @@ function renderNotificationsPanel() {
                   <b>${escapeHtml(item.title || 'Notification')}</b>
                   <time>${escapeHtml(formatNotificationTime(item.createdAtMs))}</time>
                 </div>
-                ${item.body ? `<p>${escapeHtml(item.body)}</p>` : ''}
+                ${item.body ? `<p>${renderMessageHtml(item.body)}</p>` : ''}
                 <small>${escapeHtml(notificationMeta(item))}</small>
               </div>
+              <button type="button" class="notification-mark notification-continue" data-notification-action="continue-chat" data-notification-id="${escapeHtml(item.id)}" title="Continue in chat thread">Chat</button>
               ${item.readAtMs ? '' : `<button type="button" class="notification-mark" data-notification-action="mark-read" data-notification-id="${escapeHtml(item.id)}">✓</button>`}
             </article>
           `).join('')}
@@ -2672,6 +3221,21 @@ function renderCard() {
   return renderCardByType(bubbleState.card);
 }
 
+// The head control is ALWAYS the "new thread" (+) button — even mid-stream.
+// Pressing it discards the current thread (cancelling + persisting a running
+// one so it stays resumable from History) and resets to the fresh input-only
+// state. Stopping a stream in place is the FOOTER's "Stop"; resuming an
+// interrupted task is the FOOTER's "Resume" primary.
+const NEW_THREAD_BUTTON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
+
+function updateStopButton() {
+  if (stopButton.dataset.glyph === 'new-thread') return;
+  stopButton.dataset.glyph = 'new-thread';
+  stopButton.innerHTML = NEW_THREAD_BUTTON_SVG;
+  stopButton.title = 'New thread';
+  stopButton.setAttribute('aria-label', 'New thread');
+}
+
 function renderFooter() {
   if (notificationsOpen || historyOpen) {
     thoughtFoot.classList.add('hidden');
@@ -2688,7 +3252,7 @@ function renderFooter() {
   thoughtFoot.innerHTML = `
     ${secondary.map((label) => `<button class="foot-btn" type="button">${escapeHtml(label)}</button>`).join('')}
     <div class="foot-spacer"></div>
-    ${bubbleState.footer.danger ? `<button class="foot-btn danger" type="button" data-action="close">${escapeHtml(bubbleState.footer.danger)}</button>` : ''}
+    ${bubbleState.footer.danger ? `<button class="foot-btn danger" type="button" data-action="${escapeHtml(bubbleState.footer.dangerAction || 'close')}">${escapeHtml(bubbleState.footer.danger)}</button>` : ''}
     ${bubbleState.footer.primary ? `<button class="foot-btn pri" type="button" data-action="${escapeHtml(bubbleState.footer.action || '')}">${escapeHtml(bubbleState.footer.primary)}</button>` : ''}
   `;
 }
@@ -2702,18 +3266,34 @@ function renderBubble() {
   if (bubbleState.width) thought.classList.add(bubbleState.width);
   renderMode();
   thoughtMeta.textContent = bubbleState.done ? 'done' : elapsedText();
-  thoughtBody.innerHTML = notificationsOpen
-    ? renderNotificationsPanel()
-    : historyOpen
-    ? renderHistoryPanel()
-    : bubbleState.thread.length
-    ? renderThread()
-    : [
-      renderStream(),
-      renderIntent(),
-      renderCard(),
-      renderActivities(),
-    ].filter(Boolean).join('');
+  // Never let one malformed thread item blank the bubble mid-stream: if any
+  // renderer throws, fall back to a minimal status line instead of leaving
+  // stale or empty innerHTML (the "bubble spontaneously vanished" failure).
+  let bodyHtml;
+  try {
+    bodyHtml = notificationsOpen
+      ? renderNotificationsPanel()
+      : historyOpen
+      ? renderHistoryPanel()
+      : modelPickerOpen
+      ? renderModelPanel()
+      : bubbleState.thread.length
+      ? renderThread()
+      : [
+        renderStream(),
+        renderIntent(),
+        renderCard(),
+        renderActivities(),
+      ].filter(Boolean).join('');
+  } catch (error) {
+    console.warn('[bor] bubble guard: renderBubble failed, using fallback body', {
+      error: error?.message || String(error),
+      requestId: currentRequestId,
+      threadLength: bubbleState.thread.length,
+    });
+    bodyHtml = `<div class="stream">${escapeHtml(bubbleState.mode || 'Working')}</div>`;
+  }
+  thoughtBody.innerHTML = bodyHtml;
   // CRITICAL: hydrate AFTER innerHTML is set. Shortcut iframe DOM nodes are
   // re-attached from `shortcutCache` so their JS state (the live iframe, any
   // pending postMessage replies, scroll position, in-progress AI requests)
@@ -2721,6 +3301,7 @@ function renderBubble() {
   // event re-mounts every iframe — disastrous for stateful shortcuts.
   hydrateShortcutMounts();
   keepTerminalCardsAtBottom();
+  updateStopButton();
   renderFooter();
   keepMediaScrollAtBottom();
   scrollThoughtToBottom();
@@ -2796,7 +3377,19 @@ function showWaitingForModel() {
   setOrbState('thinking');
 }
 
-function hideThought({ reset = false } = {}) {
+function hideThought({ reset = false, force = false } = {}) {
+  // Streaming guard (task 2): while a request is actively streaming, the
+  // bubble must NEVER auto-hide. Only the explicit thread-ending controls
+  // (head "+" / × via closeThoughtSession) pass force:true. Anything else that
+  // lands here mid-stream is a bug — log it so reports are diagnosable.
+  if (currentRequestId && !force) {
+    console.warn('[bor] bubble guard: refused hideThought during active stream', {
+      requestId: currentRequestId,
+      mode: currentMode,
+      reset,
+    });
+    return false;
+  }
   thought.classList.add('hidden');
   taskChip.classList.add('hidden');
   if (reset) {
@@ -2806,7 +3399,50 @@ function hideThought({ reset = false } = {}) {
     thoughtFoot.classList.add('hidden');
   }
   if (!currentRequestId) setOrbState('idle');
+  return true;
 }
+
+// ---- Streaming bubble guard (task 2) ---------------------------------------
+// While a request is streaming the bubble must never silently vanish. This
+// restores it if a space/tab switch or a stray code path hid it, knocked the
+// window out of 'thinking' mode, or emptied its DOM mid-render. Explicit user
+// minimize (task chip visible) and open panels are respected. Every firing is
+// logged with the state that caused it so future reports are diagnosable.
+function restoreBubbleIfStreamingHidden(source) {
+  if (!currentRequestId || minimizedTask) return false;
+  if (notificationsOpen || historyOpen || modelPickerOpen) return false;
+  const hidden = thought.classList.contains('hidden');
+  const wrongMode = currentMode !== 'thinking';
+  const hasContent = Boolean(
+    bubbleState.thread.length ||
+    bubbleState.stream ||
+    bubbleState.intent ||
+    bubbleState.card ||
+    bubbleState.activities.length
+  );
+  const emptied = hasContent && !thoughtBody.childElementCount;
+  if (!hidden && !wrongMode && !emptied) return false;
+  console.warn('[bor] bubble guard: restoring bubble during active stream', {
+    source,
+    hidden,
+    wrongMode,
+    emptied,
+    mode: currentMode,
+    requestId: currentRequestId,
+  });
+  thought.classList.remove('hidden');
+  taskChip.classList.add('hidden');
+  if (wrongMode) setMode('thinking');
+  renderBubble();
+  return true;
+}
+
+// Returning to the space / refocusing the window: if a stream is active but
+// the bubble got hidden or collapsed, bring it back.
+window.addEventListener('focus', () => restoreBubbleIfStreamingHidden('window-focus'));
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) restoreBubbleIfStreamingHidden('visibilitychange');
+});
 
 function updateNotificationBadges() {
   const unread = Math.max(0, Number(notificationsState.unread) || 0);
@@ -2815,6 +3451,12 @@ function updateNotificationBadges() {
   if (notificationCount) {
     notificationCount.textContent = label;
     notificationCount.classList.toggle('hidden', unread === 0);
+  }
+  // The options drop-up mirrors the bubble head's unread chip on its
+  // Notifications row.
+  if (promptMenuNotificationCount) {
+    promptMenuNotificationCount.textContent = label;
+    promptMenuNotificationCount.classList.toggle('hidden', unread === 0);
   }
   if (notificationChip && notificationChipCount && notificationChipSubject) {
     notificationChipCount.textContent = unread === 1 ? '1 unread' : `${label} unread`;
@@ -2900,7 +3542,10 @@ function closeNotifications({ render = true } = {}) {
     bubbleState.width = previous.bubbleWidth;
     bubbleState.footer = previous.bubbleFooter;
     minimizedTask = previous.minimizedTask;
-    thought.classList.toggle('hidden', previous.thoughtHidden);
+    // Never re-hide the bubble from a stale panel snapshot while a stream is
+    // active (task 2 policy) — unless the snapshot restores the minimized
+    // state, whose task chip keeps the running task discoverable.
+    thought.classList.toggle('hidden', previous.thoughtHidden && (!currentRequestId || previous.minimizedTask));
     taskChip.classList.toggle('hidden', previous.taskChipHidden);
     setMode(previous.mode || (hasThoughtSession() ? 'thinking' : 'expanded'));
   } else {
@@ -2929,7 +3574,230 @@ async function showNotifications({ notificationId = '', detail = false } = {}) {
   setMode('thinking');
   setOrbState('idle');
   await refreshNotifications({ render: true });
+  // Opening straight into a detail (notification chip click) reads it, same
+  // as clicking it from the list.
+  if (selectedNotificationId) markNotificationRead(selectedNotificationId);
   renderBubble();
+}
+
+// ---------- Model picker (the composer's model chip) ----------
+// Opens inside the thought bubble like the notifications/history panels, so
+// it inherits every theme and never has to squeeze a dropdown into the 92px
+// composer window. Picking a model actually changes the active provider+model
+// via /api/config; unconfigured picks route to the provider-settings screen.
+
+function shortModelLabel(model) {
+  const text = String(model || '').trim();
+  return text || 'model';
+}
+
+async function loadModelPickerData({ force = false } = {}) {
+  if (!providerCatalogCache || force) {
+    const catalog = await window.borHost.getProviderCatalog?.().catch(() => null);
+    providerCatalogCache = Array.isArray(catalog?.providers) ? catalog.providers : [];
+  }
+  const config = await window.borHost.getConfig?.().catch(() => null);
+  if (config) publicConfigCache = config;
+  return { catalog: providerCatalogCache, config: publicConfigCache };
+}
+
+function currentModelInfo() {
+  const config = publicConfigCache || {};
+  const providerId = config.defaultProvider || '';
+  const provider = (providerCatalogCache || []).find((p) => p.id === providerId);
+  const model = config.providers?.[providerId]?.model || provider?.defaultModel || '';
+  return { providerId, providerLabel: provider?.label || providerId, model };
+}
+
+function refreshModelChip() {
+  if (!modelChipLabel) return;
+  const { model } = currentModelInfo();
+  modelChipLabel.textContent = shortModelLabel(model);
+}
+
+function renderModelPanel() {
+  const config = publicConfigCache || {};
+  const providers = providerCatalogCache || [];
+  const activeProvider = config.defaultProvider || '';
+  const activeModel = config.providers?.[activeProvider]?.model
+    || providers.find((p) => p.id === activeProvider)?.defaultModel || '';
+  const sections = providers.map((prov) => {
+    const st = config.providers?.[prov.id];
+    const configured = Boolean(st?.configured);
+    const isCompat = prov.id === 'openai-compatible';
+    const stateLabel = configured ? (prov.id === activeProvider ? 'active' : 'connected') : 'not connected';
+    const rows = isCompat
+      ? `
+        <button type="button" class="model-row" data-model-action="settings" data-provider="${escapeHtml(prov.id)}">
+          <span class="model-row-name">${escapeHtml(st?.model || 'choose endpoint + model')}</span>
+          <span class="model-row-note">opens provider settings</span>
+          ${prov.id === activeProvider ? '<span class="model-row-current">✓</span>' : ''}
+        </button>`
+      : (prov.models || []).map((m) => {
+        const isCurrent = prov.id === activeProvider && m.id === activeModel;
+        return `
+        <button type="button" class="model-row${isCurrent ? ' current' : ''}" data-model-action="pick" data-provider="${escapeHtml(prov.id)}" data-model="${escapeHtml(m.id)}">
+          <span class="model-row-name">${escapeHtml(m.label || m.id)}</span>
+          ${m.note ? `<span class="model-row-note">${escapeHtml(m.note)}</span>` : ''}
+          ${isCurrent ? '<span class="model-row-current">✓</span>' : ''}
+        </button>`;
+      }).join('');
+    return `
+      <article class="model-provider${configured ? '' : ' unconfigured'}">
+        <div class="model-provider-head">
+          <b>${escapeHtml(prov.label)}</b>
+          <span class="model-provider-state">${escapeHtml(stateLabel)}</span>
+          <button type="button" class="model-settings-btn" data-model-action="settings" data-provider="${escapeHtml(prov.id)}">Settings</button>
+        </div>
+        <div class="model-rows">${rows}</div>
+      </article>`;
+  }).join('');
+  const current = currentModelInfo();
+  return `
+    <section class="notification-panel model-panel">
+      <div class="notification-top">
+        <div>
+          <b>Model</b>
+          <small>${escapeHtml(current.providerLabel ? `${current.providerLabel} · ${current.model}` : 'none selected')}</small>
+        </div>
+        <div class="notification-actions">
+          <button type="button" class="notification-back" data-model-action="back">Back</button>
+        </div>
+      </div>
+      <div class="notification-list model-list">${sections}</div>
+    </section>
+  `;
+}
+
+function closeModelPicker({ render = true } = {}) {
+  const previous = modelPickerReturnState;
+  modelPickerOpen = false;
+  modelPickerReturnState = null;
+  if (previous) {
+    bubbleState.mode = previous.bubbleMode;
+    bubbleState.subject = previous.bubbleSubject;
+    bubbleState.width = previous.bubbleWidth;
+    bubbleState.footer = previous.bubbleFooter;
+    minimizedTask = previous.minimizedTask;
+    // Never re-hide the bubble from a stale panel snapshot while a stream is
+    // active (task 2 policy) — unless the snapshot restores the minimized
+    // state, whose task chip keeps the running task discoverable.
+    thought.classList.toggle('hidden', previous.thoughtHidden && (!currentRequestId || previous.minimizedTask));
+    taskChip.classList.toggle('hidden', previous.taskChipHidden);
+    setMode(previous.mode || (hasThoughtSession() ? 'thinking' : 'expanded'));
+  } else {
+    setMode(hasVisibleThoughtSession() ? 'thinking' : 'expanded');
+  }
+  setOrbState(currentRequestId ? 'busy' : 'idle');
+  // Re-render even when the bubble ends hidden — otherwise the stale panel
+  // markup flashes when the bubble next reopens.
+  if (render) renderBubble();
+}
+
+async function openModelPicker() {
+  if (modelPickerOpen) return;
+  historyOpen = false;
+  historyReturnState = null;
+  if (notificationsOpen) closeNotifications({ render: false });
+  modelPickerReturnState = captureNotificationReturnState();
+  modelPickerOpen = true;
+  minimizedTask = false;
+  surfaceDrawer.classList.add('hidden');
+  taskChip.classList.add('hidden');
+  thought.classList.remove('hidden');
+  bubbleState.width = 'wide';
+  setBubbleMode('Model', '');
+  setMode('thinking');
+  setOrbState('idle');
+  await loadModelPickerData({ force: true });
+  renderBubble();
+}
+
+async function applyModelPick(providerId, modelId) {
+  const config = publicConfigCache || {};
+  const st = config.providers?.[providerId];
+  if (!st?.configured) {
+    // Not configured — picking it means setting it up first.
+    window.borHost.openProviderSettings?.(providerId).catch?.(() => {});
+    return;
+  }
+  const result = await window.borHost.saveProviderConfig?.({
+    defaultProvider: providerId,
+    providers: { [providerId]: { model: modelId } },
+  }).catch(() => null);
+  if (result?.config) publicConfigCache = result.config;
+  else {
+    // Save failed — the provider likely needs attention.
+    window.borHost.openProviderSettings?.(providerId).catch?.(() => {});
+    return;
+  }
+  refreshModelChip();
+  closeModelPicker();
+}
+
+function markNotificationRead(id) {
+  const item = (notificationsState.notifications || []).find((n) => n.id === id);
+  if (!item || item.readAtMs) return;
+  // Optimistic: clear locally so the chip/badge drop the moment the panel
+  // closes; the server round-trip confirms in the background.
+  item.readAtMs = Date.now();
+  notificationsState.unread = Math.max(0, (Number(notificationsState.unread) || 0) - 1);
+  lastNotificationUnread = notificationsState.unread;
+  updateNotificationBadges();
+  if (window.borHost?.notificationAction) {
+    window.borHost.notificationAction({ action: 'mark-read', id })
+      .then(() => refreshNotifications({ render: false, sound: false }))
+      .catch(() => {});
+  }
+}
+
+// "Continue in chat thread" — seed a fresh conversation with the notification
+// as its opening context. The notification renders as a BOR bubble; the model
+// receives the subject/title/body as the thread's working context; History
+// picks the conversation up like any other.
+function continueNotificationInChat(item) {
+  markNotificationRead(item.id);
+  closeNotifications({ render: false });
+  historyOpen = false;
+  historyReturnState = null;
+  resetBubbleState();
+  currentConversationId = newConversationId();
+  const title = item.title || item.subject || 'Notification';
+  const body = String(item.body || '').trim();
+  taskMessages = [{
+    role: 'user',
+    content: [
+      '[Continuing from a BOR notification — treat it as the working context for this thread]',
+      item.subject ? `Subject: ${item.subject}` : '',
+      `Title: ${title}`,
+      item.source ? `Source: ${item.source}` : '',
+      body ? `Body:\n${body}` : '',
+      '',
+      'I will follow up with what I need next.',
+    ].filter(Boolean).join('\n'),
+  }];
+  bubbleState.thread = [{
+    id: uniqueId('ai'),
+    at: Date.now(),
+    type: 'ai',
+    tone: 'warm',
+    text: body ? `${title}\n${body}` : title,
+    streaming: false,
+    done: true,
+  }];
+  bubbleState.done = true;
+  bubbleState.mode = 'Notification';
+  bubbleState.subject = shortText(item.subject || title, 60);
+  bubbleState.width = 'wide';
+  bubbleState.footer = null;
+  minimizedTask = false;
+  taskChip.classList.add('hidden');
+  thought.classList.remove('hidden');
+  setMode('thinking');
+  setOrbState('idle');
+  renderBubble();
+  persistConversation();
+  promptInput?.focus();
 }
 
 async function performNotificationAction(action, id = '') {
@@ -2944,7 +3812,15 @@ async function performNotificationAction(action, id = '') {
   }
   if (action === 'open-detail') {
     selectedNotificationId = id;
+    // Viewing a notification READS it — otherwise the unread count survives
+    // the panel closing and the collapsed chip keeps announcing it forever.
+    markNotificationRead(id);
     renderBubble();
+    return;
+  }
+  if (action === 'continue-chat') {
+    const item = (notificationsState.notifications || []).find((n) => n.id === id);
+    if (item) continueNotificationInChat(item);
     return;
   }
   if (!window.borHost?.notificationAction || !action) return;
@@ -2997,8 +3873,77 @@ function conversationTitle() {
   return shortText(firstLine, 80);
 }
 
+// The History list shows the LAST substantive message of each conversation as
+// its preview. Walk the transcript backward: assistant turns contribute their
+// spoken <say> text, user turns their plain text; empty turns are skipped.
+function conversationPreview() {
+  for (let index = taskMessages.length - 1; index >= 0; index -= 1) {
+    const message = taskMessages[index];
+    if (!message) continue;
+    const text = message.role === 'assistant' ? extractSayText(message.content) : messageText(message);
+    if (isInterruptMarkerText(text)) continue; // protocol markers are not preview material
+    if (text) return shortText(text, 100);
+  }
+  return '';
+}
+
+// Serialize the reasoning cards currently in the thread so they survive
+// save/resume. Each entry is anchored by how many user / AI bubbles come
+// AFTER it in the thread (end-anchored so front-trimming of the thread or
+// transcript skews positions as little as possible). threadFromMessages()
+// uses the anchors to re-insert the cards in chronological order.
+function reasoningSnapshot() {
+  const thread = Array.isArray(bubbleState.thread) ? bubbleState.thread : [];
+  const entries = [];
+  for (let index = 0; index < thread.length; index += 1) {
+    const item = thread[index];
+    if (!item || item.type !== 'reasoning') continue;
+    const text = String(item.text || '').trim();
+    if (!text) continue;
+    let usersAfter = 0;
+    let aisAfter = 0;
+    for (let rest = index + 1; rest < thread.length; rest += 1) {
+      const later = thread[rest];
+      if (later?.type === 'user') usersAfter += 1;
+      else if (later?.type === 'ai') aisAfter += 1;
+    }
+    entries.push({ text, at: item.at || null, usersAfter, aisAfter });
+  }
+  return entries;
+}
+
 // Save the running transcript under the active conversation id. Called after
 // every completed turn; cheap and best-effort.
+// Snapshot the FULL rendered thread — say bubbles, editor/terminal/image/
+// browser/wait cards, reasoning — so resume restores the exact UI, not a
+// text-only reconstruction. Transient state is normalized: spinners dropped,
+// running statuses become done, shortcut iframes freeze (Revive re-mounts).
+function serializeThread() {
+  const out = [];
+  for (const item of bubbleState.thread) {
+    if (!item || item.type === 'thinking') continue;
+    let clone;
+    try {
+      clone = JSON.parse(JSON.stringify(item));
+    } catch {
+      continue; // unserializable item — skip rather than fail the save
+    }
+    if (clone.type === 'reasoning') {
+      clone.status = 'done';
+      clone.expanded = false;
+    } else if (clone.type === 'ai') {
+      clone.streaming = false;
+      clone.done = true;
+    } else if (clone.type === 'shortcut') {
+      clone.isLive = false;
+    } else if (clone.type === 'card' && clone.card?.status === 'running') {
+      clone.card.status = 'done';
+    }
+    out.push(clone);
+  }
+  return out.slice(-120);
+}
+
 function persistConversation() {
   if (!currentConversationId) return;
   if (!Array.isArray(taskMessages) || !taskMessages.length) return;
@@ -3006,25 +3951,92 @@ function persistConversation() {
   window.borHost.saveConversation({
     id: currentConversationId,
     title: conversationTitle(),
+    preview: conversationPreview(),
+    reasoning: reasoningSnapshot(),
+    thread: serializeThread(),
     messages: taskMessages,
     updatedAt: new Date().toISOString(),
   }).catch(() => {});
 }
 
+// Restore a saved serialized thread (records with the `thread` field). Items
+// are re-validated so a hand-edited or truncated record can't break render.
+function threadFromSaved(saved) {
+  const out = [];
+  for (const raw of Array.isArray(saved) ? saved : []) {
+    if (!raw || typeof raw !== 'object' || typeof raw.type !== 'string' || raw.type === 'thinking') continue;
+    const item = { ...raw };
+    item.id = typeof item.id === 'string' && item.id ? item.id : uniqueId(item.type);
+    item.at = Number(item.at) || Date.now();
+    if (item.type === 'reasoning') {
+      item.status = 'done';
+      item.expanded = Boolean(item.expanded);
+    } else if (item.type === 'ai') {
+      item.streaming = false;
+    } else if (item.type === 'shortcut') {
+      item.isLive = false;
+    } else if (item.type === 'card') {
+      if (!item.card || typeof item.card !== 'object') continue;
+      if (item.card.status === 'running') item.card = { ...item.card, status: 'done' };
+    }
+    out.push(item);
+  }
+  return out;
+}
+
 // Rebuild a readable thread (You / BOR bubbles) from a stored transcript.
-function threadFromMessages(messages) {
+// `reasoning` is the optional saved snapshot from reasoningSnapshot(); its
+// end-anchored counters place each card back in chronological order. Old
+// records without the field rebuild exactly as before.
+function threadFromMessages(messages, reasoning = []) {
   const thread = [];
   for (const message of messages || []) {
     if (!message) continue;
     if (message.role === 'user') {
       const text = messageText(message);
-      if (text) thread.push({ type: 'user', text });
+      if (text === TASK_INTERRUPTED_TAG) thread.push({ type: 'status', text: 'Stopped' });
+      else if (text === TASK_RESUMED_TAG) thread.push({ type: 'status', text: 'Resumed' });
+      else if (text) thread.push({ type: 'user', text });
     } else if (message.role === 'assistant') {
       const text = extractSayText(message.content) || 'Done.';
       thread.push({ type: 'ai', tone: 'warm', text, streaming: false, done: true });
     }
   }
-  return thread;
+  const notes = (Array.isArray(reasoning) ? reasoning : [])
+    .filter((note) => note && typeof note.text === 'string' && note.text.trim());
+  if (!notes.length) return thread;
+  const reasoningItem = (note) => ({
+    id: uniqueId('reasoning'),
+    at: Number(note.at) || Date.now(),
+    type: 'reasoning',
+    text: note.text.trim(),
+    status: 'done',
+    expanded: false,
+  });
+  // Remaining user/AI bubbles at each boundary; a note slots in at the first
+  // boundary where no more bubbles than its recorded counts remain after it.
+  let remainingUsers = thread.filter((item) => item.type === 'user').length;
+  let remainingAis = thread.filter((item) => item.type === 'ai').length;
+  const merged = [];
+  let next = 0;
+  for (const item of thread) {
+    while (
+      next < notes.length &&
+      remainingUsers <= (Number(notes[next].usersAfter) || 0) &&
+      remainingAis <= (Number(notes[next].aisAfter) || 0)
+    ) {
+      merged.push(reasoningItem(notes[next]));
+      next += 1;
+    }
+    merged.push(item);
+    if (item.type === 'user') remainingUsers -= 1;
+    else if (item.type === 'ai') remainingAis -= 1;
+  }
+  while (next < notes.length) {
+    merged.push(reasoningItem(notes[next]));
+    next += 1;
+  }
+  return merged;
 }
 
 function formatHistoryTime(iso) {
@@ -3036,6 +4048,14 @@ function formatHistoryTime(iso) {
 function historyMeta(item = {}) {
   const count = Number(item.messageCount) || 0;
   return count ? `${count} message${count === 1 ? '' : 's'}` : '';
+}
+
+// Each History row previews the conversation's LAST message (saved by
+// persistConversation; the store backfills it for older records). Fall back
+// to the message count when neither is available.
+function historyPreview(item = {}) {
+  const preview = shortText(item.preview, 100);
+  return preview || historyMeta(item);
 }
 
 function renderHistoryPanel() {
@@ -3061,7 +4081,7 @@ function renderHistoryPanel() {
                   <b>${escapeHtml(item.title || 'Conversation')}</b>
                   <time>${escapeHtml(formatHistoryTime(item.updatedAt))}</time>
                 </div>
-                <small>${escapeHtml(historyMeta(item))}</small>
+                <small>${escapeHtml(historyPreview(item))}</small>
               </div>
               <button type="button" class="notification-mark history-delete" data-history-action="delete" data-history-id="${escapeHtml(item.id)}" title="Delete conversation" aria-label="Delete conversation">×</button>
             </article>
@@ -3113,7 +4133,10 @@ function closeHistory({ render = true } = {}) {
     bubbleState.width = previous.bubbleWidth;
     bubbleState.footer = previous.bubbleFooter;
     minimizedTask = previous.minimizedTask;
-    thought.classList.toggle('hidden', previous.thoughtHidden);
+    // Never re-hide the bubble from a stale panel snapshot while a stream is
+    // active (task 2 policy) — unless the snapshot restores the minimized
+    // state, whose task chip keeps the running task discoverable.
+    thought.classList.toggle('hidden', previous.thoughtHidden && (!currentRequestId || previous.minimizedTask));
     taskChip.classList.toggle('hidden', previous.taskChipHidden);
     setMode(previous.mode || (hasThoughtSession() ? 'thinking' : 'expanded'));
   } else {
@@ -3135,12 +4158,23 @@ async function resumeConversation(id) {
   resetBubbleState(); // clears thread, taskMessages and the conversation id
   taskMessages = record.messages.slice();
   currentConversationId = record.id;
-  bubbleState.thread = threadFromMessages(record.messages);
+  // Records with a saved thread restore the full UI (cards, terminals,
+  // reasoning) verbatim; older records fall back to the text reconstruction.
+  const savedThread = threadFromSaved(record.thread);
+  bubbleState.thread = savedThread.length
+    ? savedThread
+    : threadFromMessages(record.messages, record.reasoning);
   bubbleState.done = true;
-  bubbleState.mode = 'Done.';
+  // A transcript ending on the interrupted marker restores the interrupted
+  // state — the Stop control comes back as Resume (play).
+  bubbleState.interrupted = messageText(taskMessages[taskMessages.length - 1]) === TASK_INTERRUPTED_TAG
+    && taskMessages[taskMessages.length - 1]?.role === 'user';
+  bubbleState.mode = bubbleState.interrupted ? 'Stopped.' : 'Done.';
   bubbleState.subject = '';
   bubbleState.width = 'wide';
-  bubbleState.footer = null;
+  bubbleState.footer = bubbleState.interrupted
+    ? { primary: 'Resume', action: 'resume', secondary: ['Keep visible', 'View work'] }
+    : null;
   minimizedTask = false;
   surfaceDrawer.classList.add('hidden');
   taskChip.classList.add('hidden');
@@ -3180,32 +4214,73 @@ async function performHistoryAction(action, id = '') {
 function closeThoughtSession() {
   const request = currentRequestId;
   if (request && typeof window.borHost.cancelChat === 'function') {
-    window.borHost.cancelChat(request);
+    window.borHost.cancelChat(request, { byUser: true });
   }
-  hideThought({ reset: true });
+  if (request) {
+    // Closing mid-run is a user cancellation too — record it so the next
+    // turn's history tells the model the task was interrupted. The persist
+    // below then saves the interrupted state before the reset wipes the
+    // thread, so History can resume it later.
+    markTaskInterrupted();
+  }
+  // Always persist before the reset — a discarded thread must land in History
+  // whether it was streaming, stopped, or already done.
+  persistConversation();
+  hideThought({ reset: true, force: true });
   setMode('expanded');
   setOrbState('idle');
   updateNotificationBadges();
 }
 
-function stopGeneration({ reason = 'Stopped.' } = {}) {
+// Head "+" (new thread): same discard semantics as closing the session — the
+// bubble collapses to the fresh input-only state, ready for a new thread.
+function startNewThread() {
+  closeThoughtSession();
+  promptInput?.focus();
+}
+
+// Append the interrupted marker to the task transcript exactly once and flag
+// the bubble as interrupted. Only ever called from user-initiated stop paths
+// while a request is running — provider errors and connection drops never
+// reach this.
+function markTaskInterrupted() {
+  const last = taskMessages[taskMessages.length - 1];
+  const lastText = typeof last?.content === 'string' ? last.content.trim() : '';
+  if (!(last?.role === 'user' && lastText === TASK_INTERRUPTED_TAG)) {
+    taskMessages.push({ role: 'user', content: TASK_INTERRUPTED_TAG });
+    compactTaskMessages();
+  }
+  bubbleState.interrupted = true;
+  appendThreadItem({ type: 'status', text: 'Stopped' });
+}
+
+function stopGeneration({ reason = 'Stopped.', byUser = false } = {}) {
   const request = currentRequestId;
   if (request && typeof window.borHost.cancelChat === 'function') {
-    window.borHost.cancelChat(request);
+    window.borHost.cancelChat(request, byUser ? { byUser: true } : undefined);
   }
   currentRequestId = null;
   bubbleState.done = true;
   removeThinkingLine();
   markRunningDone();
+  // Marker only for USER stops of a task that was actually running — never
+  // for provider errors, disconnects, or a stop click on an idle bubble.
+  if (byUser && request && !bubbleState.interrupted) {
+    markTaskInterrupted();
+  }
   persistConversation();
   if (activeSayItem) {
     activeSayItem.streaming = false;
     activeSayItem.done = true;
   }
   setBubbleMode(reason, bubbleState.subject);
-  bubbleState.footer ||= lastSurfaceId
-    ? { primary: 'Open', action: 'open-surface', secondary: ['Keep visible', 'View work'] }
-    : { secondary: ['Keep visible', 'View work'] };
+  if (bubbleState.interrupted) {
+    bubbleState.footer = { primary: 'Resume', action: 'resume', secondary: ['Keep visible', 'View work'] };
+  } else {
+    bubbleState.footer ||= lastSurfaceId
+      ? { primary: 'Open', action: 'open-surface', secondary: ['Keep visible', 'View work'] }
+      : { secondary: ['Keep visible', 'View work'] };
+  }
   stopElapsed();
   setOrbState('idle');
   thought.classList.remove('hidden');
@@ -3213,8 +4288,25 @@ function stopGeneration({ reason = 'Stopped.' } = {}) {
   renderBubble();
 }
 
+// Resume the interrupted task: the wire message is exactly the resume marker;
+// the thread shows a quiet "Resumed" line instead of a user bubble.
+function resumeInterruptedTask() {
+  if (currentRequestId || !bubbleState.interrupted) return;
+  appendThreadItem({ type: 'status', text: 'Resumed' });
+  startTask(TASK_RESUMED_TAG, { resume: true });
+}
+
 function minimizeThought() {
   if (thought.classList.contains('hidden')) return;
+  // A minimize is an implicit dismissal of any open panel — clear the flags so
+  // the eventual restore shows the thread, not a stale notifications/history
+  // panel.
+  notificationsOpen = false;
+  notificationReturnState = null;
+  historyOpen = false;
+  historyReturnState = null;
+  modelPickerOpen = false;
+  modelPickerReturnState = null;
   minimizedTask = true;
   thought.classList.add('hidden');
   taskChipName.textContent = bubbleState.subject || bubbleState.mode || 'Task';
@@ -3226,6 +4318,13 @@ function minimizeThought() {
 }
 
 function restoreTask() {
+  // Restoring the task always shows the thread — never a leftover panel.
+  notificationsOpen = false;
+  notificationReturnState = null;
+  historyOpen = false;
+  historyReturnState = null;
+  modelPickerOpen = false;
+  modelPickerReturnState = null;
   minimizedTask = false;
   taskChip.classList.add('hidden');
   updateNotificationBadges();
@@ -3235,8 +4334,8 @@ function restoreTask() {
   window.setTimeout(ensureThoughtHostMode, 80);
 }
 
-function startTask(prompt) {
-  const contextItems = attachedContextItems.slice();
+function startTask(prompt, { resume = false } = {}) {
+  const contextItems = resume ? [] : attachedContextItems.slice();
   const previousRequestId = currentRequestId;
   if (previousRequestId && typeof window.borHost.cancelChat === 'function') {
     window.borHost.cancelChat(previousRequestId);
@@ -3264,14 +4363,31 @@ function startTask(prompt) {
   bubbleState.subject = '';
   bubbleState.width = 'wide';
   bubbleState.stream = '';
-  bubbleState.intent = prompt;
+  bubbleState.intent = resume ? '' : prompt;
   bubbleState.card = null;
   bubbleState.activities = [];
-  appendUserMessage(prompt);
-  appendTaskUserMessage(prompt, contextItems);
-  clearAttachedContext();
+  // Any send — resume or a fresh prompt — ends the interrupted state and
+  // reverts the Resume (play) button to the normal Stop control.
+  bubbleState.interrupted = false;
+  if (resume) {
+    // Wire format is exactly the resume marker; the quiet "Resumed" status
+    // line was already appended by resumeInterruptedTask.
+    removeThinkingLine();
+    finalizeReasoningItem();
+    activeSayItem = null;
+    activeCardItem = null;
+    followBottom = true;
+    taskMessages.push({ role: 'user', content: TASK_RESUMED_TAG });
+    compactTaskMessages();
+  } else {
+    appendUserMessage(prompt);
+    appendTaskUserMessage(prompt, contextItems);
+    clearAttachedContext();
+  }
   showThinkingLine();
-  bubbleState.footer = { secondary: ['Minimize'], danger: 'Stop' };
+  // Footer "Stop" only stops the stream in place (bubble stays open, footer
+  // flips to Resume) — dangerAction routes it away from the legacy full close.
+  bubbleState.footer = { secondary: ['Minimize'], danger: 'Stop', dangerAction: 'stop' };
   bubbleState.done = false;
   showThought('Thinking');
   window.borHost.startChat(currentRequestId, taskMessages);
@@ -3381,8 +4497,45 @@ function handleChatEvent(payload) {
   const alwaysAllow = event === 'display_shortcut' || event === 'delete_shortcut';
   if (!alwaysAllow && payload.requestId !== currentRequestId) return;
 
+  // Defensive guard (task 2): a streaming event is about to apply — if the
+  // bubble container is hidden/collapsed/emptied while this stream is active,
+  // restore + re-render FIRST so the event lands in a visible bubble. Cheap
+  // no-op in the healthy case; logs whenever it actually fires.
+  if (currentRequestId && payload.requestId === currentRequestId) {
+    restoreBubbleIfStreamingHidden(`chat-event:${event}`);
+  }
+
+  if (event === 'provider_config_required') {
+    // The active provider needs attention (missing key, auth failure).
+    // Open the provider-settings screen focused on it.
+    window.borHost.openProviderSettings?.(data?.providerId || 'current');
+    return;
+  }
+
+  if (event === 'reasoning_delta') {
+    removeThinkingLine();
+    const fresh = !activeReasoningItem || activeReasoningItem.status !== 'running';
+    const item = ensureReasoningItem();
+    item.text += data?.text || '';
+    setBubbleMode('Reasoning', '');
+    if (!minimizedTask) {
+      thought.classList.remove('hidden');
+      taskChip.classList.add('hidden');
+      if (currentMode !== 'thinking') setMode('thinking');
+    }
+    setOrbState(minimizedTask ? 'busy' : 'thinking');
+    if (fresh) {
+      showThought('Reasoning');
+      renderBubble();
+    } else if (!updateLiveReasoningDOM(item)) {
+      renderBubble();
+    }
+    return;
+  }
+
   if (event === 'tag_start' && data?.name) {
     if (data.name === 'say' || data.name === 'attempt_completion') return;
+    finalizeReasoningItem();
     const row = addActivity(data.name, data.attrs || {});
     if (['create_app', 'create_shortcut', 'update_app', 'update_shortcut'].includes(data.name)) {
       setBubbleMode(data.name.includes('shortcut') ? 'Building shortcut' : 'Building app', data.attrs?.name || '');
@@ -3408,6 +4561,10 @@ function handleChatEvent(payload) {
       setBubbleMode('Running command', data.attrs?.cwd || '');
       bubbleState.width = 'wide';
       ensureTerminalCard({ cwd: data.attrs?.cwd || '', status: 'running' });
+    } else if (MCP_TAGS.has(data.name)) {
+      setBubbleMode('Calling MCP', [data.attrs?.server, data.attrs?.tool].filter(Boolean).join(' · '));
+      bubbleState.width = 'wide';
+      ensureMcpCard({ server: data.attrs?.server || '', tool: data.attrs?.tool || '', status: 'running' });
     } else if (data.name === 'generate_image') {
       setBubbleMode('Painting', '');
       setThreadCard({ type: 'image', status: 'running' });
@@ -3433,6 +4590,7 @@ function handleChatEvent(payload) {
 
   if (event === 'say_delta') {
     removeThinkingLine();
+    finalizeReasoningItem();
     appendOrUpdateSay({
       streamId: data.streamId,
       tone: data.tone || 'warm',
@@ -3447,7 +4605,8 @@ function handleChatEvent(payload) {
 
   if (event === 'tag_delta' && FILE_EDIT_TAGS.has(data?.name)) {
     removeThinkingLine();
-    appendEditorDelta(data);
+    finalizeReasoningItem();
+    const card = appendEditorDelta(data);
     setBubbleMode('Editing', data.attrs?.path || bubbleState.subject || '');
     if (!minimizedTask) {
       thought.classList.remove('hidden');
@@ -3455,31 +4614,33 @@ function handleChatEvent(payload) {
       if (currentMode !== 'thinking') setMode('thinking');
     }
     setOrbState(minimizedTask ? 'busy' : 'thinking');
-    // Render SYNCHRONOUSLY (no debounce) so every streaming chunk paints
-    // before the next event arrives. This mirrors say_delta's path via
-    // showThought() at line 2031, which is the reason say bubble streaming
-    // visibly works while debounced editor streaming did not. Render still
-    // runs when minimized so the bubble has fresh content when restored.
-    renderBubble();
+    // Patch the live card in place (still synchronously — every chunk paints).
+    // A full renderBubble() here rebuilt the card header per chunk (visible
+    // glitching) and stomped the user's outer scroll position. The full
+    // render only runs when the card's DOM doesn't exist yet.
+    if (!updateLiveEditorCardDOM(card)) renderBubble();
     return;
   }
 
   if (event === 'tag_delta' && SURFACE_BUILD_TAGS.has(data?.name)) {
     removeThinkingLine();
-    appendSurfaceEditorDelta(data);
-    setBubbleMode(data.name.includes('shortcut') ? 'Building shortcut' : 'Building app', data.attrs?.name || bubbleState.subject || '');
+    finalizeReasoningItem();
+    const card = appendSurfaceEditorDelta(data);
+    const surfaceLabel = data.attrs?.name || String(card.path || '').split('/').slice(1).join('/');
+    setBubbleMode(data.name.includes('shortcut') ? 'Building shortcut' : 'Building app', surfaceLabel || bubbleState.subject || '');
     if (!minimizedTask) {
       thought.classList.remove('hidden');
       taskChip.classList.add('hidden');
       if (currentMode !== 'thinking') setMode('thinking');
     }
     setOrbState(minimizedTask ? 'busy' : 'thinking');
-    renderBubble();
+    if (!updateLiveEditorCardDOM(card)) renderBubble();
     return;
   }
 
   if (event === 'tag_delta' && COMMAND_TAGS.has(data?.name)) {
     removeThinkingLine();
+    finalizeReasoningItem();
     appendTerminalDelta(data);
     setBubbleMode('Running command', data.attrs?.cwd || bubbleState.subject || '');
     if (!minimizedTask) {
@@ -3489,6 +4650,30 @@ function handleChatEvent(payload) {
     }
     setOrbState(minimizedTask ? 'busy' : 'thinking');
     renderBubble();
+    return;
+  }
+
+  if (event === 'tag_delta' && MCP_TAGS.has(data?.name)) {
+    removeThinkingLine();
+    finalizeReasoningItem();
+    const card = appendMcpDelta(data);
+    setBubbleMode('Calling MCP', [data.attrs?.server, data.attrs?.tool].filter(Boolean).join(' · ') || bubbleState.subject || '');
+    if (!minimizedTask) {
+      thought.classList.remove('hidden');
+      taskChip.classList.add('hidden');
+      if (currentMode !== 'thinking') setMode('thinking');
+    }
+    setOrbState(minimizedTask ? 'busy' : 'thinking');
+    if (!updateLiveMcpCardDOM(card)) renderBubble();
+    return;
+  }
+
+  if (event === 'mcp_input_end') {
+    removeThinkingLine();
+    finalizeReasoningItem();
+    const card = completeMcpInput(data || {});
+    setBubbleMode('Calling MCP', [card.server, card.tool].filter(Boolean).join(' · ') || bubbleState.subject || '');
+    if (!updateLiveMcpCardDOM(card)) renderBubble();
     return;
   }
 
@@ -3512,6 +4697,7 @@ function handleChatEvent(payload) {
   }
 
   if (event === 'say' && data?.text) {
+    finalizeReasoningItem();
     appendOrUpdateSay({
       streamId: data.streamId || activeSayStreamId,
       tone: data.tone || 'warm',
@@ -3770,6 +4956,15 @@ function handleChatEvent(payload) {
     return;
   }
 
+  if (event === 'use_mcp_tool') {
+    finishActivity('use_mcp_tool', data || {});
+    attachMcpResult({ ok: data?.ok !== false });
+    setBubbleMode('MCP call finished.', '');
+    showWaitingForModel();
+    renderBubble();
+    return;
+  }
+
   if (event === 'tool_error' || event === 'error' || event === 'surface_error') {
     const tag = data?.tag || data?.name || 'tool';
     const reason = data?.reason || data?.error || 'Something failed.';
@@ -3786,6 +4981,19 @@ function handleChatEvent(payload) {
         status: 'error',
         reason,
       });
+    }
+    if (SURFACE_BUILD_TAGS.has(tag)) {
+      // A failed create/update must not leave the streaming editor card
+      // spinning — mirror the FILE_EDIT error finalization.
+      const item = findThreadCardItem('editor', (card) => SURFACE_BUILD_TAGS.has(card.tag) && card.status !== 'done' && card.status !== 'error');
+      if (item) {
+        item.card.status = 'error';
+        item.card.reason = reason;
+        bubbleState.card = item.card;
+      }
+    }
+    if (MCP_TAGS.has(tag)) {
+      attachMcpResult({ ok: false, reason });
     }
     if (COMMAND_TAGS.has(tag)) {
       completeTerminalCard({
@@ -3833,6 +5041,7 @@ function handleChatEvent(payload) {
   if (event === 'task_done') {
     markRunningDone();
     removeThinkingLine();
+    finalizeReasoningItem();
     if (activeSayItem) {
       activeSayItem.streaming = false;
       activeSayItem.done = true;
@@ -3866,6 +5075,7 @@ function handleChatEvent(payload) {
     const wasAlreadyDone = bubbleState.done;
     bubbleState.done = true;
     removeThinkingLine();
+    finalizeReasoningItem();
     let hasCompletion = bubbleState.thread.some((item) => item.type === 'completion');
     if (!wasAlreadyDone && !hasCompletion) {
       appendCompletionMessage('', 'complete');
@@ -3926,7 +5136,14 @@ async function syncExpandedPresenceHeight() {
   const rect = composer.getBoundingClientRect();
   if (!rect.height) return;
   const edgeInset = composerEdgeInset();
-  const desiredHeight = Math.max(92, Math.min(180, Math.ceil(rect.height + edgeInset * 2 + 6)));
+  // While the options drop-up is open the window must also contain the menu
+  // (it opens away from the screen edge, past the composer's box). Use
+  // offsetHeight — the open animation scales a transform, which would skew
+  // getBoundingClientRect mid-flight.
+  const menuExtra = promptMenuOpen && promptMenu && !promptMenu.classList.contains('hidden')
+    ? promptMenu.offsetHeight + 8
+    : 0;
+  const desiredHeight = Math.max(92, Math.min(180 + menuExtra, Math.ceil(rect.height + edgeInset * 2 + 6) + menuExtra));
   const bounds = currentPresenceBounds || await window.borHost.getPresenceBounds().catch(() => null);
   if (!bounds || Math.abs(bounds.height - desiredHeight) < 2) return;
 
@@ -3962,6 +5179,7 @@ function scheduleComposerSync() {
 function submitPrompt() {
   const text = promptInput.value.trim();
   if (!text && !attachedContextItems.length) return;
+  closePromptMenu();
   surfaceDrawer.classList.add('hidden');
   promptInput.value = '';
   resizePrompt();
@@ -4003,6 +5221,14 @@ composer.addEventListener('submit', (event) => {
 promptInput.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     event.preventDefault();
+    // While a stream is running Escape must not vanish the bubble (task 2
+    // policy: only + / × / orb may change it). hideThought would refuse
+    // anyway; skip the collapse too so the window doesn't shrink around a
+    // live bubble.
+    if (currentRequestId) {
+      console.warn('[bor] bubble guard: Escape ignored during active stream', { requestId: currentRequestId });
+      return;
+    }
     hideThought();
     setMode(collapsedModeForNotifications());
     return;
@@ -4026,6 +5252,39 @@ promptInput.addEventListener('focus', () => {
   if (isClosedMode()) setMode('expanded');
   else resizePrompt();
 });
+
+if (modelChip) {
+  modelChip.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (modelPickerOpen) {
+      closeModelPicker();
+      return;
+    }
+    openModelPicker().catch(() => {});
+  });
+}
+
+// Model panel actions (rows + settings + back) — own delegated listener.
+thoughtBody.addEventListener('click', (event) => {
+  const btn = event.target.closest('[data-model-action]');
+  if (!btn) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const action = btn.dataset.modelAction;
+  if (action === 'back') {
+    closeModelPicker();
+    return;
+  }
+  if (action === 'settings') {
+    window.borHost.openProviderSettings?.(btn.dataset.provider || 'current');
+    closeModelPicker({ render: false });
+    return;
+  }
+  if (action === 'pick') {
+    applyModelPick(btn.dataset.provider, btn.dataset.model).catch(() => {});
+  }
+}, true);
 
 if (attachButton) {
   attachButton.addEventListener('click', async () => {
@@ -4144,6 +5403,10 @@ async function readDroppedMediaItem(file) {
 function setDropTargetActive(active) {
   composer.classList.toggle('drop-target', active);
   thought.classList.toggle('drop-target', active);
+  // The orb visibly "catches" the drag — scale + aura glow via CSS. This is
+  // the only cue in collapsed mode, where the composer outline hugs the orb.
+  if (active) root.dataset.dropHover = 'true';
+  else delete root.dataset.dropHover;
 }
 
 // Stop a file dropped outside the drop targets from navigating the window away
@@ -4153,6 +5416,17 @@ window.addEventListener('dragover', (event) => {
 });
 window.addEventListener('drop', (event) => {
   if (isFileDrag(event)) event.preventDefault();
+  // Whatever happened, the drag session is over — never strand the hover glow.
+  dragDepth = 0;
+  setDropTargetActive(false);
+});
+window.addEventListener('dragleave', (event) => {
+  // Left the window entirely, or the OS cancelled the drag (Esc): reset the
+  // depth bookkeeping so the next drag starts clean.
+  if (!event.relatedTarget) {
+    dragDepth = 0;
+    setDropTargetActive(false);
+  }
 });
 
 ['composer', 'thought'].forEach((id) => {
@@ -4221,21 +5495,35 @@ if (chipRail) {
   });
 }
 
+// Open the App Library drawer. Shared by the bubble head's apps button and
+// the composer's options drop-up — the drop-up can invoke it from the
+// input-only state, where no bubble exists yet.
+async function openSurfaceDrawer() {
+  notificationsOpen = false;
+  notificationReturnState = null;
+  historyOpen = false;
+  historyReturnState = null;
+  thought.classList.add('hidden');
+  taskChip.classList.add('hidden');
+  surfaceDrawer.classList.remove('hidden');
+  setMode('thinking');
+  await refreshSurfaces().catch((error) => {
+    surfaceList.innerHTML = `<div class="surface-empty">${escapeHtml(error.message)}</div>`;
+  });
+}
+
 if (surfacesButton) {
   surfacesButton.addEventListener('click', async () => {
-    notificationsOpen = false;
-    notificationReturnState = null;
-    historyOpen = false;
-    historyReturnState = null;
-    thought.classList.add('hidden');
-    taskChip.classList.add('hidden');
-    surfaceDrawer.classList.toggle('hidden');
-    if (!surfaceDrawer.classList.contains('hidden')) {
-      setMode('thinking');
-      await refreshSurfaces().catch((error) => {
-        surfaceList.innerHTML = `<div class="surface-empty">${escapeHtml(error.message)}</div>`;
-      });
+    if (surfaceDrawer.classList.contains('hidden')) {
+      await openSurfaceDrawer();
     } else {
+      notificationsOpen = false;
+      notificationReturnState = null;
+      historyOpen = false;
+      historyReturnState = null;
+      thought.classList.add('hidden');
+      taskChip.classList.add('hidden');
+      surfaceDrawer.classList.add('hidden');
       setMode('expanded');
     }
   });
@@ -4251,6 +5539,12 @@ if (closeSurfacesButton) {
 
 if (notificationsButton) {
   notificationsButton.addEventListener('click', () => {
+    // Toggle, like the history button — a second click closes the panel and
+    // restores whatever was underneath.
+    if (notificationsOpen) {
+      closeNotifications();
+      return;
+    }
     showNotifications().catch(() => {});
   });
 }
@@ -4271,14 +5565,90 @@ if (historyButton) {
   });
 }
 
-// Voice is not shipped yet — the button is blurred and shows a "Coming soon"
-// tooltip on hover (see presence.css). Swallow clicks so it stays inert.
-if (voiceButton) {
-  voiceButton.addEventListener('click', (event) => {
+// ---------- Options drop-up (the composer's hamburger button) ----------
+// Reaches Notifications / History / MCP Marketplace / App Library / New
+// Presence straight from the always-visible input field — previously those
+// lived only in the bubble head, which doesn't exist before the first
+// message. Rows reuse the exact code paths the head buttons use; the panel
+// openers (showNotifications / showHistory / openSurfaceDrawer) already
+// expand the bubble into panel mode themselves, so opening from the
+// input-only state is safe.
+
+function openPromptMenu() {
+  if (promptMenuOpen || !promptMenu) return;
+  promptMenuOpen = true;
+  promptMenu.classList.remove('hidden');
+  promptMenuButton?.setAttribute('aria-expanded', 'true');
+  updateNotificationBadges();
+  // In the input-only (expanded) window the composer hugs the screen edge —
+  // grow the window so the drop-up has room; the same sync shrinks it back
+  // on close. Then re-run the click-through hit-test: the resize fires no
+  // mousemove (same trap the App Library close hit — see setMode).
+  scheduleComposerSync();
+  window.__borReevalMouseIgnore?.();
+}
+
+function closePromptMenu() {
+  if (!promptMenuOpen || !promptMenu) return;
+  promptMenuOpen = false;
+  promptMenu.classList.add('hidden');
+  promptMenuButton?.setAttribute('aria-expanded', 'false');
+  scheduleComposerSync();
+  window.__borReevalMouseIgnore?.();
+}
+
+if (promptMenuButton) {
+  promptMenuButton.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
+    if (promptMenuOpen) closePromptMenu();
+    else openPromptMenu();
   });
 }
+
+if (promptMenu) {
+  promptMenu.addEventListener('click', (event) => {
+    const item = event.target.closest('[data-menu-action]');
+    if (!item) return;
+    event.preventDefault();
+    const action = item.dataset.menuAction;
+    closePromptMenu();
+    if (action === 'notifications') {
+      if (!notificationsOpen) showNotifications().catch(() => {});
+    } else if (action === 'history') {
+      if (!historyOpen) showHistory().catch(() => {});
+    } else if (action === 'apps') {
+      openSurfaceDrawer().catch(() => {});
+    } else if (action === 'mcp') {
+      if (typeof window.borHost.openMcpMarketplace === 'function') window.borHost.openMcpMarketplace();
+    } else if (action === 'new-presence') {
+      // Opens the Main app — the presence manager (list all presences,
+      // create/delete, logs tabs) — NOT a direct spawn into onboarding.
+      // Creating from there is the user's explicit next click.
+      window.borHost.openMainApp?.()?.catch?.(() => {});
+    }
+  });
+}
+
+// The drop-up dismisses like a native menu: outside press, Escape, or the
+// window losing focus. Row selection closes it in the click handler above.
+document.addEventListener('pointerdown', (event) => {
+  if (!promptMenuOpen) return;
+  if (event.target.closest('#prompt-menu, #prompt-menu-btn')) return;
+  closePromptMenu();
+}, true);
+
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && promptMenuOpen) {
+    event.preventDefault();
+    event.stopPropagation();
+    closePromptMenu();
+  }
+}, true);
+
+window.addEventListener('blur', () => {
+  if (promptMenuOpen) closePromptMenu();
+});
 
 setupButton.addEventListener('click', () => {
   // The gear now opens the Main BOR app (manage presences, edit onboarding,
@@ -4289,8 +5659,12 @@ setupButton.addEventListener('click', () => {
 
 minimizeButton.addEventListener('click', minimizeThought);
 
+// Head "+" — new thread. Discards the current thread: a running stream is
+// cancelled as a user interruption and the conversation persisted first so it
+// stays resumable from History; then the bubble resets to the fresh
+// input-only state. Resume lives in the footer primary only.
 stopButton.addEventListener('click', () => {
-  stopGeneration({ reason: 'Stopped.' });
+  startNewThread();
 });
 
 closeButton.addEventListener('click', () => {
@@ -4329,6 +5703,16 @@ thoughtFoot.addEventListener('click', (event) => {
     window.borHost.openSurface(lastSurfaceId);
     return;
   }
+  if (action === 'resume') {
+    resumeInterruptedTask();
+    return;
+  }
+  if (action === 'stop') {
+    // Footer "Stop": stop the stream ONLY. The bubble stays open with the
+    // quiet "Stopped" line, the footer primary becomes Resume.
+    stopGeneration({ reason: 'Stopped.', byUser: true });
+    return;
+  }
   if (action === 'close') {
     closeThoughtSession();
   }
@@ -4340,7 +5724,7 @@ window.addEventListener('keydown', resetIdleTimer);
 // ---------- Shortcut bridge ----------
 //
 // Sandboxed shortcut iframes communicate with the host via parent.postMessage
-// (same protocol as shell/surface-bridge.js and v2/host/surface-preload.cjs).
+// (same protocol as shell/surface-bridge.js and host/surface-preload.cjs).
 // We catch every message here, identify the source iframe by walking the
 // live `iframe[data-sid]` set, forward via IPC to main.cjs which proxies to
 // /api/surface-* on the runtime, then post the reply back to the iframe.
@@ -4474,6 +5858,18 @@ thoughtBody.addEventListener('click', (event) => {
     performHistoryAction('open', historyOpenItem.dataset.historyOpen || '');
     return;
   }
+  const reasoningToggle = event.target.closest('[data-reasoning-toggle]');
+  if (reasoningToggle) {
+    event.preventDefault();
+    event.stopPropagation();
+    const id = reasoningToggle.dataset.reasoningToggle;
+    const item = bubbleState.thread.find((it) => it.type === 'reasoning' && it.id === id);
+    if (item) {
+      item.expanded = !item.expanded;
+      renderBubble();
+    }
+    return;
+  }
   const browserCtl = event.target.closest('[data-browser-step], [data-browser-console]');
   if (browserCtl) {
     event.preventDefault();
@@ -4511,6 +5907,18 @@ if (typeof window.borHost.onPresenceLayout === 'function') {
   window.borHost.onPresenceLayout(applyPresenceLayout);
 }
 window.borHost.onTogglePresence(() => {
+  if (notificationsOpen) {
+    closeNotifications();
+    return;
+  }
+  if (historyOpen) {
+    closeHistory();
+    return;
+  }
+  if (modelPickerOpen) {
+    closeModelPicker();
+    return;
+  }
   if (isClosedMode() && hasVisibleThoughtSession()) {
     restoreTask();
     return;

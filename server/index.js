@@ -32,6 +32,18 @@ import { USER_DOWNLOADS_DIR, USER_PROFILE_DIR, ensureBrowserDirs, resolveBrowser
 import { getConnectivityStatus, startConnectivityMonitor } from './connectivity.js';
 import { detectBrowserUse, invalidateBrowserUseCache } from './runtime/browser-use.js';
 import { getBorMcpPath, readBorMcpServerNames } from './runtime/mcp.js';
+import {
+  listConnectors,
+  connectConnector,
+  disconnectConnector,
+  startConnectorOauth,
+  pollConnectorOauth,
+  listComposioApps,
+  startComposioAppOauth,
+  pollComposioAppOauth,
+  openConnectorSigninBrowser,
+  publicConnectorsProjection,
+} from './runtime/connectors.js';
 import { CronService } from './cron/service.js';
 import {
   addNotification,
@@ -887,6 +899,7 @@ async function mcpAskAi(query) {
       apiKey: providerCfg.apiKey,
       model: providerCfg.model || provider.defaultModel,
       baseUrl: providerCfg.baseUrl,
+      reasoning: providerCfg.reasoning || undefined,
       system,
       messages: [{ role: 'user', content: userMsg }],
       signal: ac.signal,
@@ -1245,6 +1258,9 @@ function migrateConfig(cfg) {
     personality: cfg.personality,
     defaultProvider: cfg.provider || null,
     providers,
+    // Preserve connector entries written by runtime/connectors.js even when a
+    // config file predates (or omits) the multi-provider shape.
+    connectors: cfg.connectors && typeof cfg.connectors === 'object' ? cfg.connectors : {},
   };
 }
 
@@ -1294,6 +1310,7 @@ function publicConfig(cfg) {
       hasApiKey: Boolean(entry.apiKey),
       model: entry.model || null,
       baseUrl: entry.baseUrl || null,
+      reasoning: entry.reasoning || null,
     };
   }
   return {
@@ -1307,9 +1324,19 @@ function publicConfig(cfg) {
     decorations: Array.isArray(cfg.decorations) ? cfg.decorations : [],
     theme: cfg.theme || null,
     personality: cfg.personality || null,
+    browserInstall: cfg.browserInstall || null,
     defaultProvider: cfg.defaultProvider || null,
     providers,
+    // Secret-stripped: per connector only { connected, hasKey booleans, meta,
+    // connectedAt } — never the saved field values.
+    connectors: publicConnectorsProjection(cfg.connectors),
   };
+}
+
+const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+function sanitizeReasoning(value) {
+  const v = String(value || '').trim().toLowerCase();
+  return REASONING_EFFORTS.includes(v) ? v : null;
 }
 
 /**
@@ -1338,8 +1365,12 @@ function mergeConfig(existing, body) {
     decorations: 'decorations' in body ? body.decorations : ex.decorations,
     theme: 'theme' in body ? body.theme : ex.theme,
     personality: 'personality' in body ? body.personality : ex.personality,
+    // Pending AI-powered browser-use install, set by onboarding's final pane;
+    // the presence clears it after kicking the install task off.
+    browserInstall: 'browserInstall' in body ? (body.browserInstall === 'llm' ? 'llm' : null) : ex.browserInstall || null,
     defaultProvider: 'defaultProvider' in body ? body.defaultProvider : ex.defaultProvider,
     providers: { ...(ex.providers || {}) },
+    connectors: { ...(ex.connectors || {}) },
   };
   if (body.providers && typeof body.providers === 'object') {
     for (const [id, entry] of Object.entries(body.providers)) {
@@ -1354,6 +1385,34 @@ function mergeConfig(existing, body) {
           apiKey: 'apiKey' in entry ? (entry.apiKey || prev.apiKey || null) : prev.apiKey || null,
           model: 'model' in entry ? entry.model : prev.model,
           baseUrl: 'baseUrl' in entry ? entry.baseUrl : prev.baseUrl,
+          reasoning: 'reasoning' in entry ? sanitizeReasoning(entry.reasoning) : prev.reasoning || null,
+        };
+      }
+    }
+  }
+  // Connectors map: same pattern as providers — null deletes, objects merge.
+  // Field values overwrite only when non-empty so metadata can be updated
+  // without re-pasting the key. (Normal writes go through runtime/connectors.js;
+  // this path keeps POST /api/config coherent.)
+  if (body.connectors && typeof body.connectors === 'object') {
+    for (const [id, entry] of Object.entries(body.connectors)) {
+      if (entry === null) {
+        // Explicit deletion
+        delete next.connectors[id];
+      } else if (entry && typeof entry === 'object') {
+        const prev = next.connectors[id] || {};
+        const prevFields = prev.fields && typeof prev.fields === 'object' ? prev.fields : {};
+        const bodyFields = entry.fields && typeof entry.fields === 'object'
+          ? Object.fromEntries(
+            Object.entries(entry.fields)
+              .filter(([, value]) => typeof value === 'string' && value)
+              .map(([key, value]) => [key, value]),
+          )
+          : {};
+        next.connectors[id] = {
+          fields: { ...prevFields, ...bodyFields },
+          connectedAt: entry.connectedAt || prev.connectedAt || new Date().toISOString(),
+          meta: entry.meta && typeof entry.meta === 'object' ? entry.meta : (prev.meta || {}),
         };
       }
     }
@@ -1745,6 +1804,80 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { config: publicConfig(next) });
     }
 
+    // --- Connectors (onboarding: "Connect Bed of Roses to your daily life") ---
+    if (url === '/api/connectors' && req.method === 'GET') {
+      const refresh = parsedUrl.searchParams.get('refresh') === '1';
+      return sendJson(res, 200, { connectors: await listConnectors({ refresh }) });
+    }
+
+    if (url === '/api/connectors/browser/signin' && req.method === 'POST') {
+      const result = await openConnectorSigninBrowser();
+      await audit({ kind: 'connector.signin-browser', ok: result.ok });
+      return sendJson(res, 200, result);
+    }
+
+    // Dynamic Composio app catalog + per-slug OAuth. Connected apps persist
+    // as `composio_<slug>` connectors and reuse the generic connector routes
+    // below for status + DELETE.
+    if (url === '/api/connectors/composio/apps' && req.method === 'GET') {
+      return sendJson(res, 200, await listComposioApps());
+    }
+
+    {
+      const appOauthStart = url.match(/^\/api\/connectors\/composio\/apps\/([\w-]+)\/oauth\/start$/);
+      if (appOauthStart && req.method === 'POST') {
+        const slug = appOauthStart[1].toLowerCase();
+        const result = await startComposioAppOauth(slug);
+        await audit({ kind: 'connector.oauth.start', id: `composio_${slug}`, ok: result.ok });
+        const { statusCode, ...payload } = result;
+        return sendJson(res, statusCode || 200, payload);
+      }
+
+      const appOauthStatus = url.match(/^\/api\/connectors\/composio\/apps\/([\w-]+)\/oauth\/status$/);
+      if (appOauthStatus && req.method === 'GET') {
+        const slug = appOauthStatus[1].toLowerCase();
+        const result = await pollComposioAppOauth(slug, parsedUrl.searchParams.get('pollToken') || '');
+        if (result.justConnected) await audit({ kind: 'connector.connect', id: `composio_${slug}`, method: 'oauth' });
+        return sendJson(res, 200, { status: result.status, detail: result.detail });
+      }
+    }
+
+    {
+      const oauthStart = url.match(/^\/api\/connectors\/([\w-]+)\/oauth\/start$/);
+      if (oauthStart && req.method === 'POST') {
+        const id = oauthStart[1];
+        const result = await startConnectorOauth(id);
+        await audit({ kind: 'connector.oauth.start', id, ok: result.ok });
+        const { statusCode, ...payload } = result;
+        return sendJson(res, statusCode || 200, payload);
+      }
+
+      const oauthStatus = url.match(/^\/api\/connectors\/([\w-]+)\/oauth\/status$/);
+      if (oauthStatus && req.method === 'GET') {
+        const id = oauthStatus[1];
+        const result = await pollConnectorOauth(id, parsedUrl.searchParams.get('pollToken') || '');
+        if (result.justConnected) await audit({ kind: 'connector.connect', id, method: 'oauth' });
+        return sendJson(res, 200, { status: result.status, detail: result.detail });
+      }
+
+      const connectorMatch = url.match(/^\/api\/connectors\/([\w-]+)$/);
+      if (connectorMatch && req.method === 'POST') {
+        const id = connectorMatch[1];
+        const body = await readJsonBody(req).catch(() => ({}));
+        const result = await connectConnector(id, body.fields || {});
+        if (result.ok) await audit({ kind: 'connector.connect', id });
+        const { statusCode, ...payload } = result;
+        return sendJson(res, statusCode || 200, payload);
+      }
+      if (connectorMatch && req.method === 'DELETE') {
+        const id = connectorMatch[1];
+        const result = await disconnectConnector(id);
+        if (result.ok) await audit({ kind: 'connector.disconnect', id });
+        const { statusCode, ...payload } = result;
+        return sendJson(res, statusCode || 200, payload);
+      }
+    }
+
     // --- Notifications ---
     if (url === '/api/notifications' && req.method === 'GET') {
       return sendJson(res, 200, await listNotifications());
@@ -2049,7 +2182,7 @@ const server = http.createServer(async (req, res) => {
 
     // --- Surface host bridge: state read/write ----------------------------
     // Shortcuts/apps call these via parent.postMessage; the host listener in
-    // shell/surface-bridge.js (classic shell) or v2/host/presence.js
+    // shell/surface-bridge.js (classic shell) or host/presence.js
     // (Mac companion) translates messages into these HTTP calls.
     {
       const m = url.match(/^\/api\/surfaces\/([^/]+)\/state$/);
@@ -2154,6 +2287,18 @@ const server = http.createServer(async (req, res) => {
     // as they arrive, the executor dispatches each to its handler, and we
     // forward the result as one SSE event per block. Connection stays open
     // until the LLM finishes (we emit a final `done` event).
+    // Explicit user-stop notification from the host. The /api/chat abort
+    // itself arrives as a socket close (indistinguishable from a connection
+    // drop), so the host calls this first for USER stops only. Audit-only —
+    // the interrupted marker lives in the conversation history the presence
+    // sends with the next turn.
+    if (url === '/api/chat/interrupted' && req.method === 'POST') {
+      await readJsonBody(req).catch(() => ({}));
+      logSessionEvent('chat.interrupted', {});
+      await audit({ kind: 'chat.interrupted' });
+      return sendJson(res, 200, { ok: true });
+    }
+
     if (url === '/api/chat' && req.method === 'POST') {
       const connectivity = getConnectivityStatus();
       if (connectivity.online === false) {
@@ -2179,9 +2324,16 @@ const server = http.createServer(async (req, res) => {
       const lastUserMessage = messageContentText(body.messages?.at(-1)?.content || '');
       const hostMode = body.hostMode === 'v2' ? 'v2' : undefined;
 
-      // Session log: record the user's prompt at the top of the turn.
+      // Session log: record the user's prompt at the top of the turn. A turn
+      // whose message is exactly the resume marker is logged as a resume, not
+      // as user prose.
       if (lastUserMessage) {
-        logSessionEvent('user.message', { text: lastUserMessage.slice(0, 2000) });
+        if (lastUserMessage.trim() === '<task_resumed_by_user/>') {
+          logSessionEvent('chat.resumed', {});
+          await audit({ kind: 'chat.resumed' });
+        } else {
+          logSessionEvent('user.message', { text: lastUserMessage.slice(0, 2000) });
+        }
       }
 
       // Open the SSE response.

@@ -1,28 +1,27 @@
 ---
 title: "Google Gemini"
-description: "Use Gemini models in BOR with a Google AI / Gemini API key. Adapter: server/providers/gemini.js."
+description: "Use Gemini models in BOR with a Google AI Studio API key."
 ---
 
-Use Gemini models in BOR with a Google AI / Gemini API key. Adapter: `server/providers/gemini.js`.
+Use Gemini models in BOR with a Google AI / Gemini API key.
 
 ## Setup
 
 1. Get a key from Google AI Studio (linked from onboarding).
-2. In [onboarding](../getting-started/onboarding.md), pick **Google Gemini**, paste your key, and choose a model.
-3. BOR validates and you're set.
+2. In [onboarding](/getting-started/onboarding) (or provider Settings), pick **Google Gemini**, paste your key, choose a model and a reasoning effort.
 
-## Choosing a model
+## Models
 
-Pick a **current** Gemini model from Google's live docs — ids change across the 2.x/3.x lines, so avoid stale ones. A vision-capable model is recommended for the screenshot-driven features.
+The current list offered in BOR includes Gemini 3.5 Flash (recommended default), Gemini 3.1 Pro, Gemini 3.1 Flash Lite, Gemini 2.5 Pro, Gemini 2.5 Flash, and Gemini 2.5 Flash Lite. Ids rotate — the picker shows the live list.
 
 ## Notes
 
-- Gemini supports context caching via `cachedContents`; BOR's prompt-cache layer uses it where available.
-- Image blocks and streaming go through the shared multimodal utilities.
-- Change the key/model in `providers.gemini` in `config.json`, or ask BOR to switch.
+- Gemini models are vision-capable, so screenshot-driven features work.
+- **Image generation** uses Imagen 4 with the same key.
+- Reasoning effort (Off–Max) maps to Gemini's thinking budget.
 
 ## Troubleshooting
 
-- **API key invalid / permission** — re-check the key and that the Generative Language API is enabled for it.
-- **404 model** — the id retired; pick a current Gemini model.
-- See [Troubleshooting](../troubleshooting.md).
+- **API key invalid / permission** — check the key and that the Generative Language API is enabled for it.
+- **404 model** — retired id; pick a current Gemini model.
+- See [Troubleshooting](/troubleshooting).

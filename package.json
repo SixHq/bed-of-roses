@@ -13,7 +13,7 @@
     "url": "https://github.com/SixHq/bed-of-roses/issues"
   },
   "type": "module",
-  "main": "v2/host/main.cjs",
+  "main": "host/main.cjs",
   "private": false,
   "os": [
     "darwin"
@@ -708,7 +708,7 @@
     "bin",
     "server",
     "shell",
-    "v2",
+    "host",
     "design-guideline",
     "README.md",
     "LICENSE",
@@ -718,14 +718,12 @@
     "node": ">=20"
   },
   "scripts": {
-    "start": "node server/index.js",
-    "dev": "node --watch server/index.js",
+    "prestart": "node scripts/brand-electron.cjs",
+    "start": "electron host/main.cjs",
+    "server": "node server/index.js",
+    "server:dev": "node --watch server/index.js",
     "brand": "node scripts/brand-electron.cjs",
-    "prev2": "node scripts/brand-electron.cjs",
-    "v2": "electron v2/host/main.cjs",
-    "prev2:host": "node scripts/brand-electron.cjs",
-    "v2:host": "electron v2/host/main.cjs",
-    "v2:cli": "node ./bin/bed-of-roses.cjs",
+    "cli": "node ./bin/bed-of-roses.cjs",
     "browser:mcp": "node server/mcp/playwright-service.js",
     "browser:install": "playwright install chromium",
     "helper:build:dev": "cd swift-helper && swift build -c release",
@@ -735,6 +733,12 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@playwright/mcp": "^0.0.75",
     "croner": "^9.1.0",
-    "electron": "^36.4.0"
+    "electron": "^36.4.0",
+    "exceljs": "^4.4.0",
+    "iconv-lite": "^0.7.3",
+    "isbinaryfile": "^6.0.0",
+    "jschardet": "^3.1.4",
+    "mammoth": "^1.12.0",
+    "pdf-parse": "^2.4.5"
   }
 }

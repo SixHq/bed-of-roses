@@ -161,8 +161,8 @@ export function stopConnectivityMonitor() {
   _timer = null;
 }
 
-export function waitForOnline({ timeoutMs = 120_000 } = {}) {
-  if (_status.online) return Promise.resolve(publicStatus());
+export function waitForOnline({ timeoutMs = 120_000, signal = null } = {}) {
+  if (_status.online || signal?.aborted) return Promise.resolve(publicStatus());
   return new Promise((resolve) => {
     let done = false;
     const finish = (status) => {
@@ -170,11 +170,16 @@ export function waitForOnline({ timeoutMs = 120_000 } = {}) {
       done = true;
       clearTimeout(timer);
       off();
+      signal?.removeEventListener?.('abort', onAbort);
       resolve(status);
     };
+    // Abort (user pressed Stop) resolves immediately with the current status;
+    // the caller re-checks its own signal and bails out without retrying.
+    const onAbort = () => finish(publicStatus());
     const off = onConnectivityChange((status) => {
       if (status.online) finish(status);
     });
     const timer = setTimeout(() => finish(publicStatus()), timeoutMs);
+    signal?.addEventListener?.('abort', onAbort, { once: true });
   });
 }

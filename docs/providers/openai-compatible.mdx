@@ -1,42 +1,41 @@
 ---
 title: "OpenAI-compatible"
-description: "The OpenAI-compatible provider (openai-compatible) connects BOR to any endpoint that speaks the OpenAI Chat Completions API: a local model server, a proxy, or another vendor's OpenAI-shaped API.…"
+description: "Connect any endpoint that speaks the OpenAI API — DeepSeek, Kimi, Z.ai, Groq, OpenRouter, Ollama, LM Studio, and more — with one-click presets."
 ---
 
-The **OpenAI-compatible** provider (`openai-compatible`) connects BOR to any endpoint that speaks the OpenAI Chat Completions API: a local model server, a proxy, or another vendor's OpenAI-shaped API. Adapter: `server/providers/openai-compatible.js`.
+The **OpenAI-compatible** provider connects BOR to any endpoint that speaks the OpenAI Chat Completions API: hosted vendors, gateways, or local model servers.
 
-## When to use it
+## Quick presets
 
-- **Local models** — Ollama, LM Studio, vLLM, llama.cpp servers, etc.
-- **Proxies / gateways** — LiteLLM, OpenRouter-style routers, your company's gateway.
-- **Other vendors** that expose an OpenAI-compatible endpoint.
+The setup panel has one-click preset chips that fill in the base URL and a sensible model:
+
+| Preset | Base URL | Example model |
+|---|---|---|
+| **DeepSeek** | `https://api.deepseek.com` | `deepseek-v4-pro` |
+| **Kimi (Moonshot)** | `https://api.moonshot.ai/v1` | `kimi-k3` |
+| **Z.ai (GLM)** | `https://api.z.ai/api/paas/v4` | `glm-5.2` |
+| **Groq** | Groq endpoint | `llama-3.3-70b-versatile` |
+| **OpenRouter** | OpenRouter endpoint | `anthropic/claude-sonnet-5` |
+| **Together / Mistral / Perplexity / Fireworks / DeepInfra / Cerebras** | vendor endpoints | vendor models |
+| **Ollama (local)** | `http://localhost:11434/v1` | no key needed |
+| **LM Studio (local)** | `http://localhost:1234/v1` | no key needed |
 
 ## Setup
 
-This provider **requires a base URL** (`needsBaseUrl: true`). In [onboarding](../getting-started/onboarding.md):
-
-1. Pick **OpenAI-compatible**.
-2. Enter the **base URL** of your endpoint (e.g. `http://localhost:11434/v1` for Ollama, or your proxy URL).
-3. Enter an **API key** if the endpoint needs one (local servers often accept any value).
-4. Enter the **model name** exactly as your endpoint expects it.
+1. In [onboarding](/getting-started/onboarding) (or provider Settings), pick **OpenAI-compatible**.
+2. Click a preset — or enter a **base URL** by hand.
+3. Enter an **API key** if the endpoint needs one (local servers usually don't).
+4. Enter the **model name** exactly as the endpoint serves it, and pick a reasoning effort.
 
 ## Notes
 
-- The model name is whatever your endpoint serves — there's no fixed catalog, so type it exactly.
-- Vision/image support depends on the underlying model; if it's text-only, screenshot-driven features won't work.
-- Streaming and image blocks use the shared multimodal utilities, assuming the endpoint follows the OpenAI streaming format.
-
-## Examples
-
-| Backend | Base URL | Notes |
-|---|---|---|
-| Ollama | `http://localhost:11434/v1` | Run a local model; key can be anything. |
-| LM Studio | `http://localhost:1234/v1` | Local server with an OpenAI-compatible API. |
-| A proxy/gateway | your gateway URL | Point at the gateway; it routes to the real model. |
+- There's no fixed catalog — the model name is whatever your endpoint serves.
+- Vision and image support depend on the underlying model; text-only models can't use screenshot-driven features.
+- Reasoning effort maps through where the endpoint supports it (e.g. DeepSeek's reasoning models).
 
 ## Troubleshooting
 
-- **Connection refused** — the local server isn't running or the base URL/port is wrong.
+- **Connection refused** — the server isn't running or the base URL/port is wrong.
 - **404 / unknown model** — the model name doesn't match what the endpoint serves.
 - **No streaming** — the endpoint must support OpenAI-style streamed responses.
-- See [Troubleshooting](../troubleshooting.md).
+- See [Troubleshooting](/troubleshooting).

@@ -29,6 +29,7 @@ import * as svg from './handlers/svg.js';
 import * as uxGuidelines from './handlers/ux-guidelines.js';
 import * as computer from './handlers/computer.js';
 import * as browser from './handlers/browser.js';
+import * as browserAgent from './handlers/browser-agent.js';
 import * as media from './handlers/media.js';
 import * as cron from './handlers/cron.js';
 import * as notification from './handlers/notification.js';
@@ -37,7 +38,7 @@ export const TAGS = {
   // ---------- THOUGHT BUBBLE ----------
   say: {
     description:
-      "Display text in the presence thought bubble. Each <say> renders as ONE bubble. Put one coherent thought per <say> — a greeting + an offer + a question that all flow together belong in ONE <say>, not three. Only open a new <say> when the tone genuinely shifts (warm → thoughtful, thoughtful → apologetic) or when there's a real beat/pause between thoughts (e.g. a narration before a tool call, then a different narration before the next one). Anything outside <say> tags is silent.",
+      "Display text in the presence thought bubble. Each <say> renders as ONE bubble. Put one coherent thought per <say> — a greeting + an offer + a question that all flow together belong in ONE <say>, not three. Only open a new <say> when the tone genuinely shifts (warm → thoughtful, thoughtful → apologetic) or when there's a real beat/pause between thoughts (e.g. a narration before a tool call, then a different narration before the next one). Anything outside <say> tags is silent. FILE LINKS (required): whenever you mention a file or folder path in user-facing text — something you created, edited, or are pointing the user to — you MUST (a) write the FULL path exactly as it exists on disk, either relative to the project root (`.bor/...`, `os-data/...`) or absolute, never a shortened basename like `index.html`, and (b) wrap it in <hyper_link_file>...</hyper_link_file> inside the <say> body, e.g. <hyper_link_file>.bor/workspaces/site/index.html</hyper_link_file>. The presence renders it as a clickable link that reveals the file in Finder.",
     params: {
       attrs: {
         tone: 'optional. one of: neutral, warm, excited, delighted, playful, curious, calm, tender, serious, thoughtful, mysterious, whisper, commanding, apologetic, proud, surprised, sad, amused. default: warm.',
@@ -51,6 +52,7 @@ export const TAGS = {
       `<say tone="warm">Here's the weather for Lagos. Twenty-eight degrees and clear.</say>`,
       `<say tone="thoughtful">Real-time flight data needs a paid API. I built a route snapshot instead.</say>`,
       `<say tone="apologetic">That didn't work — Anthropic returned a four-oh-one.</say>`,
+      `<say tone="proud">Your site is ready — I saved it to <hyper_link_file>.bor/workspaces/site/index.html</hyper_link_file>.</say>`,
     ],
     voiced: false,
     execute: say.execute,
@@ -481,7 +483,7 @@ Quick payment shortcut for the user's recurring Lagos transfers.
   // ---------- FILESYSTEM ----------
   read_file: {
     description:
-      'Read a file from disk. Relative paths resolve against the project root; absolute paths are allowed. File explorer paths are also supported: device:/ maps to the user home folder and bor:/ maps to BOR-created files. Returned content is included in your next-turn context as a tool_result.',
+      'Read a file from disk. Relative paths resolve against the project root; absolute paths are allowed. File explorer paths are also supported: device:/ maps to the user home folder and bor:/ maps to BOR-created files. Returned content is included in your next-turn context as a tool_result. read_file handles most formats natively — use it first for ANY file: code and plain text of every kind (any encoding — utf8/utf16/latin1 auto-detected); PDFs (≤20 MB, attached as readable documents, or text-extracted on providers without document support); images png/jpg/gif/webp plus heic/tiff/bmp/psd/ico (≤8 MB, attached as viewable images); Word/RTF/ODT, XLSX/PPTX, and Jupyter notebooks (extracted text); audio (metadata — you cannot listen); video (poster frame + metadata — you cannot watch); zip/tar archives (listings). NEVER use execute_command, Python, or terminal scripts to parse, convert, or extract these formats — read_file already gives you their content directly; terminal extraction is redundant and forbidden unless read_file itself refused the file.',
     params: { attrs: { path: 'required. relative, absolute, device:/..., or bor:/... file path.' } },
     examples: [`<read_file path="notes/today.md"/>`, `<read_file path="device:/Desktop/todo.py"/>`],
     voiced: false,
@@ -671,7 +673,7 @@ defs:shell
   // ---------- SKILLS + MCP ----------
   use_skill: {
     description:
-      "Load a skill's instructions into your working context. Skills are discovered in real time from ~/.bed-of-roses/skills and ./.bed-of-roses/skills; local overrides global. Use this when a task matches a specialised workflow — browser automation, deployment, research, or a team-specific process. The skill content comes back as a tool_result and is meant to guide your next pass in the same turn.",
+      "Load a skill's instructions into your working context. Skills are discovered in real time from ~/.bed-of-roses/skills and ./.bed-of-roses/skills; local overrides global. Use this when a task matches a specialised workflow — deployment, research, a team-specific process, or the browser-use CLI fallback (only after the ambient browser tags have failed). The skill content comes back as a tool_result and is meant to guide your next pass in the same turn.",
     params: {
       attrs: { name: 'required. skill name.' },
       body: 'optional fallback skill name if the attribute is omitted',
@@ -686,7 +688,7 @@ defs:shell
 
   list_mcp_servers: {
     description:
-      'List MCP servers currently configured in real time. Use this for database work, custom backends, or connected integrations beyond the built-ins. For normal browser automation, Gmail, social DMs, dashboards, and form filling, prefer the browser-use skill and execute_command.',
+      'List MCP servers currently configured in real time. Use this for database work, custom backends, or connected integrations beyond the built-ins. If a connected server covers a service (mail, calendar, docs), prefer its tools; otherwise for browser automation, dashboards, and form filling use the ambient browser tags (browser_open, browser_snapshot, browser_click, ...).',
     params: {},
     examples: [`<list_mcp_servers/>`],
     voiced: false,
@@ -710,7 +712,7 @@ defs:shell
 
   use_mcp_tool: {
     description:
-      'Call a tool exposed by a configured MCP server. The body is optional JSON arguments. Use this for databases, custom backends, or explicitly MCP-backed integrations. For browser automation, Gmail, Instagram/X workflows, external dashboards, and web forms, prefer browser-use through execute_command.',
+      'Call a tool exposed by a configured MCP server. The body is optional JSON arguments. Use this for databases, custom backends, or explicitly MCP-backed integrations — a connected server that covers a service beats driving a browser at it. For general browser automation, external dashboards, and web forms with no matching server, prefer the ambient browser tags (browser_open, browser_snapshot, browser_click, ...).',
     params: {
       attrs: {
         server: 'required. MCP server name.',
@@ -880,6 +882,189 @@ defs:shell
     voiced: false,
     feedsBack: true,
     execute: computer.executeComputerUse,
+  },
+
+  // ---------- AMBIENT BROWSER (a11y snapshot + refs) ----------
+  browser_open: {
+    description:
+      "Open a URL in the ambient browser — a persistent, visible companion browser you drive by element refs, not coordinates. THE default for web tasks that need interaction, login, or JavaScript: web apps, dashboards, forms, signed-in sites. Returns the page title/URL plus an accessibility snapshot in YAML where every interactive element has a ref like [ref=e6]. Core loop: every browser_* action returns a FRESH snapshot; interact ONLY with refs that appear in the LATEST snapshot; never invent or reuse refs after navigation. The browser stays open across tools and turns until <browser_end/> — no need to close it between steps. For plain readable pages prefer <web_fetch>; for local dev-server previews the coordinate <browser_action> also works.",
+    params: {
+      attrs: { url: 'required. full URL including protocol, e.g. https://mail.google.com.' },
+    },
+    examples: [
+      `<browser_open url="https://news.ycombinator.com"/>`,
+      `<browser_open url="https://mail.google.com"/>`,
+    ],
+    voiced: false,
+    feedsBack: true,
+    execute: browserAgent.executeBrowserOpen,
+  },
+
+  browser_snapshot: {
+    description:
+      "Take a fresh accessibility snapshot of the current ambient-browser page WITHOUT acting. Use it to re-read state — after a wait, when a ref went stale, when an expected element was missing, or to narrow into one region with target/depth. The YAML lists elements as `- link \"Learn more\" [ref=e6]` — those refs are what you pass to browser_click / browser_type / browser_select. Only refs from the LATEST snapshot are valid.",
+    params: {
+      attrs: {
+        target: 'optional. a ref (e.g. e12) to snapshot only that element subtree.',
+        depth: 'optional. limit snapshot tree depth (number) to keep the output small.',
+      },
+    },
+    examples: [
+      `<browser_snapshot/>`,
+      `<browser_snapshot target="e12" depth="6"/>`,
+    ],
+    voiced: false,
+    feedsBack: true,
+    execute: browserAgent.executeBrowserSnapshot,
+  },
+
+  browser_click: {
+    description:
+      "Click an element in the ambient browser by ref. Returns a fresh snapshot — read it before the next action; the click's effect (navigation, expanded menu, new dialog) is only true if the new snapshot shows it.",
+    params: {
+      attrs: {
+        target: 'required. ref from the LATEST snapshot, e.g. e6.',
+        element: 'required. short human description of the element, e.g. "Sign in button".',
+        double: 'optional. "true" for a double-click.',
+        button: 'optional. left (default) | right | middle.',
+      },
+    },
+    examples: [
+      `<browser_click target="e6" element="Learn more link"/>`,
+      `<browser_click target="e14" element="file row" double="true"/>`,
+    ],
+    voiced: false,
+    feedsBack: true,
+    execute: browserAgent.executeBrowserClick,
+  },
+
+  browser_type: {
+    description:
+      'Type text into an input/textarea in the ambient browser by ref. Body is the text (CDATA-safe). submit="true" presses Enter afterwards. Returns a fresh snapshot.',
+    params: {
+      attrs: {
+        target: 'required. ref of the field from the LATEST snapshot.',
+        element: 'required. short human description of the field, e.g. "search box".',
+        text: 'optional for short text; body is preferred.',
+        submit: 'optional. "true" to press Enter after typing.',
+        slowly: 'optional. "true" to type one key at a time (for autocomplete fields).',
+      },
+      body: 'the text to type (CDATA-safe).',
+    },
+    examples: [
+      `<browser_type target="e9" element="search box" submit="true"><![CDATA[weather lagos]]></browser_type>`,
+    ],
+    voiced: false,
+    feedsBack: true,
+    execute: browserAgent.executeBrowserType,
+  },
+
+  browser_press_key: {
+    description:
+      'Press a keyboard key in the ambient browser, e.g. Enter, Escape, Tab, ArrowDown, PageDown. Use PageDown/PageUp to scroll. Returns a fresh snapshot.',
+    params: {
+      attrs: { key: 'required. key name, e.g. Enter, Escape, ArrowDown, PageDown.' },
+    },
+    examples: [`<browser_press_key key="PageDown"/>`],
+    voiced: false,
+    feedsBack: true,
+    execute: browserAgent.executeBrowserPressKey,
+  },
+
+  browser_select: {
+    description:
+      'Choose option(s) in a <select> dropdown in the ambient browser by ref. Returns a fresh snapshot.',
+    params: {
+      attrs: {
+        target: 'required. ref of the dropdown from the LATEST snapshot.',
+        element: 'required. short human description, e.g. "country dropdown".',
+        values: 'required. comma-separated option value(s), e.g. "NG" or "red,blue".',
+      },
+    },
+    examples: [`<browser_select target="e21" element="country dropdown" values="NG"/>`],
+    voiced: false,
+    feedsBack: true,
+    execute: browserAgent.executeBrowserSelect,
+  },
+
+  browser_fill_form: {
+    description:
+      'Fill multiple form fields in one call in the ambient browser. Body is a JSON array of fields, each {"name": human label, "type": textbox|checkbox|radio|combobox|slider, "ref": ref from the LATEST snapshot, "value": string ("true"/"false" for checkboxes)}. Faster than one browser_type per field. Returns a fresh snapshot.',
+    params: {
+      body: 'JSON array of {name, type, ref, value} objects (CDATA-safe).',
+    },
+    examples: [
+      `<browser_fill_form><![CDATA[[{"name":"email","type":"textbox","ref":"e8","value":"ope@example.com"},{"name":"remember me","type":"checkbox","ref":"e11","value":"true"}]]]></browser_fill_form>`,
+    ],
+    voiced: false,
+    feedsBack: true,
+    execute: browserAgent.executeBrowserFillForm,
+  },
+
+  browser_back: {
+    description: 'Go back one page in the ambient browser. Returns a fresh snapshot; all old refs are stale after this.',
+    params: {},
+    examples: [`<browser_back/>`],
+    voiced: false,
+    feedsBack: true,
+    execute: browserAgent.executeBrowserBack,
+  },
+
+  browser_tabs: {
+    description:
+      'Manage ambient-browser tabs: list them, open a new one, select or close by index. Returns tab list / fresh snapshot.',
+    params: {
+      attrs: {
+        action: 'required. list | new | select | close.',
+        index: 'for select/close. tab index from a prior list.',
+      },
+    },
+    examples: [`<browser_tabs action="list"/>`, `<browser_tabs action="select" index="1"/>`],
+    voiced: false,
+    feedsBack: true,
+    execute: browserAgent.executeBrowserTabs,
+  },
+
+  browser_screenshot: {
+    description:
+      "Take a screenshot of the ambient browser's current page (viewport by default) and see it as an image. Use it when visual layout matters — verifying a design, reading a canvas/chart, or when the snapshot alone is ambiguous. For element structure and refs, prefer browser_snapshot: it is cheaper and is what you act on.",
+    params: {
+      attrs: {
+        full: 'optional. "true" for the full scrollable page instead of the viewport.',
+        target: 'optional. ref to screenshot just that element.',
+        element: 'with target. short human description of the element.',
+      },
+    },
+    examples: [`<browser_screenshot/>`, `<browser_screenshot full="true"/>`],
+    voiced: false,
+    feedsBack: true,
+    execute: browserAgent.executeBrowserScreenshot,
+  },
+
+  browser_wait: {
+    description:
+      'Wait in the ambient browser for seconds to pass, for text to appear, or for text to disappear — then get a fresh snapshot. Use after an action whose result loads asynchronously instead of assuming it worked.',
+    params: {
+      attrs: {
+        seconds: 'optional. seconds to wait, e.g. 3.',
+        text: 'optional. wait until this text is visible on the page.',
+        text_gone: 'optional. wait until this text is no longer visible.',
+      },
+    },
+    examples: [`<browser_wait text="Inbox"/>`, `<browser_wait seconds="3"/>`],
+    voiced: false,
+    feedsBack: true,
+    execute: browserAgent.executeBrowserWait,
+  },
+
+  browser_end: {
+    description:
+      'Close the ambient browser and its window. Do this when the web task is fully done — not between steps; the browser is meant to persist across tools and turns while you work.',
+    params: {},
+    examples: [`<browser_end/>`],
+    voiced: false,
+    feedsBack: true,
+    execute: browserAgent.executeBrowserEnd,
   },
 
   // ---------- WEB + VISION + IMAGE-GEN ----------

@@ -27,9 +27,33 @@ const FORBIDDEN_PATTERNS = [
   { pattern: /\bsay\s*\(/, reason: 'say() calls are not allowed inside widget code' },
 ];
 
+// ---------- History-elision marker imitation ----------
+//
+// Conversation history compresses long past tool bodies down to a marker
+// (ai.js serializeBlock). Weak models imitate what they see: kimi-class
+// models have ended their own write_to_file bodies with a literal
+// " … [truncated 904 chars]" and closed the tag — silently writing a broken
+// 231-byte file that "succeeded". Reject any tool body carrying such a
+// marker so the model gets corrective feedback instead of a corrupt write.
+// Matches the legacy `[truncated N chars]` shape and the current
+// `[… N more chars elided …]` shape, with or without a leading ellipsis.
+const ELISION_MARKER_RE = /(?:…|\.\.\.)?\s*\[(?:truncated\s+\d+\s+chars?\b[^\]]*|…?\s*\d+\s+more\s+chars\s+elided\b[^\]]*)\]/i;
+
+export function containsElisionMarker(text) {
+  return ELISION_MARKER_RE.test(String(text ?? ''));
+}
+
+export const ELISION_MARKER_REASON =
+  'the content contains a history-elision placeholder (e.g. "[… N chars elided]" / "[truncated N chars]"). '
+  + 'Those markers are display artifacts of compressed conversation history — they are NEVER valid content. '
+  + 'Emit the COMPLETE content again, in full, with no truncation markers.';
+
 export function validateWidgetCode(html) {
   if (typeof html !== 'string' || !html.trim()) {
     return { ok: false, reason: 'empty surface code' };
+  }
+  if (containsElisionMarker(html)) {
+    return { ok: false, reason: ELISION_MARKER_REASON };
   }
   if (html.length > 200_000) {
     return { ok: false, reason: 'surface too large (>200KB)' };
@@ -73,10 +97,12 @@ const SHELL_DANGER_PATTERNS = [
     pattern: /(python3?|node|ruby|perl|bash|sh|zsh)\s+(-c|-e|--command|--eval)\s+["'][\s\S]*?(\\n|\n|;\s*(def |class |import |from |for |while |function |require ))/i,
     reason: 'multi-line inline code in -c/-e — write a script with <write_file> and run it via <execute_command> instead',
   },
-  // Heredocs.
-  { pattern: /<<-?~?\s*['"]?\w+['"]?/, reason: 'heredocs (<<) are not allowed — use <write_file>' },
-  // Newline in command body — single-line only.
-  { pattern: /\n/, reason: 'commands must be single-line' },
+  // Heredocs. Sole exception: the browser-use v3 shape matched by
+  // matchBrowserUseHeredoc below — that CLI's only scripted interface is
+  // Python piped to stdin.
+  { pattern: /<<-?~?\s*['"]?\w+['"]?/, reason: 'heredocs (<<) are not allowed — use <write_file>', browserUseHeredocExempt: true },
+  // Newline in command body — single-line only (browser-use heredoc excepted).
+  { pattern: /\n/, reason: 'commands must be single-line', browserUseHeredocExempt: true },
   // Catastrophic destructive patterns. Tightly scoped — we don't want to block
   // every `rm`. Only the obvious accidents.
   { pattern: /\brm\s+(-[rRf]+\s+)+\/(\s|$)/, reason: 'refused: rm -rf /' },
@@ -91,7 +117,7 @@ const SHELL_DANGER_PATTERNS = [
   // <launch_app>/<launch_shortcut> (reopens the window) and <screen_capture>
   // to verify — never restart the host.
   {
-    pattern: /\b(npm|pnpm|yarn)\s+(run\s+)?(v2(:host|:cli)?|start|dev)\b/,
+    pattern: /\b(npm|pnpm|yarn)\s+(run\s+)?(v2(:host|:cli)?|start|dev|server(:dev)?|cli)\b/,
     reason: 'refused: that starts/restarts the Bed of Roses host, which closes every open surface window. To reload a surface use <launch_app id="..."/> (it reopens the window), then <screen_capture> to verify — do not restart the host.',
   },
   { pattern: /(^|[\s;&|])electron(\s|$)/, reason: 'refused: launching Electron restarts the host and closes open surfaces. Use <launch_app>/<launch_shortcut> to reopen a surface instead.' },
@@ -99,14 +125,44 @@ const SHELL_DANGER_PATTERNS = [
   { pattern: /bin\/bed-of-roses(\.cjs)?\b/, reason: 'refused: that starts another host instance, closing open surfaces. Use <launch_app>/<launch_shortcut> instead.' },
 ];
 
+// ---------- browser-use v3 heredoc carve-out ----------
+//
+// browser-use CLI 3.0 removed the v2 verb subcommands; its only scripted
+// interface is Python piped to stdin, canonically a heredoc:
+//
+//   browser-use <<'PY'
+//   ...python...
+//   PY
+//
+// The general heredoc + single-line rules above would refuse that, so we
+// pattern-match exactly ONE safe shape and exempt it: a command that is
+// nothing but `browser-use` followed by a SINGLE-QUOTED heredoc delimiter
+// (single quotes stop the shell from expanding $vars / $(...) inside the
+// Python), the script body, and the closing delimiter — nothing else on the
+// line, no trailing flags or redirects. Any other heredoc — other commands,
+// unquoted or double-quoted delimiters, extra suffixes — still hits the
+// general refusal. The exec handler layers its own caps on the Python body
+// (line/byte limits, foot-gun screen) on top of this.
+const BROWSER_USE_HEREDOC_RE = /^browser-use\s+<<\s*'([A-Za-z_][A-Za-z0-9_]*)'[ \t]*\n([\s\S]*?)\n\1[ \t]*$/;
+
+export function matchBrowserUseHeredoc(cmd) {
+  const m = String(cmd ?? '').trim().match(BROWSER_USE_HEREDOC_RE);
+  return m ? { delimiter: m[1], body: m[2] } : null;
+}
+
 export function validateShellCommand(cmd) {
   if (typeof cmd !== 'string' || !cmd.trim()) {
     return { ok: false, reason: 'empty command' };
   }
-  if (cmd.length > 4000) {
-    return { ok: false, reason: 'command too long (>4KB)' };
+  const browserUseHeredoc = matchBrowserUseHeredoc(cmd);
+  // browser-use heredocs get headroom for the 6 KB script cap enforced by the
+  // exec handler; everything else keeps the original 4 KB ceiling.
+  const maxLen = browserUseHeredoc ? 8192 : 4000;
+  if (cmd.length > maxLen) {
+    return { ok: false, reason: `command too long (>${browserUseHeredoc ? '8' : '4'}KB)` };
   }
-  for (const { pattern, reason } of SHELL_DANGER_PATTERNS) {
+  for (const { pattern, reason, browserUseHeredocExempt } of SHELL_DANGER_PATTERNS) {
+    if (browserUseHeredoc && browserUseHeredocExempt) continue;
     if (pattern.test(cmd)) return { ok: false, reason };
   }
   return { ok: true };

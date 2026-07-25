@@ -5,7 +5,7 @@ description: "Surfaces (apps and shortcuts) run in sandboxed iframes with no dir
 
 Surfaces (apps and shortcuts) run in **sandboxed iframes** with no direct disk or network access. The **bridge** is how they do real work: a small client API that routes every call through `parent.postMessage` to the runtime, which validates and answers it. BOR copies the bridge helper into every surface that needs state, AI, web, or images.
 
-The bridge lives in `shell/surface-bridge.js` (classic) and is forwarded by `v2/host/surface-preload.cjs` when a surface is opened as a native window. Server-side it's backed by the `widget-host` / surface endpoints.
+The bridge lives in `shell/surface-bridge.js` (classic) and is forwarded by `host/surface-preload.cjs` when a surface is opened as a native window. Server-side it's backed by the `widget-host` / surface endpoints.
 
 ## The API
 
@@ -54,11 +54,11 @@ Surfaces can schedule work and notify the user through the bridge:
 - Schedule a cron job (`type: 'cron'`).
 - Push a notification (`type: 'notification-push'`).
 
-See [Cron & notifications](cron-and-notifications.md).
+See [Background tasks](/features/background-tasks).
 
 ## How it's secured
 
-Every bridge call is a `postMessage` the runtime receives, **validates server-side**, and answers. The surface never holds your keys, never touches your disk, and can't make arbitrary network calls. The [validator](../concepts/the-runtime.md#the-validator) additionally blocks `eval`, `Function`, external `<script src>`, `localStorage`, and all `parent.*` access except `parent.postMessage`. The iframe `sandbox` attribute is the first wall; the validator and server-side checks are the rest.
+Every bridge call is a `postMessage` the runtime receives, **validates server-side**, and answers. The surface never holds your keys, never touches your disk, and can't make arbitrary network calls. The [validator](/concepts/the-runtime) additionally blocks `eval`, `Function`, external `<script src>`, `localStorage`, and all `parent.*` access except `parent.postMessage`. The iframe `sandbox` attribute is the first wall; the validator and server-side checks are the rest.
 
 ## Using it in a surface
 

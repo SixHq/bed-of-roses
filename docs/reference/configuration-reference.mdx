@@ -12,11 +12,12 @@ Per-presence, at `os-data/presences/<id>/config.json` (or `os-data/config.json` 
 | Field | Type | Purpose |
 |---|---|---|
 | `defaultProvider` | string | Active provider id: `bor`, `anthropic`, `openai`, `gemini`, `openai-compatible`. |
-| `providers` | object | Map of `providerId → { apiKey, model, baseUrl }`. |
+| `providers` | object | Map of `providerId → { apiKey, model, baseUrl, reasoning }`. `reasoning` is the per-provider reasoning effort (`none`…`max`). |
+| `connectors` | object | Linked services (Composio key, OAuth state, service tokens). Secrets never leave the machine. |
 | `aiName` | string | What the presence calls itself. |
 | `personality` | string | Persona injected into the system prompt. |
 | `baseTheme` | string | Active theme id. |
-| `avatar` | object | DiceBear avatar config. |
+| `avatar` | object | Presence avatar config (preset: `nova`/`cipher`/`aria`/`echo`, plus color). |
 | `onboarded` | boolean | Whether onboarding completed. |
 
 > API keys live here until the planned Keychain migration. Treat `os-data/` as sensitive.
@@ -41,18 +42,19 @@ Per-presence, at `os-data/presences/<id>/config.json` (or `os-data/config.json` 
 | `BOR_TOOL_MAX_ATTEMPTS` | Per-tool retry attempts on transient failure. |
 | `BOR_STREAM_IDLE_TIMEOUT_MS` | Idle timeout before a stalled stream retries. |
 
-### LLM harness
+### Provider tuning
 
-| Variable | Purpose |
-|---|---|
-| `BOR_LEGACY_LLM=1` | Force the legacy XML-tool harness (the default path). |
-| `BOR_NEW_LLM=1` | Opt into the native-tool-calling harness (experimental). |
+| Variable | Default | Purpose |
+|---|---|---|
+| `BOR_PROVIDER_REASONING_EFFORT` | `high` | Reasoning-effort fallback when a provider has none set (`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`). |
+| `BOR_PROVIDER_MAX_OUTPUT_TOKENS` | provider default | Max output tokens per response. |
 
 ### Browser
 
 | Variable | Purpose |
 |---|---|
-| `BOR_BROWSER_HEADLESS=1` | Run the user-facing Browser app headless. |
+| `BOR_BROWSER_HEADLESS=1` | Run the ambient browser headless. |
+| `BOR_BROWSER_VIEWPORT` | Ambient-browser viewport size (default `1440x1000`). |
 | `BOR_BROWSER_EXECUTABLE_PATH` | Specific Chrome/Chromium binary. |
 | `BOR_BROWSER_CHANNEL` | e.g. `chrome`. |
 | `BOR_BROWSER_DATA_DIR` | Browser data root. |

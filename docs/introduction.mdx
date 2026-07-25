@@ -1,64 +1,35 @@
 ---
 title: "Bed of Roses"
-description: "BOR is not a chatbot with a few plugins bolted on. It is a small operating-system layer built around one idea: a conversation should be able to produce durable software and take real action, not…"
+description: "An AI companion that lives on your desktop and does things — builds you apps, connects to your services, browses the web, controls your Mac, and works while you're away."
 ---
 
-**Bed of Roses (BOR) is an AI-native macOS companion.** Instead of living in a browser tab or an editor sidebar, a small draggable **presence** floats above your real desktop. You talk to it, and each turn of the conversation can do real work on your machine: generate a full app, drop a live widget into the conversation, write and run code, change your wallpaper and theme, control other Mac apps, browse the web, schedule tasks, or just answer a question.
+**Bed of Roses (BOR) is an AI companion for macOS — not a chat window.** A small, draggable presence floats above your real desktop, always one keystroke away. You tell it what you want, and it does the work in front of you.
 
-BOR is not a chatbot with a few plugins bolted on. It is a small **operating-system layer** built around one idea: *a conversation should be able to produce durable software and take real action, not just text.*
+<img src="/assets/bor_sota_code_writing_demo.gif" alt="Bed of Roses working live on the desktop: streaming its reasoning, writing files into editor cards, and running commands while the result takes shape" />
 
----
+## What a conversation can do
 
-## What makes it different
+Every request can end in something real, not just text:
 
-| Most AI assistants | Bed of Roses |
-|---|---|
-| Live in a tab / sidebar | A presence that floats over your actual desktop |
-| Return text | Return **apps, widgets, files, theme changes, real actions** |
-| One model, one vendor | **Provider parity** — Anthropic, OpenAI, Gemini, OpenAI-compatible, or BOR credits |
-| Chat history | **Persistent memory**, generated apps you keep, multiple isolated "presences" |
-| Fixed UI | **Themeable** down to fonts, wallpaper, and the look of every generated surface |
+- **An app** — "make me a calorie tracker" opens a native Mac window, built for you, saved forever. [Building apps](/features/building-apps)
+- **Action in your services** — with Gmail, Calendar, Slack, Notion, GitHub and ~100 more connected, "reply to Sarah" uses the real Gmail, not a browser. [Connectors](/features/connectors)
+- **Web work** — BOR drives a real Chrome with its own profile: reads pages, fills forms, stays signed in, verifies results. [Ambient browser](/features/ambient-browser)
+- **File work** — it reads PDF, Word, Excel, HEIC, and almost anything else; writes and edits files; every path it mentions clicks through to Finder. [Files](/features/files)
+- **Mac control** — screen capture, vision-guided clicks and typing, opening apps. [Computer use](/features/computer-use)
+- **Media** — YouTube, TikTok, Instagram, tweets, and video play as cards inside the presence. [Media](/features/media)
+- **Scheduled work** — "every morning at 8…" runs real agent turns while you're away and notifies you. [Background tasks](/features/background-tasks)
+- **A new look** — eight themes, generated wallpapers applied to your actual desktop. [Themes](/features/themes)
 
----
+And you watch all of it happen: the thought bubble streams BOR's reasoning, the code it writes, the commands it runs, and the pages it visits as live cards — with a stop button that pauses any task and a play button that resumes it. [The presence](/features/presence)
 
-## A 30-second mental model
+## Yours, locally
 
-1. You type a message to the presence.
-2. The **Node runtime** ("the brain") builds a system prompt, streams it to your chosen LLM, and parses the model's reply.
-3. The model replies in a small **XML tool protocol** — `<say>`, `<create_app>`, `<write_file>`, `<execute_command>`, `<set_theme>`, `<browser_action>`, and dozens more.
-4. The runtime **executes** each tool: it writes the app to disk, runs the command, changes the theme, opens the browser.
-5. Results stream back into the **thought bubble** as live cards (a code editor, a terminal, a browser session, a generated image), and durable results (apps, files, themes) persist.
+- **Your model.** Anthropic, OpenAI, Google Gemini, or any OpenAI-compatible endpoint (DeepSeek, Kimi, Z.ai, Ollama presets) — or Bed of Roses credits with no key at all. Switch models from a chip in the input bar. [Providers](/providers/overview)
+- **Your machine.** Everything runs locally. Keys stay in local config, generated apps are sandboxed, and every action lands in an audit log.
+- **Your memory.** It remembers you across sessions — and you can run [several presences](/features/multi-presence), each a fully separate companion.
 
-Everything the AI creates is yours, lives on your disk, and survives restarts.
+## Get started
 
----
-
-## The two surfaces
-
-BOR ships as two cooperating front-ends over the **same Node runtime**:
-
-- **v2 Mac host** (`v2/host/`) — the product. An Electron app that owns a frameless, always-on-top **presence window**, opens generated apps as native Mac windows, and applies macOS wallpapers. This is what you use day to day.
-- **Classic browser shell** (`shell/` + `server/`) — the original browser-hosted "empty OS" served at `http://localhost:7777`. Still used for onboarding and as a development surface.
-
-See [Architecture](concepts/architecture.md) for the full picture.
-
----
-
-## What it can do (at a glance)
-
-- **Build software** — generate complete apps and widgets, or write and run real projects (React/Vite/Next/Python/Rust/…) in a workspace. See [Apps](features/apps.md), [Shortcuts](features/shortcuts.md), [Running commands](features/running-commands.md).
-- **Use your computer** — read the screen, click and type in other apps, open applications. See [Computer use](features/computer-use.md).
-- **Browse the web** — drive a real headless browser, search, fetch and read pages. See [The browser](features/the-browser.md) and [Web & media](features/web-and-media.md).
-- **Edit files** — read, write, and surgically patch files anywhere you allow. See [File editing](features/file-editing.md).
-- **Remember** — durable long-term memory and a learned profile. See [Memory](features/memory.md).
-- **Extend itself** — MCP servers (install from a marketplace), skills, custom themes. See [MCP](mcp/overview.md), [Skills](features/skills.md), [Themes](features/themes.md).
-- **Run on a schedule** — cron jobs and a notification inbox. See [Cron & notifications](features/cron-and-notifications.md).
-- **Be many** — run several isolated presences, each with its own data, memory, and personality. See [Multi-presence](features/multi-presence.md).
-
----
-
-## Where to go next
-
-- New here? Start with [What is Bed of Roses](getting-started/what-is-bor.md), then [Installation](getting-started/installation.md) and the [Quickstart](getting-started/quickstart.md).
-- Want the internals? Read [Architecture](concepts/architecture.md) and [The protocol](concepts/the-protocol.md).
-- Looking for one tool? Jump to the [Tool reference](reference/tool-reference.md).
+1. [Installation](/getting-started/installation) — `npm install -g bed-of-roses`, then `bor onboard`.
+2. [Onboarding](/getting-started/onboarding) — name it, style it, connect a model, link your services.
+3. [Quickstart](/getting-started/quickstart) — your first useful requests.

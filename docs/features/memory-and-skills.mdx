@@ -1,0 +1,44 @@
+---
+title: "Memory & Skills"
+description: "BOR remembers you across sessions — facts you tell it and things it learns — and loads Markdown skills that teach it your procedures."
+---
+
+A companion that forgets you every morning isn't a companion. Bed of Roses keeps durable memory per presence, and you can extend what it *knows how to do* with skills.
+
+## Memory
+
+### What it remembers
+
+- **Facts about you** — "remember that I'm vegetarian", "remember my team's standup is at 9:15". BOR also stores things on its own when it learns something durable. Remembered facts are re-injected into every conversation, so you never repeat yourself.
+- **Sessions** — every conversation is saved with its full card thread, powering the History view and letting BOR reference what you did together last week.
+
+### Directing it
+
+- "Remember that…" — store a fact.
+- "What do you remember about me?" — recall.
+- "Forget my old address." — delete a fact.
+
+Memory lives on your disk, per presence, under that presence's data folder. Deleting the memory folder gives a presence amnesia without touching its apps or settings.
+
+## Skills
+
+A **skill** is a Markdown file that teaches BOR a procedure — your deploy checklist, your research brief format, your design process. When a task matches a skill's description, BOR loads it and follows it.
+
+Skills live in two places:
+
+- **Global** — `~/.bed-of-roses/skills/` (every presence, every project).
+- **Project** — `.bed-of-roses/skills/` in the current project (overrides global on name clashes).
+
+Drop a `.md` file in either folder and it's picked up automatically. Writing a good skill: lead with a precise one-line description of *when* to use it, then concrete steps — exact commands, exact output shape. Skills can direct BOR to use any of its tools (search the web, build an app, run commands).
+
+### Memory vs. skills vs. connectors
+
+- **Memory** — facts about *you*.
+- **Skills** — *procedures* you want followed the same way every time.
+- **[Connectors](/features/connectors) / [MCP](/mcp/overview)** — external *services and tools* BOR can reach.
+
+## What to say
+
+- "Remember that invoices go in ~/Documents/Invoices, named by date."
+- "Use my release-checklist skill and ship version 2.1."
+- "What skills do you have?"

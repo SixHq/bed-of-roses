@@ -4,7 +4,7 @@ const { spawn } = require('node:child_process');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
-const hostEntry = path.join(root, 'v2', 'host', 'main.cjs');
+const hostEntry = path.join(root, 'host', 'main.cjs');
 
 const USAGE = `Bed of Roses — AI-native macOS companion
 
@@ -18,7 +18,7 @@ Usage:
 
 // Headless ops never touch Electron — they require the pure-Node registry only.
 function presences() {
-  return require('../v2/host/presences.cjs');
+  return require('../host/presences.cjs');
 }
 
 async function runHeadless(command, args) {

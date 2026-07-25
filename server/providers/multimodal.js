@@ -126,7 +126,7 @@ export function normalizeContent(content) {
       if (typeof b === 'string') return { type: 'text', text: b };
       if (b?.type === 'text') return { type: 'text', text: String(b.text || '') };
       if (b?.type === 'image_url') return { type: 'image_url', url: String(b.url || ''), mediaType: b.mediaType };
-      if (b?.type === 'document') return { type: 'document', url: String(b.url || ''), mediaType: b.mediaType, name: b.name };
+      if (b?.type === 'document') return { type: 'document', url: String(b.url || ''), mediaType: b.mediaType, name: b.name, path: b.path };
       return null;
     }).filter(Boolean);
   }
@@ -185,7 +185,13 @@ export async function toOpenAiContent(content, { supportsDocuments = true } = {}
         }
         out.push({ type: 'file', file: { filename: b.name || 'document.pdf', file_data: fileData } });
       } else {
-        out.push({ type: 'text', text: `[Attachment "${b.name || 'document.pdf'}" (${b.mediaType || 'application/pdf'}) was provided but this model cannot read it directly.]` });
+        // Never tell the model a flat "cannot read it" — models parrot that
+        // back to the user as "I can't see your attachment". Give it a next
+        // step instead.
+        out.push({
+          type: 'text',
+          text: `[The user attached "${b.name || 'document.pdf'}" (${b.mediaType || 'application/pdf'}). This provider cannot ingest it inline.${b.path ? ` The file is on disk at: ${b.path} — call <read_file path="${b.path}"/> to get its extracted text.` : ' Call read_file on the file\'s path (see the attached-context manifest) to get its extracted text.'} The attachment IS real — never claim no file was attached.]`,
+        });
       }
     }
   }

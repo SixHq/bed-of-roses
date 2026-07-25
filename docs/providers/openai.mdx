@@ -1,27 +1,28 @@
 ---
 title: "OpenAI"
-description: "Use GPT models in BOR with an OpenAI API key. Adapter: server/providers/openai.js."
+description: "Use GPT models in BOR with an OpenAI API key."
 ---
 
-Use GPT models in BOR with an OpenAI API key. Adapter: `server/providers/openai.js`.
+Use GPT models in BOR with an OpenAI API key.
 
 ## Setup
 
 1. Get an API key from the OpenAI platform (linked from onboarding).
-2. In [onboarding](../getting-started/onboarding.md), pick **OpenAI**, paste your key, and choose a model.
-3. BOR validates and you're ready.
+2. In [onboarding](/getting-started/onboarding) (or provider Settings), pick **OpenAI**, choose **API key** billing, paste your key, choose a model and a reasoning effort.
 
-## Choosing a model
+> ChatGPT subscriptions don't cover API usage — BOR needs a platform API key.
 
-Pick a **current** GPT model from OpenAI's live docs — model ids rotate, so avoid stale hardcoded ones. A vision-capable model is recommended so screenshot-based features work ([browser](../features/the-browser.md) previews, `locate_screen_element`, image attachments).
+## Models
+
+The current list offered in BOR includes GPT-5.6 Sol, GPT-5.6 Terra (recommended default), GPT-5.6 Luna, GPT-5.5, GPT-5.5 Pro, ChatGPT latest, GPT-5.4, and GPT-5.4 mini. Ids rotate — the picker shows the live list.
 
 ## Notes
 
-- BOR's multimodal layer handles OpenAI image blocks and streaming via the shared provider utilities.
-- Prompt-prefix caching is supported through a byte-stable prefix where the provider allows it.
-- Edit `providers.openai` in `config.json` to change the key/model later, or ask BOR to switch.
+- GPT models are vision-capable, so screenshot-driven features work.
+- **Image generation** uses `gpt-image-1` with the same key.
+- Reasoning effort (Off–Max) maps to OpenAI's reasoning-effort parameter.
 
 ## Troubleshooting
 
-- **401** — bad key. **404 model** — model retired; pick a current one. **429** — rate-limited; slow down or upgrade your plan.
-- See [Troubleshooting](../troubleshooting.md).
+- **401** — bad key. **404 model** — retired id; pick a current one. **429** — rate-limited.
+- See [Troubleshooting](/troubleshooting).

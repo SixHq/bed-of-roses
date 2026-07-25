@@ -1,0 +1,52 @@
+---
+title: "Files"
+description: "BOR reads almost any file you have — PDF, Word, Excel, PowerPoint, notebooks, HEIC photos, archives — writes and edits files like a coding agent, and links every path straight to Finder."
+---
+
+Bed of Roses treats your files as first-class conversation material. Drag one onto the presence, name a path, or just describe what you're looking for — BOR reads it, works on it, and tells you exactly where it put the results.
+
+## It reads almost anything
+
+BOR extracts real content from a wide range of formats, natively:
+
+| Kind | Formats |
+|---|---|
+| Documents | PDF, Word (.docx, .doc), RTF, ODT, plain text in **any encoding** (auto-detected) |
+| Spreadsheets & data | Excel (.xlsx, with formula results and hidden sheets), CSV, Jupyter notebooks (.ipynb) |
+| Presentations | PowerPoint (.pptx, slide text) |
+| Images | PNG, JPEG, GIF, WebP viewed directly; HEIC/HEIF, TIFF, BMP, ICO, ICNS, and **PSD** converted automatically |
+| Audio | MP3, M4A, WAV, FLAC, OGG, AIFF, and more — metadata (duration, artist, format) |
+| Video | MP4, MOV, MKV, WebM, and more — metadata plus a poster frame so BOR can see what it is |
+| Archives | ZIP, JAR, EPUB, TAR/TGZ — full listings |
+
+So "summarize this contract" works on a PDF, "what's in this spreadsheet" works on real Excel, and "which of these photos is the receipt" works on HEIC straight off your iPhone.
+
+Two shorthand path schemes work everywhere: `device:/` for your home folder and `bor:/` for files BOR created.
+
+## It writes and edits
+
+BOR creates and modifies files like a careful coding agent:
+
+- **New files and whole projects** stream into live editor cards in the bubble as they're written — you watch each file fill in.
+- **Surgical edits** patch existing files precisely: BOR reads the file first, changes exactly the lines that need changing, and re-reads to verify.
+- **Search** across file contents, directory listings, and code-definition maps help it navigate big folders and repos.
+
+By default, files BOR creates for you land in the `.bor/` working directory (projects under `workspaces/`, one-off scripts under `files/`, plus `images/`, `downloads/`, `reports/`, `exports/`) — unless you name a destination. BOR always tells you where it wrote. It refuses to write into its own source code or outside your home folder, so it can't damage itself or your system.
+
+## Click a path, land in Finder
+
+Every file path BOR mentions in conversation is a link. Click it and the file is revealed in Finder — no hunting through folders for the report it just generated.
+
+<!-- TODO: screenshot: a BOR reply containing a clickable file path, with Finder open revealing that file -->
+
+## BOR Home
+
+BOR also keeps a desktop file surface of its own — BOR Home — for files you want to live "inside" BOR rather than in a project folder. Ask "put this in my BOR files" or browse them with the Files app.
+
+## What to say
+
+- "Summarize the attached PDF and pull out every deadline."
+- "Convert all the HEICs in ~/Downloads to JPEG."
+- "Fix the bug in ~/code/app/src/list.ts — it's off by one."
+- "Write a script that renames my photos by date, and run it."
+- "What's in this ZIP?"

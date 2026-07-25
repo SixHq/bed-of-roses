@@ -1,0 +1,109 @@
+/* Theme: Solarpunk — sun-warmed ecological future.
+   Sun-bleached cream, deep leaf-green ink, moss + terracotta accents.
+   A greenhouse OS with daylight in it: technology that reads grown,
+   not manufactured.
+
+   Hallmarks:
+     • Cream #FAF1DB panels with leaf-green ink #1F2A1A — never black/grey
+     • Moss #3F5D3A is the primary action; terracotta #C66B4A the highlight
+     • Sun gradient (#F2D58A → #C66B4A → #8B3F22) reserved for solar motifs
+     • Pill inputs (999px), generous card radii, soft warm shadows
+     • Dashed 1px leaf-green rings as botanical detailing
+     • DM Serif Display italic display, Geist body, JetBrains Mono labels
+
+   Palette + component recipes match the v2 presence spec in
+   host/presence.css (.presence[data-theme="solarpunk"]). The structural
+   shell (shell/style.css) reads from these variables; extras.css adds
+   the moss-filled buttons, italic serif placeholders, and dashed rings. */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+  /* Surfaces — sun-bleached cream tiers. Panels are the presence's exact
+     #FAF1DB; the canvas sits a touch deeper so cards read as lifted paper. */
+  --canvas:    #F5EBCF;
+  --surface-1: #FAF1DB;   /* main panel — cards, modals, fields */
+  --surface-2: #FFF7E4;   /* brightest sheet — hover / elevated chips */
+  --surface-3: #EFE2BF;   /* deepest cream — selected / recessed */
+  --bloom:     #3F5D3A;   /* moss — the theme's primary accent */
+
+  /* Botanical palette — exposed for extras.css and LLM-generated widgets.
+     Hex values are LITERAL matches of the presence recipe. */
+  --leaf:            #1F2A1A;  /* ink — deep leaf-green, stands in for black */
+  --moss:            #3F5D3A;  /* primary action, filled buttons */
+  --terracotta:      #C66B4A;  /* highlight — emphasis, live readings */
+  --terracotta-deep: #8B3F22;  /* sun-gradient tail, pressed terracotta */
+  --sun:             #F2D58A;  /* sun-gradient head, warm wash */
+
+  /* Hairlines — leaf-green at low alpha (presence: rgba(31,42,26,0.2)) */
+  --hairline:        rgba(31, 42, 26, 0.20);
+  --hairline-strong: rgba(31, 42, 26, 0.34);
+  --hairline-soft:   rgba(31, 42, 26, 0.10);
+
+  /* Labels — leaf-green ink tiers (presence label ladder, exact) */
+  --label:    #1F2A1A;
+  --label-2:  rgba(31, 42, 26, 0.70);
+  --label-3:  rgba(31, 42, 26, 0.45);
+  --label-4:  rgba(31, 42, 26, 0.22);
+
+  /* Translucent fills — keyed to leaf ink so tints stay warm-green */
+  --fill-1: rgba(31, 42, 26, 0.10);
+  --fill-2: rgba(31, 42, 26, 0.06);
+  --fill-3: rgba(31, 42, 26, 0.04);
+
+  /* Default presence — terracotta, matching the presence aura channel. */
+  --avatar-color-rgb: 198, 107, 74;
+  --wallpaper: transparent;
+
+  /* Atmosphere — cream daylight: a sun wash from the top corner, a faint
+     moss breath from below. Reads as morning light through glass. */
+  --atmosphere:
+    radial-gradient(ellipse 70% 50% at 82% 0%,   rgba(242, 213, 138, 0.38), transparent 62%),
+    radial-gradient(ellipse 60% 45% at 8% 100%,  rgba(63, 93, 58, 0.10), transparent 65%),
+    radial-gradient(ellipse 55% 55% at 45% 55%,  rgba(198, 107, 74, 0.05), transparent 70%),
+    var(--canvas);
+
+  /* Halos — soft warm shadows only. The medium tier is the presence's
+     literal panel shadow. Never hard offsets, never cold grey. */
+  --halo-soft:   0 10px 24px rgba(31, 42, 26, 0.10);
+  --halo-medium: 0 18px 40px rgba(31, 42, 26, 0.14);
+  --halo-strong: 0 24px 56px rgba(31, 42, 26, 0.18);
+  --shadow-deep: 0 32px 72px rgba(31, 42, 26, 0.22);
+
+  /* Spacing — shared 4px base */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-7: 32px; --s-8: 40px;
+  --s-9: 56px; --s-10: 72px; --s-11: 96px;
+
+  /* Radii — pill inputs and bars (the presence prompt-shell is a full
+     pill); cards stay generously rounded, like river stones. */
+  --r-input:  999px;
+  --r-button: 999px;
+  --r-bar:    999px;
+  --r-tile:   22px;
+  --r-modal:  26px;
+
+  /* Type — DM Serif Display italic display, Geist body, JetBrains Mono
+     eyebrow labels. Matches the presence recipe exactly. */
+  --font-display: "DM Serif Display", Georgia, serif;
+  --font-system:  "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", "IBM Plex Mono", ui-monospace, Menlo, monospace;
+
+  /* Type scale — serif display carries slightly larger; body breathes. */
+  --t-hero:     58px;
+  --t-display:  44px;
+  --t-title-1:  28px;
+  --t-title-2:  22px;
+  --t-headline: 17px;
+  --t-body:     15px;
+  --t-subhead:  13px;
+  --t-caption:  11px;
+  --t-micro:    10px;
+
+  /* Motion — unhurried, organic. Things grow into place. */
+  --ease-standard: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-snap:     cubic-bezier(0.20, 0.00, 0.00, 1);
+  --d-micro:  200ms;
+  --d-pane:   380ms;
+  --d-layout: 640ms;
+}

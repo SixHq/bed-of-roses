@@ -1820,37 +1820,391 @@ html[data-theme="pixel-crt"] .splash-bootline span {
   color: var(--label);
   font-weight: 600;
 }
-.tool-body { display: flex; flex-direction: column; gap: var(--s-2); }
-.tool-body.hidden { display: none; }
-.tool-install-line, .tool-detail-line {
+.tool-detail-line {
   color: var(--label-2);
   font-size: 12px;
   margin: 0;
-}
-.tool-install-cmd {
-  font-family: var(--mono, ui-monospace, SFMono-Regular, monospace);
-  font-size: 12px;
-  background: var(--surface-2, rgba(255,255,255,0.04));
-  border: 1px solid var(--hairline-soft);
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin: 0;
-  overflow-x: auto;
-  user-select: text;
-}
-.tool-meta-line {
-  font-family: var(--mono, ui-monospace, SFMono-Regular, monospace);
-  font-size: 11px;
-  color: var(--label-2);
-  opacity: 0.7;
 }
 .tool-actions {
   display: flex;
   gap: var(--s-2);
   justify-content: flex-end;
 }
-.tool-card[data-status="installed"] .tool-actions .btn-tertiary[id="browser-use-copy"] {
+
+/* --- Final pane: connectors gallery ("Connect BOR to your daily life") ---
+   Cards follow the provider-drawer pattern (grid-rows expand animation) but
+   reuse the tool-badge status treatment. Two columns; with the Composio
+   catalog the grid can hold ~17+ cards, so the pane scrolls. */
+.connectors-content { max-width: 880px; }
+
+.connector-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2) var(--s-3);
+  align-items: start;
+  width: 100%;
+  transition: opacity var(--d-micro) var(--ease-snap);
+}
+.connector-grid.loading { opacity: 0.55; pointer-events: none; }
+@media (max-width: 900px) {
+  .connector-grid { grid-template-columns: 1fr; }
+}
+
+.connector-card {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  overflow: hidden;
+  text-align: left;
+  transition: background var(--d-micro) var(--ease-snap),
+              border-color var(--d-micro) var(--ease-snap);
+}
+.connector-card:hover,
+.connector-card.expanded {
+  background: var(--surface-2);
+  border-color: var(--hairline-strong);
+}
+.connector-card[data-status="connected"] { border-color: var(--hairline-strong); }
+.connector-card.flash { animation: connector-flash 1.5s var(--ease-standard); }
+@keyframes connector-flash {
+  0%, 100% { border-color: var(--hairline); box-shadow: none; }
+  20%, 60% { border-color: var(--label); box-shadow: 0 0 0 3px var(--hairline-soft); }
+}
+
+.connector-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 12px var(--s-4);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  transition: background var(--d-micro) var(--ease-snap);
+}
+.connector-head:hover { background: rgba(255, 255, 255, 0.02); }
+.connector-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.connector-title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.connector-name {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.006em;
+  color: var(--label);
+}
+.connector-card .tool-badge {
+  text-transform: none;
+  letter-spacing: 0.01em;
+  flex-shrink: 0;
+}
+.connector-tagline {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--label-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.connector-card[data-status="connected"] .connector-tagline { color: var(--label-2); }
+.connector-card.expanded .provider-chevron {
+  transform: rotate(180deg);
+  color: var(--label-2);
+}
+
+.connector-drawer {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--d-pane) var(--ease-standard);
+}
+.connector-card.expanded .connector-drawer { grid-template-rows: 1fr; }
+.connector-drawer-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+.connector-drawer-content {
+  padding: var(--s-3) var(--s-4) var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  border-top: 1px solid var(--hairline-soft);
+  text-align: left;
+}
+.connector-drawer-content code {
+  font-family: var(--mono, ui-monospace, SFMono-Regular, monospace);
+  font-size: 11px;
+  background: var(--surface-2, rgba(255,255,255,0.04));
+  border: 1px solid var(--hairline-soft);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+.connector-drawer-content a {
+  color: var(--label);
+  text-decoration: none;
+  border-bottom: 1px solid var(--hairline);
+}
+.connector-drawer-content a:hover { border-color: var(--label-2); }
+
+.connector-steps {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--label-2);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.connector-detail {
+  margin: 0;
+  color: var(--label-2);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.connector-help {
+  margin: 0;
+  color: var(--label-3);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.connector-saved {
+  margin: 0;
+  color: var(--label);
+  font-size: 12px;
+}
+.connector-field .field-input {
+  padding: 10px 12px;
+  font-size: 13px;
+}
+.connector-error {
+  margin: 0;
+  color: var(--label);
+  font-size: 12px;
+  opacity: 0.85;
+}
+.connector-error::before { content: '⏤  '; color: var(--label-3); }
+
+.connector-waiting {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--label-2);
+  font-size: 12px;
+}
+.connector-waiting-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--label);
+  animation: hero-breathe 1.6s var(--ease-standard) infinite;
+}
+
+.connector-actions {
+  display: flex;
+  gap: var(--s-2);
+  align-items: center;
+  margin-top: 2px;
+}
+.connector-actions .spacer { flex: 1; }
+.connector-actions .btn {
+  height: 38px;
+  font-size: var(--t-body);
+  flex: 0 0 auto;
+  padding: 0 var(--s-4);
+  width: auto;
+}
+.connector-actions .btn-tertiary { height: 32px; font-size: 12px; }
+/* Inside a drawer the full portal aura is too loud — calm the primary. */
+.connector-actions .btn-primary {
+  animation: none;
+  box-shadow: 0 0 0 1px rgba(var(--avatar-color-rgb), 0.35),
+              0 6px 18px rgba(0, 0, 0, 0.40);
+}
+
+.connector-skeleton {
+  height: 58px;
+  border: 1px solid var(--hairline-soft);
+  border-radius: 14px;
+  background: var(--surface-1);
+  animation: connector-skeleton-pulse 1.4s var(--ease-standard) infinite;
+}
+@keyframes connector-skeleton-pulse {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 0.7; }
+}
+
+/* Hybrid cards: quiet divider + collapsed manual-token disclosure. */
+.connector-alt-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  color: var(--label-3);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+.connector-alt-divider::before,
+.connector-alt-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--hairline-soft);
+}
+
+.connector-disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--label-2);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--d-micro) var(--ease-snap);
+}
+.connector-disclosure:hover { color: var(--label); }
+.connector-disclosure .provider-chevron {
+  width: 11px;
+  height: 11px;
+  transition: transform var(--d-micro) var(--ease-snap);
+}
+.connector-disclosure[aria-expanded="true"] .provider-chevron { transform: rotate(180deg); }
+
+.connector-manual {
   display: none;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.connector-manual.open { display: flex; }
+
+/* "More apps" browser: full-width last card with a searchable catalog. */
+.connector-card.connector-more { grid-column: 1 / -1; }
+
+.connector-count-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--label-3);
+  border: 1px solid var(--hairline);
+  border-radius: 99px;
+  padding: 2px 8px;
+}
+
+.moreapps-search {
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.moreapps-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--hairline-soft);
+  border-radius: 10px;
+}
+.moreapps-list::-webkit-scrollbar { width: 8px; }
+.moreapps-list::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border-radius: 4px;
+}
+
+.moreapps-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--hairline-soft);
+}
+.moreapps-row:last-child { border-bottom: 0; }
+.moreapps-row-line {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+.moreapps-row-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.moreapps-row-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--label);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.moreapps-row-meta {
+  font-size: 11px;
+  color: var(--label-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.connector-actions .moreapps-btn,
+.moreapps-btn {
+  height: 26px;
+  font-size: 11px;
+  padding: 0 12px;
+  width: auto;
+  flex: 0 0 auto;
+}
+.moreapps-row-connected {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--label-2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 99px;
+  padding: 3px 10px;
+}
+.moreapps-row-waiting {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--label-2);
+}
+.moreapps-empty {
+  margin: 0;
+  padding: 14px 12px;
+  font-size: 12px;
+  color: var(--label-3);
+}
+
+.connector-load-line {
+  margin: 0;
+  color: var(--label-3);
+  font-size: 12px;
+}
+.connector-retry {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--label);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
 }
 
 .text-link {

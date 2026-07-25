@@ -1,18 +1,24 @@
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const UX_ICON_THUMBNAIL_PATH = '/Users/Opeyemi/open-source-os/UX_app_icons_and_thumbnails.html';
-const DESIGN_GUIDELINE_DIR = '/Users/Opeyemi/open-source-os/design-guideline';
-const SHORTCUT_CARD_SPEC_PATH = '/Users/Opeyemi/open-source-os/design-guideline/shortcut-card.md';
+// Repo root — this file lives at server/protocol/handlers/, three levels down.
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+const UX_ICON_THUMBNAIL_PATH = resolve(REPO_ROOT, 'UX_app_icons_and_thumbnails.html');
+const DESIGN_GUIDELINE_DIR = resolve(REPO_ROOT, 'design-guideline');
+const SHORTCUT_CARD_SPEC_PATH = resolve(DESIGN_GUIDELINE_DIR, 'shortcut-card.md');
 const DEFAULT_THEME = 'bloom';
 
 const THEME_GUIDELINE_FILES = new Map([
   ['bloom', 'bloom.md'],
   ['cartoon-brutalist', 'cartoon-brutalist.md'],
+  ['cyberpunk', 'cyberpunk.md'],
   ['liquid-glass', 'liquid-glass.md'],
+  ['memphis', 'memphis.md'],
   ['neo-brutalist', 'neo-brutalist.md'],
   ['pixel-crt', 'pixel-crt.md'],
   ['risograph', 'risograph.md'],
+  ['solarpunk', 'solarpunk.md'],
   ['warm-earthy', 'warm-earthy.md'],
   ['y2k-frutiger', 'y2k-frutiger.md'],
 ]);
@@ -20,10 +26,13 @@ const THEME_GUIDELINE_FILES = new Map([
 const THEME_HTML_HEADINGS = new Map([
   ['bloom', 'Bloom'],
   ['cartoon-brutalist', 'Cartoon Brutalist'],
+  ['cyberpunk', 'Cyberpunk'],
   ['liquid-glass', 'Liquid Glass'],
+  ['memphis', 'Memphis'],
   ['neo-brutalist', 'Neo Brutalist'],
   ['pixel-crt', 'Pixel CRT'],
   ['risograph', 'Risograph'],
+  ['solarpunk', 'Solarpunk'],
   ['warm-earthy', 'Warm &amp; Earthy'],
   ['y2k-frutiger', 'Y2K / Frutiger Aero'],
 ]);

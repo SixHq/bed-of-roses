@@ -1,0 +1,47 @@
+---
+title: "The Ambient Browser"
+description: "BOR drives a real Chrome with its own profile — reading pages structurally, clicking, typing, filling forms, staying signed in — plus web search and page fetch for quick lookups."
+---
+
+When a task needs the web, Bed of Roses opens a real Chrome window and uses it the way you would — except it reads each page's structure directly instead of squinting at pixels, so it's fast and precise.
+
+<!-- TODO: screenshot: the ambient browser mid-task — the visible Chrome window BOR opened next to the presence's browser card -->
+
+## How it browses
+
+- **A real, visible browser.** BOR launches Chrome (or the bundled Chromium) headed by default, with its **own persistent profile** — separate from your personal browser, so its logins and cookies don't touch yours.
+- **It reads pages structurally.** After every action, BOR gets an accessibility snapshot of the page — every link, button, and field, precisely identified. It acts on elements by reference, not by guessing coordinates.
+- **It does real work.** Clicking, typing, key presses, dropdowns, multi-field form fills, tab management, going back, waiting for content, and taking screenshots when it needs to actually look at something.
+- **It can stay signed in.** Because the profile persists, you can log BOR's browser into your sites once (use "Open sign-in browser" from the [connectors gallery](/features/connectors)) and it stays logged in for future tasks.
+- **Verified before claimed.** BOR re-reads the page after acting, so "I've submitted the form" means the form was actually submitted — not just that a click was sent.
+
+## What to say
+
+- "Find the cheapest direct flight to Lisbon in September."
+- "Log into my electricity account and tell me the last bill."
+- "Fill out this signup form with my details."
+- "Compare the pricing pages of these three tools."
+
+One rule BOR follows: if a [connector](/features/connectors) covers the service — Gmail, Calendar, Notion, GitHub — it uses the connector, never the browser. The browser is for the open web.
+
+## Quick lookups: search and fetch
+
+Not everything needs a browser session. BOR also has:
+
+- **Web search** — ranked results with sources, rendered as a card in the bubble. This is how it gives sourced answers and researches before building.
+- **Web fetch** — read a specific URL's content directly.
+
+"What's AAPL doing today?" is a search and a concise answer, not a browser session.
+
+## Fallbacks
+
+- **browser-use CLI (optional).** If you've installed the [browser-use](https://github.com/browser-use/browser-use) CLI, BOR detects it and can use it as a fallback backend — it attaches to your *actual* running Chrome (your real profile, cookies, and tabs) over CDP. This is entirely optional; nothing in BOR requires it, and without it the ambient browser handles everything.
+- **Computer use.** For the rare page that defeats structural reading, BOR can fall back to driving a visible browser with [screen capture and clicks](/features/computer-use).
+
+## The Browser app
+
+Separate from all of the above, BOR can open a plain Chrome window *for you* to use — the user-facing Browser app, with its own profile, distinct from the automation profile. Ask "open a browser" when you just want to look at something yourself.
+
+## Configuration
+
+Environment overrides, if you need them: `BOR_BROWSER_HEADLESS=1` (run the ambient browser headless), `BOR_BROWSER_EXECUTABLE_PATH` (a specific Chrome/Chromium binary), `BOR_BROWSER_CHANNEL=chrome` (browser channel), `BOR_BROWSER_VIEWPORT` (viewport size, default 1440x1000). `npm run browser:install` installs the bundled Chromium if you don't have Chrome.

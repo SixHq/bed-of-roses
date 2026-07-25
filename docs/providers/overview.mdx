@@ -1,63 +1,35 @@
 ---
 title: "Providers"
-description: "BOR is provider-agnostic. You bring your own model — or use Bed of Roses credits — and BOR works the same either way. There are five providers, all first-class."
+description: "Bring your own model — Anthropic, OpenAI, Gemini, any OpenAI-compatible endpoint — or use Bed of Roses credits. Every provider is first-class."
 ---
 
-BOR is **provider-agnostic**. You bring your own model — or use Bed of Roses credits — and BOR works the same either way. There are five providers, all first-class.
-
-## Provider parity
-
-This is a core principle: **every provider is treated equally.** BOR is never "optimized for one vendor, others get adapters." You pick during onboarding; you can switch any time. The chat loop, tools, surfaces, and bridge all behave identically regardless of which model is behind them.
+BOR is **provider-agnostic**. You bring your own model — or use Bed of Roses credits — and BOR works the same either way: the tools, the apps it builds, the browser, memory, everything behaves identically regardless of which model is behind it.
 
 ## The five providers
 
-| Provider | id | Bring | Notes |
-|---|---|---|---|
-| **Bed of Roses credits** | `bor` | nothing | Metered BOR credits — no key of your own. |
-| **Anthropic** | `anthropic` | Anthropic API key | Claude models. |
-| **OpenAI** | `openai` | OpenAI API key | GPT models. |
-| **Google Gemini** | `gemini` | Gemini API key | Gemini models. |
-| **OpenAI-compatible** | `openai-compatible` | base URL + key | Any OpenAI-API endpoint: local models, proxies, other vendors. |
+| Provider | Bring | Notes |
+|---|---|---|
+| **[Bed of Roses credits](/providers/bed-of-roses-credits)** | Nothing | Metered credits, no API key. Claude, GPT, and DeepSeek models. |
+| **[Anthropic](/providers/anthropic)** | Anthropic API key | Claude models (Fable 5, Opus 4.8, Sonnet 5, …). |
+| **[OpenAI](/providers/openai)** | OpenAI API key | GPT models (5.6 Sol/Terra/Luna, 5.5, …). |
+| **[Google Gemini](/providers/gemini)** | Gemini API key | Gemini models (3.5 Flash, 3.1 Pro, 2.5 line). |
+| **[OpenAI-compatible](/providers/openai-compatible)** | Base URL + key | DeepSeek, Kimi, Z.ai, Groq, OpenRouter, Ollama, LM Studio, and any other OpenAI-shaped endpoint — with one-click presets. |
 
-## How a provider is wired
+You can connect several at once and switch between them from the [model chip](/features/presence#the-model-chip) in the input bar.
 
-Each provider is an adapter under `server/providers/` exporting a common shape:
+## Reasoning effort
 
-```js
-{ id, label, defaultModel, models, signupUrl, needsBaseUrl, stream }
-```
+Every provider has a **reasoning effort** setting — Off, Low, Medium, High (recommended), Max — controlling how much the model thinks before acting. The thinking streams into the bubble as reasoning cards. Set it per provider in onboarding or provider Settings; see [Configuration](/getting-started/configuration#models-and-reasoning-effort).
 
-- **`stream({ apiKey, model, baseUrl, system, messages, signal })`** — an async generator yielding text chunks. This is the one method the harness calls.
-- **`defaultModel` / `models`** — what onboarding offers.
-- **`signupUrl`** — where to get a key.
-- **`needsBaseUrl`** — whether the provider needs a base URL (OpenAI-compatible does).
+## Vision and images
 
-Providers are registered in `server/providers/index.js` (`ALL_PROVIDERS`); `publicCatalog()` is what onboarding shows. Shared utilities (`multimodal.js`, `sse-util.js`, `limits.js`) handle image blocks, streaming, and limits across all of them.
+- Screenshot-driven features ([computer use](/features/computer-use), browser screenshots, image attachments) need a **vision-capable** model — all current Anthropic/OpenAI/Gemini models qualify; local models vary.
+- **Image generation** is available with OpenAI (`gpt-image-1`) and Gemini (Imagen) keys. Anthropic doesn't offer one — pair keys if you want images alongside Claude.
 
-## Choosing a model
+## Switching
 
-Onboarding lets you pick a model per provider, and you can change it in config. **Model IDs go stale fast** — new models ship and old ones retire on a months-long cadence. When picking (or when a model 404s), choose a current one from the provider's live docs rather than an old hardcoded id.
+- Click the model chip and pick any connected provider/model — instant.
+- Ask BOR: "switch to Gemini."
+- With [multi-presence](/features/multi-presence), different presences can run different providers side by side.
 
-> If you're editing the provider adapters in `server/providers/*.js`, fetch the provider's live model docs first — hardcoded ids rot.
-
-## Switching providers
-
-Change the active provider any time:
-
-- Re-run onboarding (`bor onboard`), or
-- Ask BOR to switch, or
-- Edit `defaultProvider` (and the relevant `providers` entry) in the presence's `config.json`.
-
-Because of [multi-presence](../features/multi-presence.md), you can also run one presence on Anthropic and another on Gemini at the same time.
-
-## Multimodal
-
-All providers go through `server/providers/multimodal.js` for image handling, so attaching a screenshot, generating an image, and the screenshot-feedback used by the [browser](../features/the-browser.md) and [computer-use](../features/computer-use.md) tools work consistently. Vision features (e.g. `locate_screen_element`) require a vision-capable model on your chosen provider.
-
-## Per-provider pages
-
-- [Bed of Roses credits](bed-of-roses-credits.md)
-- [Anthropic](anthropic.md)
-- [OpenAI](openai.md)
-- [Gemini](gemini.md)
-- [OpenAI-compatible](openai-compatible.md)
+> Model ids rotate every few months. The in-app picker always reflects the live list; the ids named in these docs are a snapshot.

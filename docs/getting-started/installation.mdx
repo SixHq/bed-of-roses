@@ -1,79 +1,61 @@
 ---
 title: "Installation"
-description: "Bed of Roses is stdlib-only under the hood: the Node runtime depends on nothing but Node's standard library, plus electron (for the Mac host) and @modelcontextprotocol/sdk + @playwright/mcp (for…"
+description: "Get Bed of Roses running: macOS, Node 20+, one npm install."
 ---
-
-Bed of Roses is **stdlib-only** under the hood: the Node runtime depends on nothing but Node's standard library, plus `electron` (for the Mac host) and `@modelcontextprotocol/sdk` + `@playwright/mcp` (for MCP and the browser). There is **no build step, no test suite to run, and no lint config** to satisfy.
 
 ## Requirements
 
-- **macOS** (the v2 host is a Mac app; the classic shell runs anywhere Node does).
-- **Node ≥ 20**.
-- A provider API key (Anthropic / OpenAI / Gemini / an OpenAI-compatible endpoint) — or use **Bed of Roses credits**. See [Providers](../providers/overview.md).
+- **macOS**
+- **Node ≥ 20**
+- A model: an API key for Anthropic, OpenAI, Google Gemini, or any OpenAI-compatible endpoint — or **Bed of Roses credits** with no key at all. See [Providers](/providers/overview).
 
-## Get the code
+## Install
+
+```bash
+npm install -g bed-of-roses
+bor onboard
+```
+
+`bor onboard` opens the onboarding flow — name your AI, pick a theme and presence, connect a model, link your services — and then the orb appears over your desktop. See [Onboarding](/getting-started/onboarding) for the walkthrough.
+
+Prefer not to install globally? `npx bor` does the same.
+
+### From a clone
 
 ```bash
 git clone https://github.com/SixHq/bed-of-roses
 cd bed-of-roses
 npm install
+npm start
 ```
 
-## Run it
+## Optional: bundled Chromium
 
-There are two ways to run BOR, sharing the same runtime.
-
-### v2 Mac host (the product)
+BOR's [ambient browser](/features/ambient-browser) uses your installed Google Chrome automatically. If you don't have Chrome, install the bundled Chromium once:
 
 ```bash
-npm run v2          # launch the Electron host (it spawns the Node runtime itself)
-# or
-npx bor             # alias of npm run v2
+npm run browser:install
 ```
 
-This opens the onboarding window the first time, then the draggable presence.
-
-### Classic browser shell
-
-```bash
-npm start           # run the Node runtime on :7777
-npm run dev         # same, with --watch (auto-restart on change)
-```
-
-Then open `http://localhost:7777`.
-
-## Optional: the browser automation engine
-
-BOR's [`browser_action`](../features/the-browser.md) tool and the bundled Playwright MCP need a Chromium:
-
-```bash
-npm run browser:install   # install Playwright Chromium for MCP / browser_action
-npm run browser:mcp       # run the Playwright MCP browser service standalone (optional)
-```
-
-If you skip this, `browser_action` falls back to your system Chrome when available, and tells you to run `npm run browser:install` otherwise.
-
-## Command reference
+## Useful commands
 
 | Command | What it does |
 |---|---|
-| `npm run v2` / `npx bor` | Launch the v2 Electron host |
-| `npm start` | Run the runtime on `:7777` (classic shell) |
-| `npm run dev` | Same as `npm start`, with `--watch` |
-| `npm run browser:install` | Install Playwright Chromium |
-| `npm run browser:mcp` | Run the Playwright MCP service standalone |
-| `bor onboard` / `bor create` / `bor delete` / `bor list` | Presence management — see [Command line](../cli/command-line.md) |
-
-## First run
-
-On first launch the host opens **onboarding**: pick a provider, give BOR a name and personality, choose an avatar and a theme. See [Onboarding](onboarding.md). After that you land on the presence — head to the [Quickstart](quickstart.md).
+| `bor` / `npx bor` / `npm start` | Launch Bed of Roses |
+| `bor onboard` | Create a new presence with guided onboarding |
+| `bor list` / `bor create` / `bor delete` | Manage presences — see [Command line](/cli/command-line) |
+| `npm run browser:install` | Install the bundled Chromium (only if you have no Chrome) |
 
 ## Where your data lives
 
-Everything BOR generates is written to your disk and is git-ignored:
+Everything BOR generates stays on your disk:
 
-- `os-data/` — presences, config (including API keys), generated surfaces, memory, logs.
-- `.bor/` — the agent working directory for files/projects BOR creates.
-- `.bed-of-roses/` — Electron cache, browser profiles, skills, MCP config.
+- `os-data/` — presences, config (including API keys), generated apps, memory, the audit log.
+- `.bor/` — files and projects BOR creates for you.
+- `.bed-of-roses/` — skills, MCP config, browser profiles.
 
-See [Storage & data](../concepts/storage-and-data.md) for the full map and [Configuration](configuration.md) for env overrides.
+See [Storage & data](/concepts/storage-and-data) for the map.
+
+## Next
+
+[Onboarding](/getting-started/onboarding) — what each setup step does.

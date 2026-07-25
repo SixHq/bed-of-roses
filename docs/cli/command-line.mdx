@@ -3,7 +3,7 @@ title: "Command Line"
 description: "The bor CLI (bin/bed-of-roses.cjs, also runnable as npx bor) launches the host and manages presences from the terminal. It's the headless complement to the Main BOR app."
 ---
 
-The `bor` CLI (`bin/bed-of-roses.cjs`, also runnable as `npx bor`) launches the host and manages presences from the terminal. It's the headless complement to the [Main BOR app](../features/multi-presence.md#the-main-bor-app).
+The `bor` CLI (`bin/bed-of-roses.cjs`, also runnable as `npx bor`) launches the host and manages presences from the terminal. It's the headless complement to the [Main BOR app](/features/multi-presence#managing-presences).
 
 ## Commands
 
@@ -15,7 +15,7 @@ bor list                  List presences (headless). (alias: ls)
 bor help                  Show help. (aliases: --help, -h)
 ```
 
-With no subcommand, `bor` (i.e. `npx bor` / `npm run v2`) launches the Electron host.
+With no subcommand, `bor` (i.e. `npx bor` / `npm start`) launches the Electron host.
 
 ### `bor onboard`
 
@@ -58,7 +58,7 @@ If there are none, it tells you to run `bor onboard`.
 
 ## Relationship to the app
 
-- `bor` / `npx bor` / `npm run v2` — launch the full Electron host (presence windows, etc.).
+- `bor` / `npx bor` / `npm start` — launch the full Electron host (presence windows, etc.).
 - `bor create/delete/list` — manage the presence **registry** (`os-data/presences.json`) without a window.
 - The Main BOR app does the same management with a UI.
 

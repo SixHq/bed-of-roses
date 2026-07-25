@@ -18,6 +18,14 @@ const qs = (sel, root = document) => root.querySelector(sel);
 const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 const BASE_THEME_STORAGE_KEY = 'bor.baseTheme';
 const IS_V2_HOST = new URLSearchParams(window.location.search).get('host') === 'v2';
+// Provider-settings deep link: the presence opens this window straight onto
+// the connect pane as a SETTINGS screen (API key, model, reasoning, base URL)
+// for one provider. 'current' resolves to the configured default provider.
+const SETTINGS_PROVIDER = new URLSearchParams(window.location.search).get('provider-settings') || '';
+// Connectors deep link: the presence opens this window straight onto the final
+// connectors pane ("Connect Bed of Roses to your daily life") as a SETTINGS
+// screen. The finish button becomes "Done" and just closes the window.
+const SETTINGS_CONNECTORS = new URLSearchParams(window.location.search).get('connectors') === '1';
 
 const state = {
   config: null,
@@ -39,6 +47,10 @@ const state = {
   presencePreviews: [],   // optional animated previews for themes that provide them
   providerCatalog: [],     // [{id, label, description, models, signupUrl, ...}]
   expandedProvider: null,  // id of currently-expanded drawer in connect pane
+  connectors: [],          // [{id, name, tagline, category, auth, status, detail, fields, steps, docsUrl, manualFields, manualSteps}]
+  expandedConnector: null, // id of currently-expanded drawer in connectors pane
+  moreApps: { status: 'idle', apps: [], reason: '' }, // Composio "More apps" catalog cache
+  moreAppsQuery: '',       // filter text for the More apps browser
   buildTurnSeq: 0,
   thoughtText: '',
   thoughtTone: 'warm',
@@ -781,7 +793,7 @@ function startHudClock() {
 }
 
 // --- Onboarding pane router ------------------------------------------------
-const PANES = ['welcome', 'name', 'theme', 'presence', 'tools', 'permissions', 'connect'];
+const PANES = ['welcome', 'name', 'theme', 'presence', 'permissions', 'connect', 'tools'];
 let currentPaneIdx = 0;
 
 function gotoPane(idx) {
@@ -805,8 +817,8 @@ function gotoPane(idx) {
   if (next === 'presence') startPresencePreviews();
   else stopPresencePreviews();
 
-  // Probe browser-use status when the user lands on the tools pane.
-  if (next === 'tools') refreshBrowserUseStatus(false);
+  // Refresh connector status when the user lands on the final connectors pane.
+  if (next === 'tools') refreshConnectors();
 
   // Probe macOS computer-use permissions when landing on the permissions pane
   // (the probe also triggers the first-run macOS permission prompts).
@@ -3205,6 +3217,11 @@ async function sendChat(text) {
           }
         },
 
+        // Reasoning tokens (chain-of-thought). The classic shell has no
+        // reasoning card — the v2 presence renders the stream — so just keep
+        // the avatar visibly thinking rather than mixing it into the bubble.
+        reasoning_delta: () => setAvatarState('thinking'),
+
         // Thought bubble stream. The final `say` still arrives for history,
         // but `say_delta` lets the bubble render before the tag fully closes.
         say_delta: (p) => streamThoughtBubbleDelta(p?.text, { tone: p?.tone || 'warm' }),
@@ -3321,44 +3338,704 @@ function isV2OnboardingComplete(cfg) {
   );
 }
 
-// --- Tools pane: browser-use detection -------------------------------------
-async function refreshBrowserUseStatus(force = false) {
-  const card = $('tool-browser-use');
-  const badge = $('browser-use-badge');
-  const body = $('browser-use-body');
-  const meta = $('browser-use-meta');
-  if (!card || !badge) return;
-  card.dataset.status = 'checking';
-  badge.textContent = force ? 'checking…' : 'checking…';
-  badge.className = 'tool-badge';
+// --- Final pane: connectors ("Connect Bed of Roses to your daily life") ----
+// Follows the provider-grid drawer pattern: the grid re-renders on status or
+// expansion changes; transient button/inline-error states mutate in place so
+// typed input survives a failed attempt.
+
+// Active OAuth polls: connector id -> { timer, popup }. Waiting-state UI is
+// DERIVED from this map on every render, so re-renders can't orphan a poll.
+const connectorOauthPolls = new Map();
+
+// Same idea for per-slug rows inside the "More apps" browser: slug -> { timer, popup }.
+const moreAppsPolls = new Map();
+// Slugs connected via the More apps browser before the refreshed connector list
+// lands — pruned once the server reports the matching `composio_<slug>` card.
+const moreAppsJustConnected = new Set();
+// Hybrid cards whose "Use an API token instead" disclosure is open (survives re-renders).
+const connectorManualOpen = new Set();
+
+// Client-side ordering: daily life first, then work/dev, then dynamic
+// Composio apps, then capabilities. "More apps" is appended last by the
+// renderer. Never depend on server order.
+const CONNECTOR_ORDER = [
+  'composio', 'gmail', 'gcalendar', 'outlook', 'gdrive', 'gdocs', 'gsheets',
+  'whatsapp', 'imessage', 'youtube',
+  'slack', 'notion', 'linear', 'github',
+];
+function connectorRank(id) {
+  const i = CONNECTOR_ORDER.indexOf(id);
+  if (i !== -1) return i;
+  if (id === 'imagegen') return 900;
+  if (id === 'browser') return 910;
+  return 500; // dynamic composio_<slug> cards + anything unknown
+}
+function sortedConnectors() {
+  return state.connectors
+    .map((c, i) => [c, i])
+    .sort((a, b) => (connectorRank(a[0].id) - connectorRank(b[0].id)) || (a[1] - b[1]))
+    .map((pair) => pair[0]);
+}
+
+async function refreshConnectors(force = false) {
+  const grid = $('connector-grid');
+  const loadLine = $('connector-load-line');
+  if (!grid) return;
+  if (!state.connectors.length) renderConnectorSkeleton();
+  else grid.classList.add('loading');
+  loadLine?.classList.add('hidden');
   try {
-    const res = await fetch(`/api/browser-use/status${force ? '?refresh=1' : ''}`);
+    const res = await fetch(`/api/connectors${force ? '?refresh=1' : ''}`);
     if (!res.ok) throw new Error(`status ${res.status}`);
-    const status = await res.json();
-    if (status.installed) {
-      card.dataset.status = 'installed';
-      badge.textContent = '✓ installed';
-      badge.classList.add('ok');
-      if (body) body.classList.add('hidden');
-      if (meta) {
-        const parts = [];
-        if (status.version) parts.push(status.version);
-        if (status.path) parts.push(status.path);
-        meta.textContent = parts.join(' · ');
-      }
-    } else {
-      card.dataset.status = 'missing';
-      badge.textContent = 'not installed';
-      badge.classList.add('warn');
-      if (body) body.classList.remove('hidden');
-      if (meta) meta.textContent = status.detail || '';
+    const json = await res.json();
+    state.connectors = Array.isArray(json.connectors) ? json.connectors : [];
+    // Once the server reports a dynamic card for a slug, its row state derives
+    // from the connector list — drop the optimistic marker.
+    for (const slug of [...moreAppsJustConnected]) {
+      if (state.connectors.some((c) => c.id === `composio_${slug}`)) moreAppsJustConnected.delete(slug);
     }
-  } catch (err) {
-    card.dataset.status = 'error';
-    badge.textContent = 'detection failed';
-    badge.classList.add('err');
-    if (meta) meta.textContent = err.message;
+    renderConnectorGrid();
+  } catch {
+    // Never block finishing onboarding on connector detection — one quiet
+    // retry line, nothing modal.
+    if (!state.connectors.length && loadLine) {
+      grid.innerHTML = '';
+      loadLine.classList.remove('hidden');
+      loadLine.innerHTML = 'Couldn’t load connectors. <button class="connector-retry" type="button">Try again</button> — or finish setup and add them later.';
+      loadLine.querySelector('.connector-retry')?.addEventListener('click', () => refreshConnectors(true));
+    }
+  } finally {
+    grid.classList.remove('loading');
   }
+}
+
+function renderConnectorSkeleton() {
+  const grid = $('connector-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  for (let i = 0; i < 6; i++) {
+    const ph = document.createElement('div');
+    ph.className = 'connector-skeleton';
+    ph.style.animationDelay = `${i * 90}ms`;
+    grid.appendChild(ph);
+  }
+}
+
+function connectorBadge(c) {
+  if (c.status === 'connected') return { cls: 'ok', label: 'Connected' };
+  if (c.status === 'attention') return { cls: 'err', label: 'Needs attention' };
+  return { cls: 'warn', label: 'Not connected' };
+}
+
+// Minimal markdown for connector `steps`/`detail` strings: inline code
+// backticks and bare URLs only, everything else escaped.
+function connectorMarkdown(text) {
+  const codes = [];
+  let s = String(text ?? '').replace(/`([^`]+)`/g, (_, code) => {
+    codes.push(code);
+    return `\u0000${codes.length - 1}\u0000`;
+  });
+  s = escapeHtml(s);
+  s = s.replace(/https?:\/\/[^\s<)]+/g, (url) =>
+    `<a href="${escapeAttr(url)}" target="_blank" rel="noreferrer">${url.replace(/^https?:\/\//, '')}</a>`);
+  s = s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${escapeHtml(codes[Number(i)])}</code>`);
+  return s;
+}
+
+// Hybrid = composio-oauth card that ALSO ships a manual token path
+// (manualFields + manualSteps): OAuth is primary, manual sits behind a
+// collapsed disclosure below a quiet divider.
+function connectorIsHybrid(c) {
+  return c.auth === 'composio-oauth'
+    && ((Array.isArray(c.manualFields) && c.manualFields.length)
+      || (Array.isArray(c.manualSteps) && c.manualSteps.length));
+}
+
+function connectorFieldHtml(f, attr) {
+  return `
+    <div class="field connector-field">
+      <label class="field-label">${escapeHtml(f.label || f.key)}</label>
+      <input class="field-input" type="${f.secret ? 'password' : 'text'}" ${attr}="${escapeAttr(f.key)}"
+             placeholder="${escapeAttr(f.placeholder || '')}" autocomplete="off" spellcheck="false" />
+      ${f.help ? `<p class="connector-help">${connectorMarkdown(f.help)}</p>` : ''}
+    </div>`;
+}
+
+function connectorDrawerHtml(c) {
+  const connected = c.status === 'connected';
+  const polling = connectorOauthPolls.has(c.id);
+  const hybrid = connectorIsHybrid(c);
+  const parts = [];
+
+  if (c.detail) parts.push(`<p class="connector-detail">${connectorMarkdown(c.detail)}</p>`);
+
+  const steps = Array.isArray(c.steps) ? c.steps : [];
+  if (steps.length && !connected) {
+    parts.push(`<ol class="connector-steps">${steps.map((s) => `<li>${connectorMarkdown(s)}</li>`).join('')}</ol>`);
+  }
+
+  if (c.auth === 'apikey' && !connected) {
+    for (const f of c.fields || []) parts.push(connectorFieldHtml(f, 'data-conn-field'));
+  }
+  if (c.auth === 'apikey' && connected) {
+    parts.push('<p class="connector-saved">Key saved.</p>');
+  }
+  if (c.auth === 'composio-oauth' && connected && !c.detail) {
+    // Dynamic composio_<slug> cards usually arrive with no detail line.
+    parts.push('<p class="connector-saved">Connected via Composio.</p>');
+  }
+  if (c.auth === 'composio-oauth' && !connected) {
+    parts.push(`<p class="connector-waiting ${polling ? '' : 'hidden'}" data-conn-waiting><span class="connector-waiting-dot"></span>Waiting for sign-in…</p>`);
+  }
+
+  parts.push('<p class="connector-error hidden" data-conn-error></p>');
+
+  const actions = [];
+  if (c.docsUrl) actions.push(`<a class="signup-link" href="${escapeAttr(c.docsUrl)}" target="_blank" rel="noreferrer">Docs</a>`);
+  actions.push('<span class="spacer"></span>');
+  if (c.auth === 'local-permission') {
+    actions.push('<button class="btn btn-tertiary" data-act="open-settings" type="button">Open System Settings</button>');
+    actions.push('<button class="btn btn-primary" data-act="check" type="button">Check access</button>');
+  } else if (c.auth === 'builtin') {
+    if (c.id === 'browser') actions.push('<button class="btn btn-tertiary" data-act="browser-signin" type="button">Open sign-in browser</button>');
+  } else if (connected) {
+    actions.push('<button class="btn btn-tertiary" data-act="disconnect" type="button">Disconnect</button>');
+  } else if (c.auth === 'composio-oauth') {
+    const label = hybrid
+      ? 'Connect with Composio'
+      : (c.id === 'gmail' || c.id === 'gcalendar') ? 'Connect Google account' : `Connect ${escapeHtml(c.name)}`;
+    actions.push(`<button class="btn btn-tertiary ${polling ? '' : 'hidden'}" data-act="oauth-cancel" type="button">Cancel</button>`);
+    actions.push(`<button class="btn btn-primary ${polling ? 'hidden' : ''}" data-act="oauth" type="button">${label}</button>`);
+  } else if (c.auth === 'apikey') {
+    actions.push('<button class="btn btn-primary" data-act="connect" type="button">Connect</button>');
+  }
+  parts.push(`<div class="connector-actions">${actions.join('')}</div>`);
+
+  if (hybrid && !connected) {
+    const open = connectorManualOpen.has(c.id);
+    const manualSteps = Array.isArray(c.manualSteps) ? c.manualSteps : [];
+    const manualFields = Array.isArray(c.manualFields) ? c.manualFields : [];
+    const manual = [];
+    if (manualSteps.length) {
+      manual.push(`<ol class="connector-steps">${manualSteps.map((s) => `<li>${connectorMarkdown(s)}</li>`).join('')}</ol>`);
+    }
+    for (const f of manualFields) manual.push(connectorFieldHtml(f, 'data-conn-manual-field'));
+    manual.push('<p class="connector-error hidden" data-conn-manual-error></p>');
+    manual.push('<div class="connector-actions"><span class="spacer"></span><button class="btn btn-tertiary" data-act="manual-connect" type="button">Connect</button></div>');
+
+    parts.push('<div class="connector-alt-divider"><span>or connect manually</span></div>');
+    parts.push(`<button class="connector-disclosure" data-act="toggle-manual" type="button" aria-expanded="${open}">Use an API token instead ${ICON_CHEVRON}</button>`);
+    parts.push(`<div class="connector-manual ${open ? 'open' : ''}" data-conn-manual>${manual.join('')}</div>`);
+  }
+
+  return parts.join('');
+}
+
+function renderConnectorGrid() {
+  const grid = $('connector-grid');
+  if (!grid) return;
+  const searchWasFocused = document.activeElement?.classList?.contains('moreapps-search');
+  grid.innerHTML = '';
+  for (const c of sortedConnectors()) {
+    const card = document.createElement('article');
+    card.className = 'connector-card';
+    card.dataset.connectorId = c.id;
+    card.dataset.status = c.status || 'not_connected';
+    if (state.expandedConnector === c.id) card.classList.add('expanded');
+
+    const badge = connectorBadge(c);
+    const subline = (c.status === 'connected' && c.detail) ? c.detail : (c.tagline || '');
+    card.innerHTML = `
+      <button class="connector-head" type="button">
+        <span class="connector-info">
+          <span class="connector-title">
+            <span class="connector-name">${escapeHtml(c.name)}</span>
+            <span class="tool-badge ${badge.cls}">${badge.label}</span>
+          </span>
+          <span class="connector-tagline">${escapeHtml(subline)}</span>
+        </span>
+        ${ICON_CHEVRON}
+      </button>
+      <div class="connector-drawer">
+        <div class="connector-drawer-inner">
+          <div class="connector-drawer-content">${connectorDrawerHtml(c)}</div>
+        </div>
+      </div>`;
+    grid.appendChild(card);
+
+    card.querySelector('.connector-head').addEventListener('click', () => {
+      state.expandedConnector = state.expandedConnector === c.id ? null : c.id;
+      renderConnectorGrid();
+    });
+    wireConnectorDrawer(card, c);
+  }
+  grid.appendChild(buildMoreAppsCard());
+  if (searchWasFocused) {
+    const input = qs('.moreapps-search', grid);
+    if (input) {
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+  }
+}
+
+// --- "More apps" browser: every service Composio can connect ---------------
+// Always the LAST card, spanning both grid columns. The catalog is fetched
+// lazily on first expand and cached in state.moreApps.
+
+function buildMoreAppsCard() {
+  const card = document.createElement('article');
+  card.className = 'connector-card connector-more';
+  card.dataset.connectorId = 'more-apps';
+  const expanded = state.expandedConnector === 'more-apps';
+  if (expanded) card.classList.add('expanded');
+  const count = state.moreApps.status === 'ok'
+    ? `<span class="connector-count-badge">${state.moreApps.apps.length} available</span>`
+    : '';
+  card.innerHTML = `
+    <button class="connector-head" type="button">
+      <span class="connector-info">
+        <span class="connector-title">
+          <span class="connector-name">More apps</span>
+          ${count}
+        </span>
+        <span class="connector-tagline">Browse every service Composio can connect — one-click Google-grade sign-in.</span>
+      </span>
+      ${ICON_CHEVRON}
+    </button>
+    <div class="connector-drawer">
+      <div class="connector-drawer-inner">
+        <div class="connector-drawer-content" data-moreapps-body></div>
+      </div>
+    </div>`;
+  card.querySelector('.connector-head').addEventListener('click', () => {
+    state.expandedConnector = expanded ? null : 'more-apps';
+    renderConnectorGrid();
+    if (state.expandedConnector === 'more-apps') {
+      loadMoreApps();
+      focusMoreAppsSearch();
+    }
+  });
+  if (expanded) renderMoreAppsBody(card.querySelector('[data-moreapps-body]'));
+  return card;
+}
+
+function focusMoreAppsSearch() {
+  // Autofocus the filter, but never steal focus from something the user is in.
+  const active = document.activeElement;
+  if (active && active !== document.body && active.tagName !== 'BUTTON') return;
+  qs('.moreapps-search')?.focus();
+}
+
+async function loadMoreApps(force = false) {
+  if (!force && (state.moreApps.status === 'ok' || state.moreApps.status === 'loading')) return;
+  state.moreApps = { status: 'loading', apps: [], reason: '' };
+  renderMoreAppsBody(qs('[data-moreapps-body]'));
+  try {
+    const res = await fetch('/api/connectors/composio/apps');
+    const json = await res.json().catch(() => ({}));
+    if (json.ok) {
+      state.moreApps = { status: 'ok', apps: Array.isArray(json.apps) ? json.apps : [], reason: '' };
+    } else {
+      state.moreApps = { status: 'error', apps: [], reason: json.reason || `Failed (${res.status})` };
+    }
+  } catch {
+    state.moreApps = { status: 'error', apps: [], reason: 'Couldn’t load the app catalog. Try again.' };
+  }
+  renderConnectorGrid(); // refreshes the count badge + drawer body together
+  if (state.moreApps.status === 'ok') focusMoreAppsSearch();
+  // The usual failure: Composio itself isn't connected yet. Point at its card.
+  if (state.moreApps.status === 'error' && /composio/i.test(state.moreApps.reason)) {
+    flashConnectorCard('composio');
+  }
+}
+
+function renderMoreAppsBody(body) {
+  if (!body) return;
+  const m = state.moreApps;
+  if (m.status === 'idle' || m.status === 'loading') {
+    body.innerHTML = '<p class="connector-detail">Loading apps…</p>';
+    return;
+  }
+  if (m.status === 'error') {
+    body.innerHTML = `
+      <p class="connector-error" data-moreapps-reason>${connectorMarkdown(m.reason)}</p>
+      <div class="connector-actions"><span class="spacer"></span><button class="btn btn-tertiary" data-act="moreapps-retry" type="button">Try again</button></div>`;
+    body.querySelector('[data-act="moreapps-retry"]')?.addEventListener('click', () => loadMoreApps(true));
+    return;
+  }
+  body.innerHTML = `
+    <input class="field-input moreapps-search" type="text" placeholder="Search ${m.apps.length} apps…"
+           value="${escapeAttr(state.moreAppsQuery)}" autocomplete="off" spellcheck="false" aria-label="Search apps" />
+    <div class="moreapps-list" data-moreapps-list></div>`;
+  const input = body.querySelector('.moreapps-search');
+  let debounce = null;
+  input.addEventListener('input', () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      state.moreAppsQuery = input.value;
+      renderMoreAppsList(body.querySelector('[data-moreapps-list]'));
+    }, 120);
+  });
+  renderMoreAppsList(body.querySelector('[data-moreapps-list]'));
+}
+
+function moreAppsFiltered() {
+  const q = state.moreAppsQuery.trim().toLowerCase();
+  if (!q) return state.moreApps.apps;
+  return state.moreApps.apps.filter((a) =>
+    String(a.name || '').toLowerCase().includes(q)
+    || String(a.category || '').toLowerCase().includes(q)
+    || String(a.slug || '').toLowerCase().includes(q));
+}
+
+function moreAppSlugConnected(slug) {
+  return moreAppsJustConnected.has(slug)
+    || state.connectors.some((c) => c.id === `composio_${slug}` && c.status === 'connected');
+}
+
+function renderMoreAppsList(listEl) {
+  if (!listEl) return;
+  const apps = moreAppsFiltered();
+  listEl.innerHTML = '';
+  if (!apps.length) {
+    listEl.innerHTML = '<p class="moreapps-empty">No apps match.</p>';
+    return;
+  }
+  for (const app of apps) {
+    const slug = String(app.slug || '');
+    const row = document.createElement('div');
+    row.className = 'moreapps-row';
+    row.dataset.slug = slug;
+    const polling = moreAppsPolls.has(slug);
+    const connected = moreAppSlugConnected(slug);
+    const meta = [app.category, Number.isFinite(app.toolsCount) ? `${app.toolsCount} tools` : '']
+      .filter(Boolean).join(' · ');
+    const action = connected
+      ? '<span class="moreapps-row-connected">Connected</span>'
+      : polling
+        ? `<span class="moreapps-row-waiting"><span class="connector-waiting-dot"></span>Waiting for sign-in…</span>
+           <button class="btn btn-tertiary moreapps-btn" data-act="row-cancel" type="button">Cancel</button>`
+        : '<button class="btn btn-tertiary moreapps-btn" data-act="row-connect" type="button">Connect</button>';
+    row.innerHTML = `
+      <div class="moreapps-row-line">
+        <span class="moreapps-row-info">
+          <span class="moreapps-row-name">${escapeHtml(app.name || slug)}</span>
+          ${meta ? `<span class="moreapps-row-meta">${escapeHtml(meta)}</span>` : ''}
+        </span>
+        ${action}
+      </div>
+      <p class="connector-error hidden" data-row-error></p>`;
+    row.querySelector('[data-act="row-connect"]')?.addEventListener('click', () => startMoreAppOauth(slug));
+    row.querySelector('[data-act="row-cancel"]')?.addEventListener('click', () => {
+      stopMoreAppPoll(slug);
+      refreshMoreAppsList();
+    });
+    listEl.appendChild(row);
+  }
+}
+
+// Re-render just the rows (poll callbacks + cancel), keeping the search input alive.
+function refreshMoreAppsList() {
+  renderMoreAppsList(qs('[data-moreapps-list]'));
+}
+
+function showMoreAppRowError(slug, msg) {
+  const errEl = qs(`.moreapps-row[data-slug="${CSS.escape(slug)}"] [data-row-error]`);
+  if (!errEl) return;
+  errEl.textContent = msg;
+  errEl.classList.remove('hidden');
+}
+
+async function startMoreAppOauth(slug) {
+  const btn = qs(`.moreapps-row[data-slug="${CSS.escape(slug)}"] [data-act="row-connect"]`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Starting…'; }
+  let start = null;
+  try {
+    const res = await fetch(`/api/connectors/composio/apps/${encodeURIComponent(slug)}/oauth/start`, { method: 'POST' });
+    start = await res.json().catch(() => ({}));
+    if (!res.ok || !start.ok) throw new Error(start.reason || `Failed (${res.status})`);
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Connect'; }
+    showMoreAppRowError(slug, err.message);
+    if (/composio/i.test(err.message)) flashConnectorCard('composio');
+    return;
+  }
+  const popup = window.open(start.redirectUrl, 'bor-oauth', 'width=520,height=720');
+  startMoreAppPoll(slug, start.pollToken, popup);
+  refreshMoreAppsList(); // waiting state is derived from the poll map
+}
+
+function startMoreAppPoll(slug, pollToken, popup) {
+  stopMoreAppPoll(slug);
+  const deadline = Date.now() + 3 * 60 * 1000;
+  const timer = setInterval(async () => {
+    if (Date.now() > deadline) {
+      stopMoreAppPoll(slug);
+      refreshMoreAppsList();
+      showMoreAppRowError(slug, 'Sign-in timed out. Try again.');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/connectors/composio/apps/${encodeURIComponent(slug)}/oauth/status?pollToken=${encodeURIComponent(pollToken)}`);
+      if (!res.ok) return; // transient — keep polling until the deadline
+      const json = await res.json();
+      if (json.status === 'connected') {
+        stopMoreAppPoll(slug);
+        moreAppsJustConnected.add(slug);
+        // Keep the browser open so several apps can be connected in a row;
+        // the refreshed list brings in the new composio_<slug> card above.
+        refreshConnectors();
+      } else if (json.status === 'failed') {
+        stopMoreAppPoll(slug);
+        refreshMoreAppsList();
+        showMoreAppRowError(slug, json.detail || 'Sign-in failed.');
+      }
+    } catch { /* transient network error — keep polling */ }
+  }, 2000);
+  moreAppsPolls.set(slug, { timer, popup });
+}
+
+function stopMoreAppPoll(slug) {
+  const rec = moreAppsPolls.get(slug);
+  if (!rec) return;
+  clearInterval(rec.timer);
+  try { rec.popup?.close(); } catch { /* popup already gone */ }
+  moreAppsPolls.delete(slug);
+}
+
+// Look up the CURRENT drawer elements for a connector — poll callbacks must
+// never hold stale references across re-renders.
+function connectorDrawerEls(id) {
+  const drawer = qs(`.connector-card[data-connector-id="${CSS.escape(id)}"] .connector-drawer-content`);
+  return { drawer, errEl: drawer?.querySelector('[data-conn-error]') };
+}
+
+function showConnectorError(id, msg) {
+  const { errEl } = connectorDrawerEls(id);
+  if (!errEl) return;
+  errEl.textContent = msg;
+  errEl.classList.remove('hidden');
+}
+
+// Merge a POST/DELETE result into local state. Collapses the drawer only once
+// the connector is actually connected; 'attention' keeps it open so the steps
+// and detail line stay visible.
+function applyConnectorResult(id, result) {
+  const c = state.connectors.find((x) => x.id === id);
+  if (c) {
+    if (result.status) c.status = result.status;
+    if (result.detail !== undefined) c.detail = result.detail;
+  }
+  if (c?.status === 'connected') state.expandedConnector = null;
+  renderConnectorGrid();
+}
+
+function flashConnectorCard(id) {
+  const card = qs(`.connector-card[data-connector-id="${CSS.escape(id)}"]`);
+  if (!card) return;
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  card.classList.remove('flash');
+  void card.offsetWidth; // restart the animation
+  card.classList.add('flash');
+  setTimeout(() => card.classList.remove('flash'), 1600);
+}
+
+async function postConnector(id, fields) {
+  const res = await fetch(`/api/connectors/${encodeURIComponent(id)}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ fields: fields || {} }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json.ok) throw new Error(json.reason || `Failed (${res.status})`);
+  return json;
+}
+
+function startConnectorOauthPoll(id, pollToken, popup) {
+  stopConnectorOauthPoll(id);
+  const deadline = Date.now() + 3 * 60 * 1000;
+  const timer = setInterval(async () => {
+    if (Date.now() > deadline) {
+      stopConnectorOauthPoll(id);
+      renderConnectorGrid();
+      showConnectorError(id, 'Sign-in timed out. Try again.');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/connectors/${encodeURIComponent(id)}/oauth/status?pollToken=${encodeURIComponent(pollToken)}`);
+      if (!res.ok) return; // transient — keep polling until the deadline
+      const json = await res.json();
+      if (json.status === 'connected') {
+        stopConnectorOauthPoll(id);
+        applyConnectorResult(id, { status: 'connected', detail: json.detail });
+      } else if (json.status === 'failed') {
+        stopConnectorOauthPoll(id);
+        renderConnectorGrid();
+        showConnectorError(id, json.detail || 'Sign-in failed.');
+      }
+    } catch { /* transient network error — keep polling */ }
+  }, 2000);
+  connectorOauthPolls.set(id, { timer, popup });
+}
+
+function stopConnectorOauthPoll(id) {
+  const rec = connectorOauthPolls.get(id);
+  if (!rec) return;
+  clearInterval(rec.timer);
+  try { rec.popup?.close(); } catch { /* popup already gone */ }
+  connectorOauthPolls.delete(id);
+}
+
+function wireConnectorDrawer(card, c) {
+  const drawer = card.querySelector('.connector-drawer-content');
+  if (!drawer) return;
+  const errEl = drawer.querySelector('[data-conn-error]');
+  const showErr = (msg) => { if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); } };
+  const clearErr = () => errEl?.classList.add('hidden');
+
+  // apikey: verify-then-persist on the server; inline reason on failure.
+  const connectBtn = drawer.querySelector('[data-act="connect"]');
+  connectBtn?.addEventListener('click', async () => {
+    const fields = {};
+    let missing = null;
+    for (const input of drawer.querySelectorAll('[data-conn-field]')) {
+      const v = input.value.trim();
+      if (v) fields[input.dataset.connField] = v;
+      else if (!missing) missing = input;
+    }
+    if (missing) { showErr('Fill in every field to connect.'); missing.focus(); return; }
+    clearErr();
+    connectBtn.disabled = true;
+    connectBtn.textContent = 'Checking…';
+    try {
+      const json = await postConnector(c.id, fields);
+      applyConnectorResult(c.id, json);
+    } catch (err) {
+      showErr(err.message);
+      connectBtn.disabled = false;
+      connectBtn.textContent = 'Connect';
+    }
+  });
+
+  drawer.querySelector('[data-act="disconnect"]')?.addEventListener('click', async () => {
+    clearErr();
+    try {
+      const res = await fetch(`/api/connectors/${encodeURIComponent(c.id)}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.ok === false) throw new Error(json.reason || `Failed (${res.status})`);
+      if (c.id.startsWith('composio_')) moreAppsJustConnected.delete(c.id.slice('composio_'.length));
+      applyConnectorResult(c.id, { status: 'not_connected', detail: '' });
+      refreshConnectors();
+    } catch (err) {
+      showErr(err.message);
+    }
+  });
+
+  // Hybrid manual path: disclosure toggles in place (typed input survives);
+  // the open/closed choice is recorded so re-renders preserve it.
+  const toggleManual = drawer.querySelector('[data-act="toggle-manual"]');
+  toggleManual?.addEventListener('click', () => {
+    const manualEl = drawer.querySelector('[data-conn-manual]');
+    const open = !connectorManualOpen.has(c.id);
+    if (open) connectorManualOpen.add(c.id);
+    else connectorManualOpen.delete(c.id);
+    manualEl?.classList.toggle('open', open);
+    toggleManual.setAttribute('aria-expanded', String(open));
+    if (open) manualEl?.querySelector('[data-conn-manual-field]')?.focus();
+  });
+
+  // Manual connect POSTs {fields} exactly like the apikey drawers:
+  // verify-then-persist on the server, inline reason on failure.
+  const manualBtn = drawer.querySelector('[data-act="manual-connect"]');
+  manualBtn?.addEventListener('click', async () => {
+    const manualErr = drawer.querySelector('[data-conn-manual-error]');
+    const showManualErr = (msg) => { if (manualErr) { manualErr.textContent = msg; manualErr.classList.remove('hidden'); } };
+    const fields = {};
+    let missing = null;
+    for (const input of drawer.querySelectorAll('[data-conn-manual-field]')) {
+      const v = input.value.trim();
+      if (v) fields[input.dataset.connManualField] = v;
+      else if (!missing) missing = input;
+    }
+    if (missing) { showManualErr('Fill in every field to connect.'); missing.focus(); return; }
+    manualErr?.classList.add('hidden');
+    manualBtn.disabled = true;
+    manualBtn.textContent = 'Checking…';
+    try {
+      const json = await postConnector(c.id, fields);
+      connectorManualOpen.delete(c.id);
+      applyConnectorResult(c.id, json);
+    } catch (err) {
+      showManualErr(err.message);
+      manualBtn.disabled = false;
+      manualBtn.textContent = 'Connect';
+    }
+  });
+
+  // composio-oauth: start -> popup -> poll every 2s until connected/failed.
+  const oauthBtn = drawer.querySelector('[data-act="oauth"]');
+  oauthBtn?.addEventListener('click', async () => {
+    clearErr();
+    oauthBtn.disabled = true;
+    const orig = oauthBtn.textContent;
+    oauthBtn.textContent = 'Starting…';
+    let start = null;
+    try {
+      const res = await fetch(`/api/connectors/${encodeURIComponent(c.id)}/oauth/start`, { method: 'POST' });
+      start = await res.json().catch(() => ({}));
+      if (!res.ok || !start.ok) throw new Error(start.reason || `Failed (${res.status})`);
+    } catch (err) {
+      oauthBtn.disabled = false;
+      oauthBtn.textContent = orig;
+      showErr(err.message);
+      // The usual reason: Composio itself isn't connected yet. Point at it.
+      if (/composio/i.test(err.message)) flashConnectorCard('composio');
+      return;
+    }
+    const popup = window.open(start.redirectUrl, 'bor-oauth', 'width=520,height=720');
+    startConnectorOauthPoll(c.id, start.pollToken, popup);
+    renderConnectorGrid(); // waiting state is derived from the poll map
+  });
+
+  drawer.querySelector('[data-act="oauth-cancel"]')?.addEventListener('click', () => {
+    stopConnectorOauthPoll(c.id);
+    renderConnectorGrid();
+  });
+
+  // local-permission (iMessage): probe access; 'attention' keeps detail visible.
+  const checkBtn = drawer.querySelector('[data-act="check"]');
+  checkBtn?.addEventListener('click', async () => {
+    clearErr();
+    checkBtn.disabled = true;
+    checkBtn.textContent = 'Checking…';
+    try {
+      const json = await postConnector(c.id, {});
+      applyConnectorResult(c.id, json);
+      if (json.status !== 'connected') showConnectorError(c.id, json.detail || 'Access not granted yet.');
+    } catch (err) {
+      checkBtn.disabled = false;
+      checkBtn.textContent = 'Check access';
+      showErr(err.message);
+    }
+  });
+
+  drawer.querySelector('[data-act="open-settings"]')?.addEventListener('click', () => {
+    // Routed by the host's window-open handler to shell.openExternal.
+    window.open('x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles');
+  });
+
+  // builtin browser: fire-and-forget sign-in browser.
+  const signinBtn = drawer.querySelector('[data-act="browser-signin"]');
+  signinBtn?.addEventListener('click', () => {
+    fetch('/api/connectors/browser/signin', { method: 'POST' }).catch(() => {});
+    signinBtn.disabled = true;
+    signinBtn.textContent = 'Opening…';
+    setTimeout(() => {
+      signinBtn.disabled = false;
+      signinBtn.textContent = 'Open sign-in browser';
+    }, 1800);
+  });
 }
 
 // Probe + render the two macOS computer-use permissions (Accessibility +
@@ -3425,6 +4102,21 @@ function clearOnboardingError() {
   $('onboarding-error').classList.add('hidden');
 }
 
+const REASONING_LEVELS = [
+  { id: 'none', label: 'Off' },
+  { id: 'low', label: 'Low' },
+  { id: 'medium', label: 'Medium' },
+  { id: 'high', label: 'High — recommended' },
+  { id: 'max', label: 'Max' },
+];
+
+function reasoningSelectHtml(status) {
+  const current = status?.reasoning || 'high';
+  return `<select class="field-select" data-field="reasoning">
+    ${REASONING_LEVELS.map((r) => `<option value="${escapeAttr(r.id)}" ${current === r.id ? 'selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
+  </select>`;
+}
+
 function drawerHtml(prov, status) {
   const isCompat = prov.id === 'openai-compatible';
   const presets = prov.presets || [];
@@ -3449,6 +4141,10 @@ function drawerHtml(prov, status) {
         <select class="field-input" data-field="model">
           ${(prov.models || []).map((mm) => `<option value="${escapeAttr(mm.id)}"${status?.model === mm.id ? ' selected' : ''}>${escapeHtml(mm.label)}${mm.note ? ` — ${escapeHtml(mm.note)}` : ''}</option>`).join('')}
         </select>
+      </div>
+      <div class="provider-model-row">
+        <label class="field-label">Reasoning</label>
+        ${reasoningSelectHtml(status)}
       </div>
     `);
     const actions = [];
@@ -3521,12 +4217,20 @@ function drawerHtml(prov, status) {
             : `<input class="field-input" type="text" data-field="model" value="${escapeAttr(status?.model || '')}" placeholder="e.g. llama-3.3-70b" autocomplete="off" spellcheck="false" />`}
         </div>
       </div>
+      <div class="field">
+        <label class="field-label">Reasoning</label>
+        ${reasoningSelectHtml(status)}
+      </div>
     `);
   } else {
     parts.push(`
       <div class="field">
         <label class="field-label">API key</label>
         <input class="field-input" type="password" data-field="apiKey" placeholder="${status?.hasApiKey ? '••••••••' : escapeAttr(prov.keyHint || '')}" autocomplete="off" spellcheck="false" />
+      </div>
+      <div class="field">
+        <label class="field-label">Reasoning</label>
+        ${reasoningSelectHtml(status)}
       </div>
     `);
   }
@@ -3608,7 +4312,7 @@ function renderProviderGrid() {
     wireDrawer(card, prov);
   }
 
-  $('connect-finish').disabled = !isConnected(state.config);
+  $('connect-finish').disabled = SETTINGS_PROVIDER ? false : !isConnected(state.config);
 }
 
 function wireDrawer(card, prov) {
@@ -3645,6 +4349,7 @@ function wireDrawer(card, prov) {
     const apiKey = drawer.querySelector('[data-field="apiKey"]')?.value.trim();
     const model = drawer.querySelector('[data-field="model"]')?.value.trim();
     const baseUrl = drawer.querySelector('[data-field="baseUrl"]')?.value.trim();
+    const reasoning = drawer.querySelector('[data-field="reasoning"]')?.value;
 
     const status = state.config?.providers?.[prov.id];
     const hasExisting = !!status?.hasApiKey;
@@ -3666,6 +4371,7 @@ function wireDrawer(card, prov) {
       if (apiKey) entry.apiKey = apiKey;
       if (model) entry.model = model;
       if (baseUrl) entry.baseUrl = baseUrl;
+      if (reasoning) entry.reasoning = reasoning;
 
       const res = await fetch('/api/config', {
         method: 'POST',
@@ -3738,22 +4444,47 @@ function wireOnboarding() {
     gotoPane(4);
   });
 
-  // Tools pane — detection-driven status for browser-use (and future CLIs).
-  $('tools-back').addEventListener('click', () => gotoPane(3));
-  $('tools-next').addEventListener('click', () => gotoPane(5)); // -> permissions
-  $('browser-use-recheck').addEventListener('click', () => refreshBrowserUseStatus(true));
-  $('browser-use-copy').addEventListener('click', () => {
-    const cmd = $('browser-use-cmd').textContent || '';
-    navigator.clipboard?.writeText(cmd).catch(() => {});
-    const btn = $('browser-use-copy');
-    const orig = btn.textContent;
-    btn.textContent = 'Copied';
-    setTimeout(() => { btn.textContent = orig; }, 1200);
+  // Final pane — connectors gallery ("Connect Bed of Roses to your daily life").
+  $('tools-back').addEventListener('click', () => gotoPane(5)); // -> connect
+  $('connectors-recheck').addEventListener('click', () => refreshConnectors(true));
+  $('tools-next').addEventListener('click', async () => {
+    // Settings mode (?connectors=1): connector actions already saved
+    // server-side — just close the window and return to the presence.
+    if (SETTINGS_CONNECTORS) {
+      window.close();
+      return;
+    }
+    // FINAL onboarding step. Committing identity marks onboarding complete
+    // (the v2 host closes this window on that signal), so it happens here —
+    // after the connectors gallery — not on the connect pane. Connecting
+    // services is optional; finishing commits identity only.
+    const btn = $('tools-next');
+    btn.disabled = true;
+    btn.textContent = 'Starting…';
+    try {
+      const body = {
+        aiName: state.config?.aiName || $('ai-name').value.trim() || 'Atlas',
+        avatarStyle: state.avatarStyle,
+        avatarColor: state.avatarColor,
+        baseTheme: state.baseTheme,
+      };
+      const res = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      state.config = (await res.json()).config;
+      enterHome();
+    } catch (err) {
+      showOnboardingError(err.message);
+      btn.disabled = false;
+      btn.textContent = 'Finish setup';
+    }
   });
 
   // Permissions pane (computer-use macOS perms).
-  $('permissions-back').addEventListener('click', () => gotoPane(4)); // -> tools
-  $('permissions-next').addEventListener('click', () => gotoPane(6)); // -> connect
+  $('permissions-back').addEventListener('click', () => gotoPane(3)); // -> presence
+  $('permissions-next').addEventListener('click', () => gotoPane(5)); // -> connect
   $('permissions-recheck').addEventListener('click', () => refreshComputerUsePermissions());
   qsa('[data-perm-open]').forEach((btn) => {
     btn.addEventListener('click', async () => {
@@ -3770,35 +4501,21 @@ function wireOnboarding() {
     });
   });
 
-  $('connect-back').addEventListener('click', () => gotoPane(5)); // -> permissions
+  $('connect-back').addEventListener('click', () => gotoPane(4)); // -> permissions
 
   $('connect-finish').addEventListener('click', async () => {
+    // Settings mode: nothing to commit beyond what the drawers already saved —
+    // just close the window and return to the presence.
+    if (SETTINGS_PROVIDER) {
+      window.close();
+      return;
+    }
     if (!isConnected(state.config)) {
       showOnboardingError('Connect at least one provider to continue.');
       return;
     }
-    const btn = $('connect-finish');
-    btn.disabled = true;
-    btn.textContent = 'Starting…';
-    try {
-      // Persist name + avatar identity now that the user has fully committed
-      const res = await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          aiName: state.config?.aiName || $('ai-name').value.trim() || 'Atlas',
-          avatarStyle: state.avatarStyle,
-          avatarColor: state.avatarColor,
-          baseTheme: state.baseTheme,
-        }),
-      });
-      state.config = (await res.json()).config;
-      enterHome();
-    } catch (err) {
-      showOnboardingError(err.message);
-      btn.disabled = false;
-      btn.textContent = 'Begin';
-    }
+    // Identity commit happens on the FINAL (tools) pane — see tools-next.
+    gotoPane(6); // -> tools (connectors gallery, last step)
   });
 
   $('ai-name').addEventListener('keydown', (e) => {
@@ -4140,6 +4857,36 @@ async function boot() {
 
   const elapsed = Date.now() - splashStarted;
   await new Promise((r) => setTimeout(r, Math.max(0, 1400 - elapsed)));
+
+  // Connectors deep link: show ONLY the connectors pane, regardless of
+  // onboarding state. The finish button becomes "Done" and just closes the
+  // window — connector actions save server-side as they happen.
+  if (SETTINGS_CONNECTORS) {
+    show('onboarding');
+    gotoPane(6); // connectors pane (also triggers refreshConnectors)
+    $('tools-back')?.classList.add('hidden');
+    const finish = $('tools-next');
+    if (finish) finish.textContent = 'Done';
+    return;
+  }
+
+  // Provider-settings deep link: show ONLY the connect pane, with the target
+  // provider's drawer open, regardless of onboarding state. The finish button
+  // becomes "Done" and just closes the window.
+  if (SETTINGS_PROVIDER) {
+    show('onboarding');
+    state.expandedProvider = (SETTINGS_PROVIDER === 'current' ? cfg?.defaultProvider : SETTINGS_PROVIDER) || null;
+    renderProviderGrid();
+    gotoPane(5); // connect pane
+    const back = $('connect-back');
+    if (back) back.classList.add('hidden');
+    const finish = $('connect-finish');
+    if (finish) {
+      finish.disabled = false;
+      finish.textContent = 'Done';
+    }
+    return;
+  }
 
   // The legacy browser shell can enter home after provider setup. The v2 Mac
   // host must keep onboarding open until identity, theme, presence, and provider

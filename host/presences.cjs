@@ -15,13 +15,13 @@ const { existsSync } = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 
-const ROOT = path.resolve(__dirname, '../..');
+const ROOT = path.resolve(__dirname, '..');
 const OS_DATA = path.join(ROOT, 'os-data');
 const PRESENCES_DIR = path.join(OS_DATA, 'presences');
 const REGISTRY_PATH = path.join(OS_DATA, 'presences.json');
 
 // Legacy single-tenant dirs that get moved into the default presence on first
-// multi-presence boot. v2-host.json / v2-wallpaper stay host-global.
+// multi-presence boot. host.json / wallpaper stay host-global.
 const LEGACY_DATA_ENTRIES = [
   'config.json', 'surfaces', 'memory', 'cron', 'notifications',
   'logs', 'images', 'files', 'system-app-layout.json',

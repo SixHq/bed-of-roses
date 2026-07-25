@@ -21,9 +21,19 @@ contextBridge.exposeInMainWorld('borHost', {
   cronAction: (payload) => ipcRenderer.invoke('bor:cron-action', payload),
   pickContextItems: () => ipcRenderer.invoke('bor:pick-context-items'),
   openOnboarding: () => ipcRenderer.invoke('bor:open-onboarding'),
+  openProviderSettings: (providerId) => ipcRenderer.invoke('bor:open-provider-settings', providerId),
+  openConnectorSettings: () => ipcRenderer.invoke('bor:open-connector-settings'),
+  getProviderCatalog: () => ipcRenderer.invoke('bor:provider-catalog'),
+  saveProviderConfig: (patch) => ipcRenderer.invoke('bor:save-provider-config', patch),
   openExternal: (url) => ipcRenderer.invoke('bor:open-external', url),
+  /** Reveal a file/folder the AI mentioned (clickable path links) in Finder. */
+  revealPath: (p) => ipcRenderer.invoke('bor:reveal-path', p),
   openMainApp: () => ipcRenderer.invoke('bor:open-main-app'),
   openMcpMarketplace: () => ipcRenderer.invoke('bor:open-mcp-marketplace'),
+  /** Create a brand-new presence via the existing multi-presence flow
+   *  (registry entry → runtime → onboarding window). Same IPC the Main app's
+   *  "New presence" button uses (host/main.cjs bor:presences-create). */
+  createPresence: (nickname) => ipcRenderer.invoke('bor:presences-create', { nickname }),
   onSubmitPrompt: (callback) => {
     const listener = (_event, text) => callback(text);
     ipcRenderer.on('bor:submit-prompt', listener);
@@ -36,7 +46,7 @@ contextBridge.exposeInMainWorld('borHost', {
   onCursorPoll: (cb) => ipcRenderer.on('bor:cursor-poll', (_e, pt) => cb(pt)),
   setPresenceMode: (mode) => ipcRenderer.invoke('bor:presence-mode', mode),
   startChat: (requestId, messages) => ipcRenderer.send('bor:chat-start', { requestId, messages }),
-  cancelChat: (requestId) => ipcRenderer.send('bor:chat-cancel', { requestId }),
+  cancelChat: (requestId, info) => ipcRenderer.send('bor:chat-cancel', { requestId, byUser: Boolean(info && info.byUser) }),
   onChatEvent: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('bor:chat-event', listener);
@@ -56,7 +66,7 @@ contextBridge.exposeInMainWorld('borHost', {
    * Shortcut iframe bridge. The renderer catches postMessage from sandboxed
    * shortcut iframes and forwards each call here. Main proxies to the
    * appropriate /api/surface-* endpoint and returns the result. Same protocol
-   * as shell/surface-bridge.js + v2/host/surface-preload.cjs.
+   * as shell/surface-bridge.js + host/surface-preload.cjs.
    * `op` is one of: 'state-get', 'state-set', 'llm-request', 'web-search',
    * 'web-fetch', 'image-generate'.
    */

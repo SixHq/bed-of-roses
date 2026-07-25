@@ -8,14 +8,19 @@
 // Some endpoints don't require a key (e.g. local Ollama). We pass an empty
 // Authorization if no key is provided.
 
-import { iterateSseStream } from './sse-util.js';
+import { httpStreamError, iterateSseStream, makeTruncatedStreamError, strictFinishEnabled } from './sse-util.js';
 import { toOpenAiContent } from './multimodal.js';
 import { providerMaxOutputTokens } from './limits.js';
 import { openAiCompatibleReasoningParams, openRouterReasoningParams } from './reasoning.js';
 
 const PRESETS = [
+  // DeepSeek: legacy `deepseek-chat` / `deepseek-reasoner` names sunset
+  // 2026-07-24 — v4 names are the way forward (verified api-docs.deepseek.com).
+  { id: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com', signupUrl: 'https://platform.deepseek.com/api_keys', exampleModel: 'deepseek-v4-pro' },
+  { id: 'kimi', name: 'Kimi (Moonshot)', baseUrl: 'https://api.moonshot.ai/v1', signupUrl: 'https://platform.moonshot.ai', exampleModel: 'kimi-k3' },
+  { id: 'zai', name: 'Z.ai (GLM)', baseUrl: 'https://api.z.ai/api/paas/v4', signupUrl: 'https://z.ai/manage-apikey/apikey-list', exampleModel: 'glm-5.2' },
   { id: 'groq', name: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', signupUrl: 'https://console.groq.com/keys', exampleModel: 'llama-3.3-70b-versatile' },
-  { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', signupUrl: 'https://openrouter.ai/keys', exampleModel: 'anthropic/claude-3.5-sonnet' },
+  { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', signupUrl: 'https://openrouter.ai/keys', exampleModel: 'anthropic/claude-sonnet-5' },
   { id: 'together', name: 'Together AI', baseUrl: 'https://api.together.xyz/v1', signupUrl: 'https://api.together.ai/settings/api-keys', exampleModel: 'meta-llama/Llama-3.3-70B-Instruct-Turbo' },
   { id: 'mistral', name: 'Mistral', baseUrl: 'https://api.mistral.ai/v1', signupUrl: 'https://console.mistral.ai/api-keys', exampleModel: 'mistral-large-latest' },
   { id: 'perplexity', name: 'Perplexity', baseUrl: 'https://api.perplexity.ai', signupUrl: 'https://www.perplexity.ai/settings/api', exampleModel: 'llama-3.1-sonar-large-128k-online' },
@@ -36,8 +41,12 @@ export default {
   needsBaseUrl: true,
   keyHint: 'sk-… or leave empty for local',
   presets: PRESETS,
+  // Arbitrary OpenAI-compatible endpoints (Kimi, DeepSeek, Ollama, …) don't
+  // accept OpenAI's inline `file` content part — document blocks are replaced
+  // with a text pointer, and read_file extracts PDF text server-side instead.
+  supportsDocuments: false,
 
-  async *stream({ apiKey, model, baseUrl, system, messages, signal }) {
+  async *stream({ apiKey, model, baseUrl, system, messages, signal, reasoning, emitReasoning }) {
     if (!baseUrl) throw new Error('Base URL required for OpenAI-compatible providers.');
     if (!model) throw new Error('Model name required for OpenAI-compatible providers.');
     const url = baseUrl.replace(/\/+$/, '') + '/chat/completions';
@@ -49,23 +58,33 @@ export default {
     }
     const body = {
       model,
-      ...(baseUrl.includes('openrouter.ai') ? openRouterReasoningParams(model) : openAiCompatibleReasoningParams(model)),
+      ...(baseUrl.includes('openrouter.ai') ? openRouterReasoningParams(model, reasoning) : openAiCompatibleReasoningParams(model, reasoning)),
       max_tokens: providerMaxOutputTokens(),
       stream: true,
       messages: nativeMessages,
     };
     const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Custom endpoint ${res.status}: ${err.slice(0, 400)}`);
-    }
+    if (!res.ok) throw await httpStreamError('Custom endpoint', res);
+    let finished = false;
     for await (const ev of iterateSseStream(res.body)) {
-      if (!ev.data || ev.data === '[DONE]') continue;
+      if (!ev.data) continue;
+      if (ev.data === '[DONE]') { finished = true; continue; }
       try {
         const j = JSON.parse(ev.data);
-        const delta = j.choices?.[0]?.delta?.content;
-        if (delta) yield delta;
+        if (j.choices?.[0]?.finish_reason) finished = true;
+        const d = j.choices?.[0]?.delta;
+        if (d?.content) yield d.content;
+        // OpenRouter streams reasoning as `delta.reasoning`; DeepSeek-style
+        // endpoints use `delta.reasoning_content`.
+        else if (emitReasoning && (d?.reasoning_content || d?.reasoning)) {
+          const text = d.reasoning_content || d.reasoning;
+          if (typeof text === 'string' && text) yield { type: 'reasoning', text };
+        }
       } catch { /* ignore malformed */ }
     }
+    // The Chat Completions streaming contract mandates a final `data: [DONE]`
+    // (and a finish_reason chunk before it). An endpoint that never sends
+    // either can set BOR_STREAM_STRICT_FINISH=0.
+    if (strictFinishEnabled() && !finished) throw makeTruncatedStreamError('Custom endpoint');
   },
 };

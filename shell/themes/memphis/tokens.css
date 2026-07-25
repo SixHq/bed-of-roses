@@ -1,0 +1,118 @@
+/* Theme: Memphis — 1980s Memphis Group postmodern pop.
+   Bold geometric shapes in clashing brights over warm paper, everything
+   outlined in deep navy ink with asymmetric corners. Sottsass shelving,
+   terrazzo, squiggles, MTV idents. Deliberately too much.
+
+   Hallmarks:
+     • Navy ink #1A1A2E (NEVER pure black) — 2.5px solid border on every
+       card and button
+     • ASYMMETRIC corners: border-radius 24px 4px 24px 4px — opposite
+       corners round vs sharp. The radii tokens below carry this.
+     • Clashing brights as flat blocks: pink #FF4FA3, yellow #FFE15B,
+       sky #3DB7FF, mint #5FE3A1 — two accents may clash per surface,
+       ink holds them together
+     • Flat shadows or none — never blur
+     • Fraunces italic 900 display, Space Grotesk 700 body, DM Mono micro
+
+   Palette + component recipes match the v2 presence spec in
+   host/presence.css (.presence[data-theme="memphis"]). The structural
+   shell (shell/style.css) reads from these variables; extras.css applies
+   the ink borders, accent blocks, wobble, and squiggle details. */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,900;1,9..144,600;1,9..144,900&family=Space+Grotesk:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+:root {
+  /* Surfaces — warm paper tiers. --surface-1 is the presence's literal
+     card color; the canvas sits at the deeper cream the presence uses
+     for text-on-ink. */
+  --canvas:    #FAF1DC;
+  --surface-1: #FFFAF0;   /* main paper card — bubbles, modals, fields */
+  --surface-2: #FFF4E2;   /* layered chips / hover */
+  --surface-3: #F5E8CC;   /* recessed / selected backdrops */
+  --bloom:     #FF4FA3;   /* pink — the theme's loudest accent */
+
+  /* Memphis palette — exposed for extras.css and LLM-generated widgets.
+     Hex values are LITERAL matches of the presence recipe. */
+  --ink:            #1A1A2E;  /* deep navy — every stroke and label */
+  --memphis-pink:   #FF4FA3;  /* hot pink — emphasis, error blocks */
+  --memphis-yellow: #FFE15B;  /* input bars, running states */
+  --memphis-sky:    #3DB7FF;  /* footer bands, cool blocks */
+  --memphis-mint:   #5FE3A1;  /* status chips, done states */
+  --memphis-cream:  #FAF1DC;  /* text on ink fills */
+
+  /* Hairlines — SOLID ink. Memphis doesn't do subtle dividers; even the
+     soft tier stays visibly inked (mirrors cartoon-brutalist's approach). */
+  --hairline:        #1A1A2E;
+  --hairline-strong: #1A1A2E;
+  --hairline-soft:   rgba(26, 26, 46, 0.60);
+
+  /* Labels — navy ink tiers (presence ladder, exact) */
+  --label:    #1A1A2E;
+  --label-2:  rgba(26, 26, 46, 0.75);
+  --label-3:  rgba(26, 26, 46, 0.50);
+  --label-4:  rgba(26, 26, 46, 0.25);
+
+  /* Translucent fills — ink-keyed so tints stay warm-navy on paper */
+  --fill-1: rgba(26, 26, 46, 0.10);
+  --fill-2: rgba(26, 26, 46, 0.06);
+  --fill-3: rgba(26, 26, 46, 0.04);
+
+  /* Default presence — hot pink, matching the presence orb + aura. */
+  --avatar-color-rgb: 255, 79, 163;
+  --wallpaper: transparent;
+
+  /* Atmosphere — flat cream with faint confetti-bright washes. The real
+     decoration (terrazzo dots, squiggles) lives in extras.css. */
+  --atmosphere:
+    radial-gradient(ellipse 55% 40% at 88% 0%,   rgba(255, 79, 163, 0.10), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 5% 100%,  rgba(61, 183, 255, 0.10), transparent 62%),
+    radial-gradient(ellipse 45% 45% at 55% 50%,  rgba(255, 225, 91, 0.12), transparent 68%),
+    var(--canvas);
+
+  /* Halos — flat ink rings, never blur. The presence sets box-shadow:
+     none on cards; these tiers give the shell a flat outline language
+     for focus/selection instead of a glow. */
+  --halo-soft:   0 0 0 2px rgba(26, 26, 46, 0.14);
+  --halo-medium: 0 0 0 3px rgba(26, 26, 46, 0.20);
+  --halo-strong: 0 0 0 4px rgba(26, 26, 46, 0.28);
+  --shadow-deep: 0 24px 48px rgba(26, 26, 46, 0.16);
+
+  /* Spacing — shared 4px base */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-7: 32px; --s-8: 40px;
+  --s-9: 56px; --s-10: 72px; --s-11: 96px;
+
+  /* Radii — ASYMMETRIC, the theme's signature (presence: 24px 4px 24px
+     4px on bubbles, 20px 4px on the prompt, 14px 4px on buttons,
+     8px 2px on icons). Opposite corners round vs sharp. */
+  --r-input:  16px 4px 16px 4px;
+  --r-button: 14px 4px 14px 4px;
+  --r-bar:    20px 4px 20px 4px;
+  --r-tile:   24px 4px 24px 4px;
+  --r-modal:  28px 6px 28px 6px;
+
+  /* Type — Fraunces italic 900 display, Space Grotesk body, DM Mono
+     micro. Matches the presence recipe exactly. */
+  --font-display: "Fraunces", Georgia, serif;
+  --font-system:  "Space Grotesk", "Geist", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono:    "DM Mono", "Geist Mono", ui-monospace, Menlo, monospace;
+
+  /* Type scale — display slightly compact; italic 900 Fraunces is loud
+     at any size. Body holds Space Grotesk's comfortable 14–15px. */
+  --t-hero:     56px;
+  --t-display:  42px;
+  --t-title-1:  28px;
+  --t-title-2:  22px;
+  --t-headline: 17px;
+  --t-body:     14px;
+  --t-subhead:  13px;
+  --t-caption:  11px;
+  --t-micro:    10px;
+
+  /* Motion — bouncy, toy-like. Things wobble, they don't fade. */
+  --ease-standard: cubic-bezier(0.34, 1.30, 0.40, 1);
+  --ease-snap:     cubic-bezier(0.20, 0.00, 0.00, 1);
+  --d-micro:  140ms;
+  --d-pane:   300ms;
+  --d-layout: 520ms;
+}

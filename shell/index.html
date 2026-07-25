@@ -185,41 +185,6 @@
       </div>
     </div>
 
-    <!-- Pane 4: tools — install optional CLIs (browser-use today, ffmpeg/yt-dlp possible later) -->
-    <div class="pane" data-pane="tools">
-      <div class="pane-content tools-content">
-        <h1 class="headline">Set up your tools.</h1>
-        <p class="subheadline">Bed of Roses uses local CLIs for the things web APIs can't do — driving real browsers, watching the screen, transcoding video. You can skip these and install later.</p>
-
-        <div class="tools-list" id="tools-list">
-          <article class="tool-card" id="tool-browser-use" data-status="checking">
-            <div class="tool-head">
-              <div class="tool-title">
-                <span class="tool-name">browser-use</span>
-                <span class="tool-badge" id="browser-use-badge">checking…</span>
-              </div>
-              <p class="tool-blurb">Drives a real Chrome/Chromium so I can sign in to Gmail, send DMs, scrape JS-rendered pages, fill forms, and pull TikTok/Instagram/YouTube media. <strong>Without it I can only do basic web search and fetch — no logged-in actions, no scraping.</strong></p>
-            </div>
-            <div class="tool-body" id="browser-use-body">
-              <p class="tool-install-line">Install it once with <a href="https://pipx.pypa.io/stable/installation/" target="_blank" rel="noreferrer">pipx</a>:</p>
-              <pre class="tool-install-cmd"><code id="browser-use-cmd">pipx install browser-use</code></pre>
-              <p class="tool-detail-line">Then click <em>Re-check</em> below. Docs: <a href="https://github.com/browser-use/browser-use" target="_blank" rel="noreferrer">github.com/browser-use/browser-use</a></p>
-              <div class="tool-meta-line" id="browser-use-meta"></div>
-            </div>
-            <div class="tool-actions">
-              <button class="btn btn-tertiary" id="browser-use-copy" type="button">Copy command</button>
-              <button class="btn btn-tertiary" id="browser-use-recheck" type="button">Re-check</button>
-            </div>
-          </article>
-        </div>
-
-        <div class="btn-row">
-          <button class="btn btn-secondary" id="tools-back" type="button">Back</button>
-          <button class="btn btn-primary" id="tools-next" type="button">Continue</button>
-        </div>
-      </div>
-    </div>
-
     <!-- Pane 5: permissions — macOS computer-use permissions (Accessibility + Screen Recording) -->
     <div class="pane" data-pane="permissions">
       <div class="pane-content tools-content">
@@ -280,10 +245,30 @@
 
         <div class="btn-row">
           <button class="btn btn-secondary" id="connect-back" type="button">Back</button>
-          <button class="btn btn-primary" id="connect-finish" type="button" disabled>Begin</button>
+          <button class="btn btn-primary" id="connect-finish" type="button" disabled>Continue</button>
         </div>
       </div>
     </div>
+
+    <!-- Final pane: connectors — connect BOR to the services it should act on -->
+    <div class="pane" data-pane="tools">
+      <div class="pane-content connectors-content">
+        <h1 class="headline">Connect Bed of Roses to your daily life.</h1>
+        <p class="subheadline">Link the services your AI should act on — mail, calendar, messages, notes, code. Everything here is optional, and you can add any of it later.</p>
+
+        <div class="connector-grid" id="connector-grid" role="list">
+          <!-- Connector cards rendered by app.js from /api/connectors -->
+        </div>
+        <p class="connector-load-line hidden" id="connector-load-line"></p>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" id="tools-back" type="button">Back</button>
+          <button class="btn btn-tertiary" id="connectors-recheck" type="button">Re-check</button>
+          <button class="btn btn-primary" id="tools-next" type="button">Finish setup</button>
+        </div>
+      </div>
+    </div>
+
   </section>
 
   <!-- Home -->

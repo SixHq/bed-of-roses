@@ -1,0 +1,42 @@
+---
+title: "Background Tasks & Notifications"
+description: "Schedule real agent runs — once, on an interval, or on a cron expression — and get the results in a notifications inbox you can continue as a conversation."
+---
+
+Bed of Roses doesn't need you at the keyboard. Ask it to do something later — or every morning — and it schedules a real agent run that executes with full tool access, then tells you what happened.
+
+<img src="/assets/background_task_plus_scheduled_notification.png" alt="A scheduled background task finishing and its result arriving in the presence's notifications panel" />
+
+## Scheduling
+
+Three kinds of schedule, all in plain language:
+
+- **Once** — "at 6pm today, remind me to submit the timesheet." (One-shot jobs disable themselves after running.)
+- **Interval** — "every two hours, check whether the deploy finished."
+- **Cron** — "every weekday at 9am, summarize my inbox" (full cron expressions with timezone support, for when you're precise about it).
+
+A scheduled job is either a **real agent turn** — BOR wakes up and works with every tool it has: connectors, the browser, files, MCP — or a simple **reminder** that goes straight to your inbox.
+
+Apps and shortcut cards BOR builds can schedule jobs too: a habit tracker can nudge you nightly without you ever mentioning cron.
+
+## The notifications inbox
+
+Results land behind the bell on the presence:
+
+- The **orb badge** and a **notification chip** show unread counts even when the presence is collapsed.
+- Open the panel to read, mark read, or delete; new arrivals can play a sound.
+- Every notification has **Continue in chat** — one click opens a fresh conversation seeded with that notification, so a morning digest becomes "now draft replies to the two urgent ones" without re-explaining anything.
+
+<!-- TODO: screenshot: the notifications panel open on a scheduled-job result, cursor on the "Continue in chat" button -->
+
+## What to say
+
+- "Every morning at 8, check the weather and notify me if I need an umbrella."
+- "Every Friday at 4, pull my GitHub notifications and summarize what needs me."
+- "In 45 minutes, tell me to take the bread out of the oven."
+- "Once a day, fetch my RSS feeds and update the digest app."
+- "What jobs do you have scheduled? Cancel the deploy check."
+
+## Per presence
+
+Schedules and inboxes are per presence — your work presence's 9am digest doesn't ping your home presence. See [Multi-presence](/features/multi-presence).

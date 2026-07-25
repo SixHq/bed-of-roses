@@ -358,6 +358,11 @@ export class ProtocolParser {
           name: open.name,
           attrs: open.attrs,
           body: unwrapCdata(partialInner),
+          // Raw inner (CDATA markers intact). Append-only across feeds, unlike
+          // `body`: unwrapCdata keys off the LAST `]]>`, so its output mutates
+          // mid-string when a later close appears — length-sliced streaming
+          // deltas (ai.js tag_delta) must use this monotonic form instead.
+          rawBody: partialInner,
           children: [],
           partial: true,
         };

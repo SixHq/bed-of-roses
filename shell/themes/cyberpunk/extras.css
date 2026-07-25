@@ -1,0 +1,235 @@
+/* Cyberpunk — component-level overrides.
+   The shell's structure keeps its layout; this file wires it into the rig:
+   cyan wireframe borders, notched clip-path corners, neon glow, uppercase
+   Chakra Petch display with text-glow, mono telemetry. Mirrors
+   host/presence.css (.presence[data-theme="cyberpunk"]). */
+
+/* The bezel cuts — presence recipe, exact. Large panels take a 12px cut,
+   buttons 6px, small marks 4px; always the top-left / bottom-right pair. */
+:root {
+  --notch-panel:  polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+  --notch-button: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  --notch-mark:   polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+}
+
+/* Headlines — Chakra Petch, UPPERCASE, cyan glow (presence card titles). */
+.headline,
+.greeting,
+.modal-title,
+.wordmark span {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-style: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.50);
+}
+
+.greeting em,
+.headline em {
+  color: var(--neon-magenta);
+  font-style: normal;
+  text-shadow: 0 0 8px rgba(255, 45, 156, 0.60);
+}
+
+/* Buttons — cyan wireframe, notched, transparent; primary fills cyan
+   with void text (presence .send, exact). */
+.btn {
+  border: 1px solid var(--neon-cyan);
+  border-radius: 0;
+  clip-path: var(--notch-button);
+  background: transparent;
+  color: var(--neon-cyan);
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  box-shadow: inset 0 0 12px rgba(0, 229, 255, 0.10);
+  transition: background var(--d-micro) var(--ease-snap), color var(--d-micro) var(--ease-snap), box-shadow var(--d-micro) var(--ease-snap);
+}
+.btn:hover:not(:disabled) {
+  background: rgba(0, 229, 255, 0.12);
+  box-shadow: inset 0 0 18px rgba(0, 229, 255, 0.18);
+}
+.btn-primary {
+  background: var(--neon-cyan);
+  border-color: var(--neon-cyan);
+  color: var(--on-neon);
+  text-shadow: none;
+}
+.btn-primary:hover:not(:disabled) {
+  background: #66EFFF;
+  border-color: #66EFFF;
+  color: var(--on-neon);
+}
+.btn-secondary {
+  background: transparent;
+  color: var(--neon-cyan);
+}
+.btn:disabled, .btn[disabled] {
+  border-color: rgba(0, 229, 255, 0.25);
+  color: rgba(0, 229, 255, 0.30);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* Inputs — mono, cyan trace with text-glow (presence .prompt-input). */
+.field-input,
+.chat-input,
+input[type="text"],
+input[type="password"],
+input[type="number"],
+textarea {
+  background: var(--surface-1);
+  border: 1px solid rgba(0, 229, 255, 0.45);
+  border-radius: 0;
+  color: var(--neon-cyan);
+  font-family: var(--font-mono);
+  text-shadow: 0 0 6px rgba(0, 229, 255, 0.45);
+  caret-color: var(--neon-magenta);
+}
+.field-input:focus,
+.chat-input:focus,
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+textarea:focus {
+  outline: 0;
+  border-color: var(--neon-cyan);
+  box-shadow: inset 0 0 18px rgba(0, 229, 255, 0.08), 0 0 24px rgba(0, 229, 255, 0.25);
+}
+.field-input::placeholder,
+.chat-input::placeholder,
+textarea::placeholder {
+  color: rgba(237, 229, 255, 0.40);
+  font-family: var(--font-mono);
+  font-style: normal;
+  text-transform: uppercase;
+  text-shadow: none;
+}
+.field-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--label-3);
+}
+
+/* Cards — wireframed, notched, glowing panels (presence .bubble, exact
+   border + inset/outer glow). Selection flips to the magenta channel. */
+.provider-card,
+.presence-card,
+.theme-card {
+  background: var(--surface-1);
+  border: 1px solid var(--neon-cyan);
+  border-radius: 0;
+  clip-path: var(--notch-panel);
+  box-shadow: inset 0 0 18px rgba(0, 229, 255, 0.08);
+  transition: box-shadow var(--d-micro) var(--ease-snap), border-color var(--d-micro) var(--ease-snap), background var(--d-micro) var(--ease-snap);
+}
+.provider-card:hover,
+.presence-card:hover,
+.theme-card:hover {
+  background: var(--surface-2);
+  box-shadow: inset 0 0 26px rgba(0, 229, 255, 0.14);
+}
+.provider-card.selected,
+.presence-card.selected,
+.theme-card.selected {
+  border-color: var(--neon-magenta);
+  box-shadow: inset 0 0 22px rgba(255, 45, 156, 0.14);
+}
+.presence-card.selected::after,
+.theme-card.selected::after {
+  display: none; /* the magenta trace is the selection cue */
+}
+
+.theme-swatches {
+  border: 1px solid rgba(0, 229, 255, 0.45);
+  border-radius: 0;
+}
+.theme-label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.theme-tagline {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--label-3);
+}
+
+/* Chips — telemetry tags */
+.chip,
+.preset-chip {
+  border: 1px solid rgba(0, 229, 255, 0.45);
+  border-radius: 0;
+  clip-path: var(--notch-mark);
+  background: rgba(0, 229, 255, 0.08);
+  color: var(--neon-cyan);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.chip:hover,
+.preset-chip:hover {
+  border-color: var(--neon-cyan);
+  background: rgba(0, 229, 255, 0.14);
+}
+
+/* Tiles — every widget is a notched console pane */
+.tile-thumb {
+  background: var(--surface-1);
+  border: 1px solid var(--neon-cyan);
+  border-radius: 0;
+  clip-path: var(--notch-panel);
+  box-shadow: inset 0 0 18px rgba(0, 229, 255, 0.08);
+}
+.tile:hover .tile-thumb {
+  box-shadow: inset 0 0 26px rgba(0, 229, 255, 0.16);
+}
+.tile-name {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--label-3);
+  text-shadow: none;
+}
+
+/* Modal frame — the main viewport of the rig */
+.modal-frame {
+  background: var(--surface-1);
+  border: 1px solid var(--neon-cyan);
+  border-radius: 0;
+  clip-path: var(--notch-panel);
+  box-shadow: inset 0 0 18px rgba(0, 229, 255, 0.08);
+}
+
+/* Chat orb — the command line */
+.chat-orb {
+  background: var(--surface-1);
+  border: 1px solid var(--neon-cyan);
+  border-radius: 0;
+  clip-path: var(--notch-panel);
+  box-shadow: inset 0 0 18px rgba(0, 229, 255, 0.08);
+}
+.chat-send {
+  background: var(--neon-cyan);
+  color: var(--on-neon);
+  border-radius: 0;
+}
+
+/* Meta / HUD — cyan instrument text */
+.hud-meta,
+.hud-tick {
+  color: var(--label-3);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+}
+
+::selection {
+  background: rgba(255, 45, 156, 0.45);
+  color: #FFFFFF;
+}

@@ -11,9 +11,9 @@ How BOR is built, the conventions to follow, and where things live. If you're ex
 git clone https://github.com/SixHq/bed-of-roses
 cd bed-of-roses
 npm install
-npm run dev     # runtime on :7777 with --watch
+npm run server:dev  # runtime on :7777 with --watch
 # or
-npm run v2      # the Electron host
+npm start      # the Electron host
 ```
 
 There is **no build step, no test suite, and no lint config**. Node ≥ 20. The runtime is stdlib-only except for `electron`, `@modelcontextprotocol/sdk`, and `@playwright/mcp`.
@@ -22,9 +22,9 @@ There is **no build step, no test suite, and no lint config**. Node ≥ 20. The 
 
 - **`server/`** — the Node runtime (the brain). HTTP server, LLM harness, providers, the tool protocol, handlers, memory, cron.
 - **`shell/`** — the classic browser display (onboarding + dev), vanilla HTML/CSS/JS.
-- **`v2/host/`** — the Electron Mac host (the product): presence window, native app windows, wallpaper.
+- **`host/`** — the Electron Mac host (the product): presence window, native app windows, wallpaper.
 
-See [Architecture](../concepts/architecture.md).
+See [How it works: the runtime](/concepts/the-runtime) and the repo's `CLAUDE.md` for the code-level map.
 
 ## Key files
 
@@ -38,8 +38,8 @@ See [Architecture](../concepts/architecture.md).
 | `server/protocol/handlers/*` | One module per tool family. |
 | `server/providers/*` | Provider adapters. |
 | `server/validator.js` | Safety checks for AI HTML + shell commands. |
-| `v2/host/main.cjs` | Electron main process. |
-| `v2/host/presence.{html,js,css}` | The presence UI. |
+| `host/main.cjs` | Electron main process. |
+| `host/presence.{html,js,css}` | The presence UI. |
 
 ## Conventions
 
@@ -47,15 +47,15 @@ These are enforced across the codebase:
 
 - **Strict B&W default aesthetic.** No emojis, gradients, or color in core UI. Apple-grade. Named themes are the deliberate exceptions. Run the design process before any UI redesign.
 - **LLM model ids go stale.** Before editing `server/providers/*.js`, fetch the provider's live model docs — hardcoded ids rot in months.
-- **Avatar = DiceBear `avataaars` only.** Extend `shell/memoji.js`; never re-add hand-rolled canvas drawing.
+- **Avatar = the `MemojiRenderer` presence engine.** Extend `shell/memoji.js` (presets, colors); don't introduce external avatar libraries.
 - **Provider parity.** All providers are first-class; never "optimize for one, adapt the rest."
 - **The default file root** for AI-created files (no path given) is `.bor/`, not the project tree.
 - **Surfaces are sandboxed iframes.** All I/O goes through `parent.postMessage` → the bridge, validated server-side.
 - **Audit everything that mutates state.** Call `ctx.audit({ kind, … })` from handlers.
 
-## The two LLM harnesses
+## The LLM harness
 
-During a migration, two harnesses coexist. The legacy XML-tool harness (`server/ai.js` + `server/protocol/`) is the **default**; the native-tool-calling harness (`server/llm/`) is gated behind `BOR_NEW_LLM=1`. Both read the **same registry and handlers**. When you add a tool, both pick it up automatically (the new path shims the legacy handler).
+The harness is `server/ai.js` + `server/protocol/` (streaming XML-tool protocol). `server/protocol/registry.js` is the single source of truth for the tool surface — adding a tool there plus a handler module is all it takes.
 
 ## Extending BOR
 

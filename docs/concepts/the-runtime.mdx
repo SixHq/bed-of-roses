@@ -1,56 +1,29 @@
 ---
-title: "The Runtime"
-description: "The runtime (server/) is BOR's brain: a single, stdlib-only Node process that serves the UI, proxies the LLM, persists everything, and executes every tool. One runtime serves exactly one presence."
+title: "How It Works: The Runtime"
+description: "The local engine behind the presence — one Node process per presence that talks to your model, runs every tool, and records everything."
 ---
 
-The runtime (`server/`) is BOR's brain: a single, stdlib-only Node process that serves the UI, proxies the LLM, persists everything, and executes every tool. One runtime serves exactly one **presence**.
+Behind every presence is a **runtime**: a single local Node process on your machine. It's the part that talks to your model provider, executes every tool, and stores everything. One runtime serves exactly one presence; run three presences and you have three isolated runtimes.
 
-## Responsibilities
+## What it does
 
-1. **Serve the UI** — the classic shell (HTML/CSS/JS) and the per-surface assets.
-2. **Proxy the LLM** — build the system prompt, stream to the provider, parse the reply.
-3. **Execute tools** — run the handler for every tool the model emits.
-4. **Persist state** — surfaces, files, memory, config, sessions, and an append-only audit log.
-5. **Bridge surfaces** — answer the sandboxed `postMessage` calls apps and shortcuts make.
+1. **Talks to your model.** It builds the prompt (your personality settings, memory, connected tools), streams your request to the provider you configured, and reads the reply.
+2. **Executes tools.** When the model wants to write a file, run a command, browse, call Gmail, or build an app, the runtime does it — and streams the result both to your bubble (as a card) and back to the model, which keeps working until the task is done.
+3. **Stores everything locally.** Apps, files, memory, config, sessions — all on your disk. See [Storage & data](/concepts/storage-and-data).
 
-## The HTTP server
+## The safety layer
 
-`server/index.js` is a plain `http` server. Notable route families (full list in [HTTP API](../reference/http-api.md)):
+The runtime doesn't blindly trust generated output:
 
-- **`POST /api/chat`** — the main chat endpoint, Server-Sent Events. Dispatches into the harness.
-- **`/api/surfaces`, `/api/widgets/:id/state`** — surface listing and state CRUD.
-- **`/api/surface-llm`, `/api/surface-search`, `/api/surface-fetch`, `/api/surface-image-gen`** — the server side of the [bridge](../features/the-bridge.md) (the `askAI`/`webSearch`/`webFetch`/`generateImage` an app calls).
-- **`/api/files*`** — the BOR Home file explorer (list, raw, upload, move, rename, folder).
-- **`/api/config`** — read/update the presence config.
-- **`/api/mcp/*`** — the [MCP marketplace](../mcp/marketplace.md): catalog, install, installed, ask.
-- **`/api/cron`, `/api/notifications`** — [scheduled tasks and the inbox](../features/cron-and-notifications.md).
-- **`/api/system-apps`, `/api/system/permissions`** — system app layout and macOS permission probes.
-- **`/api/images/…`** — serves generated/captured images.
+- **Generated apps are sandboxed.** Apps and shortcut cards run in sandboxed frames with no direct disk, network, or key access; everything goes through validated calls to the runtime ([the bridge](/features/the-bridge)). A static validator additionally rejects HTML that tries to escape (eval, external scripts, storage access).
+- **Commands are screened.** Catastrophic shell patterns are refused before they run — see [Running commands](/features/running-commands#safety).
+- **Writes are fenced.** BOR can't overwrite its own source code or write outside your home folder.
+- **Everything is audited.** Every state-changing action — file writes, commands, theme changes, connector events — is appended to `os-data/logs/audit.jsonl`. It's your complete record of what BOR did.
 
-Every filesystem path is validated through `validateSurfaceId` and JSON-pointer helpers before use. **Preserve these guards when adding routes.**
+## Local first
 
-## Per-presence isolation
+The runtime binds to `127.0.0.1` (port 7777 by default). Your API keys and connector tokens stay in local config; the only network traffic is to your chosen model provider and whatever services you've connected. The runtime can even tell "the model is slow" apart from "you're offline" and retries transient failures on its own.
 
-The runtime resolves its data root from `BOR_DATA_DIR` (see [paths](storage-and-data.md)). With no env set, it uses the legacy single-tenant `os-data/`. The v2 host launches **one runtime process per presence**, each with its own `BOR_DATA_DIR` pointing at `os-data/presences/<id>/`, its own port, its own config, memory, and cron. They never share state. The source tree (`PROJECT_ROOT`) stays the anchor for write-protection and the served shell — only *user data* is relocated.
+## For developers
 
-## The validator
-
-`server/validator.js` enforces a security floor:
-
-- **AI-generated surface HTML** — blocks `eval`, `Function`, `parent.*` (except `parent.postMessage`), `localStorage`, external `<script src>`, and other escapes. This runs *in addition* to the iframe sandbox.
-- **Shell commands** — refuses heredocs, host-restart commands (`npm run v2`, `electron`, `npx bor`), and catastrophic patterns (`rm -rf /`, fork bombs, `curl | bash`, `dd` to a device).
-
-The validator is belt-and-suspenders, not the only defense — see [Surfaces](surfaces.md) for the sandbox model and [Running commands](../features/running-commands.md) for the shell.
-
-## Connectivity & retries
-
-- `server/connectivity.js` monitors network status (it pings lightweight endpoints) so the runtime can tell "the model is slow" from "you're offline".
-- `server/retry.js` provides retry/backoff shared by the chat loop and the tool executor. Transient tool failures retry up to `BOR_TOOL_MAX_ATTEMPTS`.
-
-## The audit log
-
-Every state mutation is appended to `os-data/logs/audit.jsonl`. Handlers call `ctx.audit({ kind, … })` from the per-request context. This is your record of everything BOR did — file writes, command runs, theme changes, MCP installs, image generations, and more.
-
-## The API registry
-
-`server/api-registry.md` is a Markdown reference of public web APIs the runtime tells the model about, loaded into the system prompt. It's how BOR knows which free APIs it can wire into an app without a key.
+The runtime is a dependency-light Node server with no build step. If you want the code-level view — the tool registry, handlers, providers — start with [CONTRIBUTING](https://github.com/SixHq/bed-of-roses/blob/main/CONTRIBUTING.md) and the repo's `CLAUDE.md`, plus [Adding a tool](/contributing/adding-a-tool).

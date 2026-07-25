@@ -2,7 +2,7 @@
 // Rebrand the local Electron.app bundle as "Bed of Roses" (name + bundle id + bloom
 // icon) so the macOS menu bar, dock, App Switcher, and — importantly — privacy
 // permission prompts + System Settings show "Bed of Roses" instead of "Electron" in
-// dev (`npm run v2`). macOS attributes those to the running .app BUNDLE, which
+// dev (`npm start`). macOS attributes those to the running .app BUNDLE, which
 // app.setName() cannot change. Run automatically before every launch (prev2 hook)
 // so it re-applies after `npm install` restores the stock Electron bundle.
 // macOS only; never fails the launch.
@@ -15,7 +15,7 @@ if (process.platform !== 'darwin') process.exit(0);
 const ROOT = path.join(__dirname, '..');
 const APP = path.join(ROOT, 'node_modules', 'electron', 'dist', 'Electron.app');
 const PL = path.join(APP, 'Contents', 'Info.plist');
-const ICON = path.join(ROOT, 'v2', 'host', 'assets', 'bloom-icon.icns');
+const ICON = path.join(ROOT, 'host', 'assets', 'bloom-icon.icns');
 const NAME = 'Bed of Roses';
 const BUNDLE_ID = 'co.sixth.bedofroses';
 const PB = '/usr/libexec/PlistBuddy';

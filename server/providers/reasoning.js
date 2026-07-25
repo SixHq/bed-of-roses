@@ -1,13 +1,18 @@
-const DEFAULT_REASONING_EFFORT = 'max';
+const DEFAULT_REASONING_EFFORT = 'high';
+const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
 
-function configuredReasoningEffort() {
+// Effort resolution order: per-request override (the per-provider `reasoning`
+// value saved from onboarding) → BOR_PROVIDER_REASONING_EFFORT env → default.
+function configuredReasoningEffort(override) {
+  const fromOverride = String(override || '').trim().toLowerCase();
+  if (REASONING_EFFORTS.includes(fromOverride)) return fromOverride;
   const value = String(process.env.BOR_PROVIDER_REASONING_EFFORT || DEFAULT_REASONING_EFFORT).trim().toLowerCase();
-  if (['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(value)) return value;
+  if (REASONING_EFFORTS.includes(value)) return value;
   return DEFAULT_REASONING_EFFORT;
 }
 
-export function providerReasoningEffort() {
-  return configuredReasoningEffort();
+export function providerReasoningEffort(effort) {
+  return configuredReasoningEffort(effort);
 }
 
 function modelText(model) {
@@ -29,27 +34,27 @@ function isDeepSeekMaxModel(model) {
   return m.includes('deepseek') && (m.includes('v4') || m.includes('reason') || m.includes('thinking') || m.includes('r1'));
 }
 
-export function openAiMaxReasoningEffort(model) {
-  const configured = configuredReasoningEffort();
+export function openAiMaxReasoningEffort(model, effort) {
+  const configured = configuredReasoningEffort(effort);
   if (configured === 'max') return isOpenAiXhighModel(model) ? 'xhigh' : 'high';
   if (configured === 'xhigh') return 'xhigh';
   return configured;
 }
 
-export function openRouterMaxReasoningEffort() {
-  const configured = configuredReasoningEffort();
+export function openRouterMaxReasoningEffort(effort) {
+  const configured = configuredReasoningEffort(effort);
   return configured === 'max' ? 'xhigh' : configured;
 }
 
-export function openAiCompatibleMaxReasoningEffort(model) {
-  const configured = configuredReasoningEffort();
+export function openAiCompatibleMaxReasoningEffort(model, effort) {
+  const configured = configuredReasoningEffort(effort);
   if (isDeepSeekMaxModel(model) && (configured === 'max' || configured === 'xhigh')) return 'max';
   if (configured === 'max') return isOpenAiXhighModel(model) ? 'xhigh' : 'high';
   return configured;
 }
 
-export function anthropicMaxEffort() {
-  return configuredReasoningEffort();
+export function anthropicMaxEffort(effort) {
+  return configuredReasoningEffort(effort);
 }
 
 export function providerThinkingBudgetTokens(model) {
@@ -60,27 +65,42 @@ export function providerThinkingBudgetTokens(model) {
   return Math.max(1024, Math.round(value));
 }
 
-export function openAiReasoningParams(model) {
-  return { reasoning_effort: openAiMaxReasoningEffort(model) };
+export function openAiReasoningParams(model, effort) {
+  return { reasoning_effort: openAiMaxReasoningEffort(model, effort) };
 }
 
-export function openAiCompatibleReasoningParams(model) {
-  return { reasoning_effort: openAiCompatibleMaxReasoningEffort(model) };
+export function openAiCompatibleReasoningParams(model, effort) {
+  return { reasoning_effort: openAiCompatibleMaxReasoningEffort(model, effort) };
 }
 
-export function openRouterReasoningParams() {
-  return { reasoning: { effort: openRouterMaxReasoningEffort() } };
+export function openRouterReasoningParams(model, effort) {
+  return { reasoning: { effort: openRouterMaxReasoningEffort(effort) } };
 }
 
-export function anthropicReasoningParams() {
+export function anthropicReasoningParams(effort) {
+  const level = configuredReasoningEffort(effort);
+  if (level === 'none') return {};
   return {
     thinking: { type: 'adaptive' },
-    output_config: { effort: anthropicMaxEffort() },
+    output_config: { effort: level },
   };
 }
 
-export function geminiThinkingConfig(model) {
+export function geminiThinkingConfig(model, effort, { includeThoughts = false } = {}) {
   const m = modelText(model);
-  if (/^gemini-3/.test(m)) return { thinkingLevel: 'high' };
-  return { thinkingBudget: providerThinkingBudgetTokens(model) };
+  const level = configuredReasoningEffort(effort);
+  const thoughts = includeThoughts && level !== 'none' ? { includeThoughts: true } : {};
+  if (/^gemini-3/.test(m)) {
+    const thinkingLevel = ['none', 'minimal', 'low'].includes(level) ? 'low' : 'high';
+    return { thinkingLevel, ...thoughts };
+  }
+  // 2.5 Pro cannot fully disable thinking — its minimum budget is 128.
+  if (level === 'none') return { thinkingBudget: m.includes('2.5-pro') ? 128 : 0 };
+  const budget = providerThinkingBudgetTokens(model);
+  const scaled = level === 'minimal' || level === 'low'
+    ? Math.min(budget, 8192)
+    : level === 'medium'
+    ? Math.min(budget, 16_384)
+    : budget;
+  return { thinkingBudget: scaled, ...thoughts };
 }

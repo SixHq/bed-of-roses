@@ -1,14 +1,37 @@
 // Filesystem handlers. Reads are unrestricted; writes/deletes pass through
 // paths.assertWritable. All paths are recorded in the audit log.
 
-import { readFile, writeFile, mkdir, readdir, unlink, rmdir, stat } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir, unlink, rmdir, rm, stat } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
+import { randomUUID } from 'node:crypto';
+import { inflateSync } from 'node:zlib';
 import { dirname, relative, resolve, normalize } from 'node:path';
 import { resolvePath, resolveForWrite, assertWritable, PROJECT_ROOT, DATA_DIR } from '../paths.js';
+import { containsElisionMarker, ELISION_MARKER_REASON } from '../../validator.js';
+import { decodeTextBufferChecked, pdfText, docxText, xlsxText, ipynbText } from './extract-text.js';
 
 const MAX_READ_BYTES = 200 * 1024;     // 200 KB hard cap
 const MAX_CHUNK_BYTES = 50 * 1024;
+// Complex formats read_file understands natively. PDFs feed back as document
+// blocks and images as vision blocks (via llmMedia) so the model actually sees
+// them; Office/RTF text is extracted with macOS `textutil`. Anything else that
+// looks binary is refused with guidance instead of mojibake.
+const READ_PDF_MAX_BYTES = 20 * 1024 * 1024;   // matches the + button context cap
+const READ_IMAGE_MAX_BYTES = 8 * 1024 * 1024;  // matches the + button context cap
+const READ_UNKNOWN_MAX_BYTES = 50 * 1024 * 1024; // refuse loading unknown files beyond this into memory
+const READ_IMAGE_MIME_BY_EXT = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+};
+// Formats that need a `sips` transcode to a provider-accepted image type.
+const CONVERT_IMAGE_EXTS = new Set(['.heic', '.heif', '.tif', '.tiff', '.bmp', '.ico', '.icns', '.psd']);
+const TEXTUTIL_EXTS = new Set(['.docx', '.doc', '.rtf', '.rtfd', '.odt', '.wordml', '.webarchive']);
+const AUDIO_EXTS = new Set(['.mp3', '.m4a', '.wav', '.aac', '.flac', '.ogg', '.aiff', '.aif', '.caf', '.wma', '.opus']);
+const VIDEO_EXTS = new Set(['.mp4', '.mov', '.m4v', '.avi', '.mkv', '.webm', '.mpg', '.mpeg', '.wmv']);
 const MAX_BATCH_ITEMS = 20;
 const MAX_BATCH_ECHO_BYTES = 240 * 1024;
 const MAX_LIST_ENTRIES = 500;
@@ -142,6 +165,362 @@ function parseRipgrepOutput(stdout) {
     if (matches.length >= MAX_SEARCH_MATCHES) break;
   }
   return matches;
+}
+
+function fileExt(absPath) {
+  const match = /\.[a-z0-9]+$/i.exec(absPath);
+  return match ? match[0].toLowerCase() : '';
+}
+
+function looksBinary(buf) {
+  return buf.subarray(0, 8192).includes(0);
+}
+
+// Run a stock macOS CLI and capture stdout (capped). Rejects on non-zero exit.
+function runTool(cmd, args, { maxBytes = 512 * 1024 } = {}) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const out = [];
+    const err = [];
+    let bytes = 0;
+    child.stdout.on('data', (chunk) => {
+      bytes += chunk.length;
+      if (bytes <= maxBytes + 4096) out.push(chunk);
+    });
+    child.stderr.on('data', (chunk) => err.push(chunk));
+    child.on('error', rejectPromise);
+    child.on('close', (code) => {
+      if (code === 0) resolvePromise(Buffer.concat(out).toString('utf8'));
+      else rejectPromise(new Error(Buffer.concat(err).toString('utf8').trim() || `${cmd} exited ${code}`));
+    });
+  });
+}
+
+// Extract plain text from Word/RTF/ODT via macOS textutil (ships with the OS).
+function textutilExtract(absPath) {
+  return runTool('textutil', ['-convert', 'txt', '-stdout', absPath], { maxBytes: MAX_READ_BYTES });
+}
+
+// Media metadata via Spotlight — duration, dimensions, codecs, sample rate.
+async function mdlsMetadata(absPath) {
+  try {
+    const raw = await runTool('mdls', [
+      '-name', 'kMDItemDurationSeconds', '-name', 'kMDItemPixelWidth', '-name', 'kMDItemPixelHeight',
+      '-name', 'kMDItemCodecs', '-name', 'kMDItemAudioSampleRate', '-name', 'kMDItemAudioChannelCount',
+      '-name', 'kMDItemTitle', '-name', 'kMDItemAuthors', '-name', 'kMDItemKind',
+      absPath,
+    ]);
+    return raw.split('\n').filter((line) => line && !line.includes('(null)')).join('\n');
+  } catch {
+    return '';
+  }
+}
+
+// Transcode an image macOS can decode (HEIC, TIFF, BMP, PSD, …) to JPEG.
+async function sipsToJpeg(absPath) {
+  const tmp = resolve(tmpdir(), `bor-read-${randomUUID()}.jpg`);
+  try {
+    await runTool('sips', ['-s', 'format', 'jpeg', '-s', 'formatOptions', '85', absPath, '--out', tmp]);
+    return await readFile(tmp);
+  } finally {
+    unlink(tmp).catch(() => {});
+  }
+}
+
+// Poster frame for a video via Quick Look.
+async function qlThumbnail(absPath) {
+  const dir = resolve(tmpdir(), `bor-ql-${randomUUID()}`);
+  await mkdir(dir, { recursive: true });
+  try {
+    await runTool('qlmanage', ['-t', '-s', '1024', '-o', dir, absPath]);
+    const entries = await readdir(dir);
+    const png = entries.find((name) => name.toLowerCase().endsWith('.png'));
+    if (!png) throw new Error('no thumbnail produced');
+    return await readFile(resolve(dir, png));
+  } finally {
+    rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+function stripXmlToText(xml) {
+  return String(xml || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#x?[0-9a-f]+;/gi, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s*\n\s*/g, '\n')
+    .trim();
+}
+
+// Pull the text content out of an Office Open XML container with stock unzip.
+async function officeXmlText(absPath, patterns) {
+  const raw = await runTool('unzip', ['-p', absPath, ...patterns], { maxBytes: 4 * MAX_READ_BYTES });
+  return stripXmlToText(raw);
+}
+
+// --- Best-effort pure-Node PDF text extraction --------------------------
+// For providers that can't ingest document blocks inline (OpenAI-compatible
+// endpoints), we extract the PDF's text server-side: inflate FlateDecode
+// streams with stdlib zlib and pull the string literals off the Tj/TJ text
+// operators. Handles the common text-based PDF; scanned or CID-encoded PDFs
+// yield nothing and the caller falls back to honest guidance.
+function pdfLiteralToText(lit) {
+  let out = '';
+  for (let i = 0; i < lit.length; i += 1) {
+    const ch = lit[i];
+    if (ch !== '\\') { out += ch; continue; }
+    const next = lit[i + 1];
+    if (next === undefined) break;
+    i += 1;
+    if (next === 'n') out += '\n';
+    else if (next === 'r') out += '\r';
+    else if (next === 't') out += '\t';
+    else if (next >= '0' && next <= '7') {
+      let oct = next;
+      while (oct.length < 3 && lit[i + 1] >= '0' && lit[i + 1] <= '7') { i += 1; oct += lit[i]; }
+      out += String.fromCharCode(parseInt(oct, 8));
+    } else out += next;
+  }
+  return out;
+}
+
+function extractPdfText(buf) {
+  const raw = buf.toString('latin1');
+  const streams = [];
+  const streamRe = /stream\r?\n([\s\S]*?)endstream/g;
+  let match;
+  while ((match = streamRe.exec(raw))) {
+    let content;
+    try {
+      content = inflateSync(Buffer.from(match[1], 'latin1')).toString('latin1');
+    } catch {
+      content = match[1]; // uncompressed stream
+    }
+    if (content && /\b(Tj|TJ)\b/.test(content)) streams.push(content);
+  }
+  const lines = [];
+  for (const content of streams) {
+    let line = '';
+    const flush = () => { if (line.trim()) lines.push(line.trim()); line = ''; };
+    // String literals shown via Tj / ' / ", arrays shown via TJ, and the
+    // line-advance operators (T*, Td, TD) as line-break hints.
+    const opRe = /\(((?:\\.|[^\\()])*)\)\s*(?:Tj|'|")|\[((?:\((?:\\.|[^\\()])*\)|[^\]])*)\]\s*TJ|(T\*|Td|TD|ET)/g;
+    let op;
+    while ((op = opRe.exec(content))) {
+      if (op[3]) { flush(); continue; }
+      if (op[1] !== undefined) { line += pdfLiteralToText(op[1]); continue; }
+      if (op[2] !== undefined) {
+        const litRe = /\(((?:\\.|[^\\()])*)\)/g;
+        let lit;
+        while ((lit = litRe.exec(op[2]))) line += pdfLiteralToText(lit[1]);
+      }
+    }
+    flush();
+  }
+  const text = lines.join('\n').replace(/\u0000/g, '').trim();
+  if (!text) return '';
+  // Quality gate: mostly-unprintable output means CID/hex encoding — garbage.
+  const printable = text.replace(/[^\x20-\x7E\n\t\u00A0-\uFFFF]/g, '');
+  if (printable.length < 40 || printable.length / text.length < 0.7) return '';
+  return printable;
+}
+
+function complexOk(tag, abs, bytes, format, body, llmMedia) {
+  return {
+    ok: true,
+    event: tag,
+    payload: { path: shortPath(abs), bytes, format },
+    llmEcho: `# ${tag} ${shortPath(abs)}\nbytes: ${bytes}\nformat: ${format}\n\n${body}`,
+    ...(llmMedia ? { llmMedia } : {}),
+  };
+}
+
+function complexFail(tag, reason) {
+  return { ok: false, event: 'tool_error', payload: { tag, reason }, llmEcho: `${tag} failed: ${reason}` };
+}
+
+function clipText(text) {
+  const truncated = Buffer.byteLength(text, 'utf8') > MAX_READ_BYTES;
+  const visible = truncated ? Buffer.from(text, 'utf8').subarray(0, MAX_READ_BYTES).toString('utf8') : text;
+  return { visible, truncated };
+}
+
+// Route complex formats before the plain-utf8 read. read_file understands, by
+// family: PDFs (native document block), images (vision block; HEIC/TIFF/BMP/
+// PSD/ICO transcoded via sips), Word/RTF/ODT (textutil text), XLSX/PPTX
+// (unzip + XML text), audio (afinfo/mdls metadata), video (Quick Look poster
+// frame + metadata), archives (listings). Code and plain text of any kind fall
+// through to the normal utf8 read; unknown binary gets metadata + guidance
+// instead of mojibake. Returns a full handler result, or null to fall through.
+// Reads bytes lazily so a multi-GB video never gets loaded into memory.
+// `supportsDocuments` mirrors the active provider: when false (OpenAI-
+// compatible endpoints), PDFs return extracted text instead of a document
+// block the wire would drop.
+async function readComplexFormat(abs, size, { tag, chunked = false, supportsDocuments = true } = {}) {
+  const ext = fileExt(abs);
+  const noteChunked = chunked ? ' (chunking does not apply to this format — the result covers the whole file)' : '';
+
+  if (ext === '.pdf') {
+    if (size > READ_PDF_MAX_BYTES) {
+      return complexFail(tag, `PDF is ${Math.round(size / (1024 * 1024))} MB (max 20 MB for inline reading). Ask the user for a smaller export, or use execute_command with a CLI to extract the pages you need.`);
+    }
+    const buf = await readFile(abs);
+    if (supportsDocuments) {
+      return complexOk(tag, abs, size, `PDF${noteChunked}`,
+        'The full PDF is attached below this tool result as a document — you can read it directly in this conversation. Do NOT use execute_command, Python, or any other extraction method on this file; the attached document already IS its complete content.',
+        [{ type: 'document', url: `data:application/pdf;base64,${buf.toString('base64')}`, mediaType: 'application/pdf', name: shortPath(abs) }]);
+    }
+    // This provider drops document blocks at the wire — extract text instead.
+    // pdf-parse (proper extraction, Sixth-style) first; the naive stream
+    // parser is the zero-dependency fallback.
+    let extracted = '';
+    try { extracted = await pdfText(buf); } catch { /* fall through */ }
+    if (!extracted) extracted = extractPdfText(buf);
+    if (extracted) {
+      const { visible, truncated } = clipText(extracted);
+      return complexOk(tag, abs, size, 'PDF (text extracted server-side — this provider cannot view PDFs inline)',
+        `${visible}${truncated ? '\n[truncated]' : ''}`);
+    }
+    return complexFail(tag, `this PDF's text could not be extracted server-side (likely a scanned or unusually encoded PDF), and the current provider cannot view PDF documents inline. On THIS provider you may use execute_command to extract it (e.g. a PDF-to-text CLI or Python library if available), or ask the user for a text/markdown export.`);
+  }
+
+  const imageMime = READ_IMAGE_MIME_BY_EXT[ext];
+  if (imageMime) {
+    if (size > READ_IMAGE_MAX_BYTES) {
+      return complexFail(tag, `image is ${Math.round(size / (1024 * 1024))} MB (max 8 MB for inline viewing). Downscale it first (e.g. execute_command with sips).`);
+    }
+    const buf = await readFile(abs);
+    return complexOk(tag, abs, size, `image (${imageMime})${noteChunked}`,
+      'The image is attached below this tool result — look at it directly.',
+      [{ type: 'image_url', url: `data:${imageMime};base64,${buf.toString('base64')}`, mediaType: imageMime }]);
+  }
+
+  if (CONVERT_IMAGE_EXTS.has(ext)) {
+    try {
+      const jpeg = await sipsToJpeg(abs);
+      if (jpeg.length > READ_IMAGE_MAX_BYTES) {
+        return complexFail(tag, `converted image is still over 8 MB. Downscale it first (execute_command with sips -Z).`);
+      }
+      return complexOk(tag, abs, size, `image (${ext.slice(1)} → jpeg)${noteChunked}`,
+        'The image (converted to JPEG) is attached below this tool result — look at it directly.',
+        [{ type: 'image_url', url: `data:image/jpeg;base64,${jpeg.toString('base64')}`, mediaType: 'image/jpeg' }]);
+    } catch (error) {
+      return complexFail(tag, `could not convert ${ext} image (${error.message}).`);
+    }
+  }
+
+  if (TEXTUTIL_EXTS.has(ext)) {
+    // .docx: mammoth (Sixth-style, structure-aware) first; textutil is the
+    // fallback and the primary for .doc/.rtf/.odt which mammoth can't parse.
+    if (ext === '.docx') {
+      try {
+        const text = await docxText(abs);
+        if (text) {
+          const { visible, truncated } = clipText(text);
+          return complexOk(tag, abs, size, 'docx (text extracted)',
+            `${visible}${truncated ? '\n[truncated]' : ''}`);
+        }
+      } catch { /* fall through to textutil */ }
+    }
+    try {
+      const { visible, truncated } = clipText(await textutilExtract(abs));
+      return complexOk(tag, abs, size, `${ext.slice(1)} (text extracted via textutil)`,
+        `${visible}${truncated ? '\n[truncated]' : ''}`);
+    } catch (error) {
+      return complexFail(tag, `could not extract text from ${ext} (${error.message}). Ask the user for a plain-text or PDF export.`);
+    }
+  }
+
+  if (ext === '.xlsx') {
+    // ExcelJS (Sixth-style: formula results, dates, hyperlinks, hidden-sheet
+    // skipping) first; the raw unzip+strip extraction is the fallback.
+    try {
+      const text = await xlsxText(abs);
+      if (text) {
+        const { visible, truncated } = clipText(text);
+        return complexOk(tag, abs, size, 'xlsx (sheets extracted)',
+          `${visible}${truncated ? '\n[truncated]' : ''}`);
+      }
+    } catch { /* fall through */ }
+    try {
+      const { visible, truncated } = clipText(await officeXmlText(abs, ['xl/sharedStrings.xml', 'xl/worksheets/sheet*.xml']));
+      return complexOk(tag, abs, size, 'xlsx (cell text extracted)',
+        `Extracted spreadsheet text (cell strings; layout/formulas not preserved):\n\n${visible}${truncated ? '\n[truncated]' : ''}`);
+    } catch (error) {
+      return complexFail(tag, `could not extract xlsx text (${error.message}). Ask the user for a CSV export, or use execute_command to convert it.`);
+    }
+  }
+
+  if (ext === '.ipynb') {
+    try {
+      const buf = await readFile(abs);
+      const text = ipynbText(buf);
+      const { visible, truncated } = clipText(text);
+      return complexOk(tag, abs, size, 'ipynb (notebook cells extracted)',
+        `${visible || '(empty notebook)'}${truncated ? '\n[truncated]' : ''}`);
+    } catch (error) {
+      return complexFail(tag, `could not parse notebook (${error.message}).`);
+    }
+  }
+
+  if (ext === '.pptx') {
+    try {
+      const { visible, truncated } = clipText(await officeXmlText(abs, ['ppt/slides/slide*.xml', 'ppt/notesSlides/notesSlide*.xml']));
+      return complexOk(tag, abs, size, 'pptx (slide text extracted)',
+        `Extracted slide text (layout/images not preserved):\n\n${visible}${truncated ? '\n[truncated]' : ''}`);
+    } catch (error) {
+      return complexFail(tag, `could not extract pptx text (${error.message}). Ask the user for a PDF export.`);
+    }
+  }
+
+  if (AUDIO_EXTS.has(ext)) {
+    const info = await runTool('afinfo', [abs], { maxBytes: 16 * 1024 }).catch(() => '');
+    const meta = info || await mdlsMetadata(abs);
+    return complexOk(tag, abs, size, `audio (${ext.slice(1)})`,
+      `Audio file metadata:\n${meta || '(no metadata available)'}\n\nYou cannot listen to audio directly. If the user needs the contents, ask them what they want from it, or transcribe it with execute_command if a transcription tool is available.`);
+  }
+
+  if (VIDEO_EXTS.has(ext)) {
+    const meta = await mdlsMetadata(abs);
+    let media;
+    let frameNote = 'No poster frame could be generated.';
+    try {
+      const png = await qlThumbnail(abs);
+      if (png.length <= READ_IMAGE_MAX_BYTES) {
+        media = [{ type: 'image_url', url: `data:image/png;base64,${png.toString('base64')}`, mediaType: 'image/png' }];
+        frameNote = 'A poster frame from the video is attached below this tool result.';
+      }
+    } catch { /* headless/unsupported codec — metadata only */ }
+    return complexOk(tag, abs, size, `video (${ext.slice(1)})`,
+      `Video file metadata:\n${meta || '(no metadata available)'}\n\n${frameNote} You cannot watch video directly; use execute_command (e.g. a frame-extraction CLI) if specific moments are needed.`, media);
+  }
+
+  if (ext === '.zip' || ext === '.jar' || ext === '.epub') {
+    try {
+      const { visible, truncated } = clipText(await runTool('unzip', ['-l', abs], { maxBytes: MAX_READ_BYTES }));
+      return complexOk(tag, abs, size, `${ext.slice(1)} archive (listing)`,
+        `Archive contents:\n${visible}${truncated ? '\n[truncated]' : ''}\n\nExtract specific entries with execute_command (unzip -p / unzip -d) to read them.`);
+    } catch (error) {
+      return complexFail(tag, `could not list archive (${error.message}).`);
+    }
+  }
+  if (ext === '.tar' || ext === '.tgz' || abs.toLowerCase().endsWith('.tar.gz')) {
+    try {
+      const { visible, truncated } = clipText(await runTool('tar', ['-tf', abs], { maxBytes: MAX_READ_BYTES }));
+      return complexOk(tag, abs, size, 'tar archive (listing)',
+        `Archive contents:\n${visible}${truncated ? '\n[truncated]' : ''}\n\nExtract specific entries with execute_command (tar -xf) to read them.`);
+    } catch (error) {
+      return complexFail(tag, `could not list archive (${error.message}).`);
+    }
+  }
+
+  // Unknown format past a sane size: don't slurp gigabytes into memory.
+  if (size > READ_UNKNOWN_MAX_BYTES) {
+    const meta = await mdlsMetadata(abs);
+    return complexFail(tag, `file is ${Math.round(size / (1024 * 1024))} MB — too large to read inline.${meta ? `\nMetadata:\n${meta}` : ''}\nUse execute_command to inspect or extract what you need.`);
+  }
+
+  return null;
 }
 
 function renderReadResult(abs, bytes, truncated, text) {
@@ -462,9 +841,23 @@ export async function executeRead(block, ctx) {
     return { ok: false, event: 'tool_error', payload: { tag: 'read_file', reason: e.message }, llmEcho: `read_file failed: ${e.message}` };
   }
   try {
+    const st = await stat(abs);
+    const complex = await readComplexFormat(abs, st.size, { tag: 'read_file', supportsDocuments: ctx.providerCaps?.supportsDocuments !== false });
+    if (complex) {
+      ctx.markReadFile?.(abs);
+      await ctx.audit({ kind: 'fs.read', path: abs, bytes: st.size, format: complex.payload?.format || 'refused' });
+      return complex;
+    }
     const buf = await readFile(abs);
-    const truncated = buf.length > MAX_READ_BYTES;
-    const text = (truncated ? buf.subarray(0, MAX_READ_BYTES) : buf).toString('utf8');
+    // Encoding-aware decode (jschardet + iconv-lite, Sixth's order: sniff
+    // first, binary-check only undetectable buffers) — utf16/latin1 text
+    // files no longer come back as mojibake.
+    const decoded = await decodeTextBufferChecked(buf);
+    if (decoded === null) {
+      const reason = `"${shortPath(abs)}" is binary — decoding it as text would produce garbage. read_file natively supports PDFs, images, Word/RTF/ODT, XLSX/PPTX, notebooks, audio/video metadata, and archives; for this format use execute_command with an appropriate CLI, or ask the user for a supported export.`;
+      return { ok: false, event: 'tool_error', payload: { tag: 'read_file', reason }, llmEcho: `read_file refused: ${reason}` };
+    }
+    const { visible: text, truncated } = clipText(decoded);
     ctx.markReadFile?.(abs);
     await ctx.audit({ kind: 'fs.read', path: abs, bytes: buf.length });
     return {
@@ -487,6 +880,13 @@ export async function executeReadChunk(block, ctx) {
   }
   const requestedChunk = Math.max(1, Number.parseInt(block.attrs.chunk || '1', 10) || 1);
   try {
+    const st = await stat(abs);
+    const complex = await readComplexFormat(abs, st.size, { tag: 'read_file_in_chunks', chunked: true, supportsDocuments: ctx.providerCaps?.supportsDocuments !== false });
+    if (complex) {
+      ctx.markReadFile?.(abs);
+      await ctx.audit({ kind: 'fs.read_chunk', path: abs, bytes: st.size, format: complex.payload?.format || 'refused' });
+      return complex;
+    }
     const buf = await readFile(abs);
     const totalChunks = Math.max(1, Math.ceil(buf.length / MAX_CHUNK_BYTES));
     const chunk = Math.min(requestedChunk, totalChunks);
@@ -533,6 +933,28 @@ async function executeWriteWithTag(block, ctx, tag) {
     return { ok: false, event: 'tool_error', payload: { tag, reason: e.message }, llmEcho: `${tag} refused: ${e.message}` };
   }
   const content = stripProtocolArtifacts(block.body || '');
+  // History serializes long past bodies as self-closing stubs. A model
+  // imitating the stub form sends an empty body — refuse it with the fix
+  // spelled out rather than silently writing a zero-byte file.
+  if (!content.trim()) {
+    const reason = `${tag} requires the complete file content inside the tag body (CDATA-wrapped). `
+      + 'The body was empty. Emit the call again with the FULL content — or, to intentionally create an '
+      + 'empty file, use <execute_command>touch <path></execute_command>.';
+    await ctx.audit({ kind: 'tool.refused', tag, path: abs, reason: 'empty body' });
+    return { ok: false, event: 'tool_error', payload: { tag, reason }, llmEcho: `${tag} refused: ${reason}` };
+  }
+  // A body carrying a history-elision marker is a truncated imitation of
+  // compressed history, never real file content — refuse instead of silently
+  // writing a broken file (see validator.js containsElisionMarker).
+  if (containsElisionMarker(content)) {
+    await ctx.audit({ kind: 'tool.refused', tag, path: abs, reason: 'elision marker in body' });
+    return {
+      ok: false,
+      event: 'tool_error',
+      payload: { tag, reason: ELISION_MARKER_REASON },
+      llmEcho: `${tag} refused: ${ELISION_MARKER_REASON}`,
+    };
+  }
   try {
     await mkdir(dirname(abs), { recursive: true });
     await writeFile(abs, content, 'utf8');
@@ -568,6 +990,15 @@ export async function executeReplaceInFile(block, ctx) {
     return { ok: false, event: 'tool_error', payload: { tag, reason: e.message }, llmEcho: `${tag} refused: ${e.message}` };
   }
 
+  if (containsElisionMarker(block.body)) {
+    await ctx.audit({ kind: 'tool.refused', tag, path: abs, reason: 'elision marker in body' });
+    return {
+      ok: false,
+      event: 'tool_error',
+      payload: { tag, reason: ELISION_MARKER_REASON },
+      llmEcho: `${tag} refused: ${ELISION_MARKER_REASON}`,
+    };
+  }
   let blocks;
   try {
     blocks = parseReplaceBlocks(stripProtocolArtifacts(block.body));
@@ -720,6 +1151,7 @@ export async function executeReadBatch(block, ctx) {
     return { ok: false, event: 'tool_error', payload: { tag, reason: 'paths are required' }, llmEcho: `${tag} failed: paths are required` };
   }
   const results = [];
+  const media = [];
   for (const item of items) {
     const [mode, ...rest] = item.includes(':') ? item.split(':') : ['read', item];
     const path = rest.join(':').trim();
@@ -738,6 +1170,9 @@ export async function executeReadBatch(block, ctx) {
       const readPath = key === 'read' ? path : item;
       const result = await executeRead({ attrs: { path: readPath } }, ctx);
       results.push(result.llmEcho);
+      // A batched PDF/image echoes "attached below" — carry its media through
+      // or that claim would be false.
+      if (Array.isArray(result.llmMedia)) media.push(...result.llmMedia);
     }
   }
   let text = results.filter(Boolean).join('\n\n---\n\n');
@@ -750,5 +1185,6 @@ export async function executeReadBatch(block, ctx) {
     event: tag,
     payload: { count: items.length },
     llmEcho: `# ${tag}\n${text}`,
+    ...(media.length ? { llmMedia: media } : {}),
   };
 }

@@ -8,7 +8,7 @@
 // element per chunk, with the standard candidates/content/parts shape. We use
 // alt=sse which gives proper `data: {...}` lines to keep parity with the rest.
 
-import { iterateSseStream } from './sse-util.js';
+import { httpStreamError, iterateSseStream, makeTruncatedStreamError, strictFinishEnabled } from './sse-util.js';
 import { toGeminiParts } from './multimodal.js';
 import { providerMaxOutputTokens } from './limits.js';
 import { geminiThinkingConfig } from './reasoning.js';
@@ -23,22 +23,26 @@ const DEFAULT_IMAGE_MODEL = 'imagen-4.0-generate-001';
 export default {
   id: 'gemini',
   label: 'Google Gemini',
-  description: 'Gemini 2.5 + 3.5 — multimodal, fast, generous free tier.',
-  defaultModel: 'gemini-2.5-flash',
+  description: 'Gemini 3.x + 2.5 — multimodal, fast, generous free tier.',
+  defaultModel: 'gemini-3.5-flash',
+  // Verified against ai.google.dev July 2026. 3.5 Flash is GA and the top
+  // recommendation; 3.5 Pro is not public yet; gemini-3-flash-preview and
+  // gemini-3-pro-preview are superseded/shut down.
   models: [
-    { id: 'gemini-3.5-flash',        label: 'Gemini 3.5 Flash',       note: 'Newest stable' },
-    { id: 'gemini-2.5-pro',          label: 'Gemini 2.5 Pro',         note: 'Most capable' },
-    { id: 'gemini-2.5-flash',        label: 'Gemini 2.5 Flash',       note: 'Balanced (recommended)' },
-    { id: 'gemini-2.5-flash-lite',   label: 'Gemini 2.5 Flash Lite',  note: 'Fastest, cheapest' },
-    { id: 'gemini-3.1-pro-preview',  label: 'Gemini 3.1 Pro',         note: 'Newest, preview' },
-    { id: 'gemini-3-flash-preview',  label: 'Gemini 3 Flash',         note: 'Preview' },
+    { id: 'gemini-3.5-flash',       label: 'Gemini 3.5 Flash',       note: 'Most intelligent (recommended)' },
+    { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro',         note: 'Deep reasoning, preview' },
+    { id: 'gemini-3.1-flash-lite',  label: 'Gemini 3.1 Flash Lite',  note: 'Fast, low cost' },
+    { id: 'gemini-2.5-pro',         label: 'Gemini 2.5 Pro',         note: 'Previous Pro' },
+    { id: 'gemini-2.5-flash',       label: 'Gemini 2.5 Flash',       note: 'Previous Flash' },
+    { id: 'gemini-2.5-flash-lite',  label: 'Gemini 2.5 Flash Lite',  note: 'Cheapest' },
   ],
   signupUrl: 'https://aistudio.google.com/apikey',
   needsBaseUrl: false,
+  supportsDocuments: true,
   keyHint: 'AIza…',
 
-  async *stream({ apiKey, model, system, messages, signal }) {
-    const m = model || 'gemini-2.5-flash';
+  async *stream({ apiKey, model, system, messages, signal, reasoning, emitReasoning }) {
+    const m = model || 'gemini-3.5-flash';
     const url = `${BASE}/models/${encodeURIComponent(m)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`;
     // Build parts arrays per message. Images come pre-fetched + base64-encoded
     // by the helper because Gemini doesn't accept image URLs inline.
@@ -55,7 +59,7 @@ export default {
       generationConfig: {
         maxOutputTokens: providerMaxOutputTokens(),
         temperature: 0.7,
-        thinkingConfig: geminiThinkingConfig(m),
+        thinkingConfig: geminiThinkingConfig(m, reasoning, { includeThoughts: Boolean(emitReasoning) }),
       },
     };
     const res = await fetch(url, {
@@ -64,18 +68,27 @@ export default {
       body: JSON.stringify(body),
       signal,
     });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Gemini ${res.status}: ${err.slice(0, 400)}`);
-    }
+    if (!res.ok) throw await httpStreamError('Gemini', res);
+    let finished = false;
     for await (const ev of iterateSseStream(res.body)) {
       if (!ev.data) continue;
       try {
         const j = JSON.parse(ev.data);
+        if (j.candidates?.[0]?.finishReason) finished = true;
         const parts = j.candidates?.[0]?.content?.parts || [];
-        for (const p of parts) if (p.text) yield p.text;
+        for (const p of parts) {
+          if (!p.text) continue;
+          // `thought: true` parts are thinking summaries — never let them leak
+          // into the visible answer stream.
+          if (p.thought) {
+            if (emitReasoning) yield { type: 'reasoning', text: p.text };
+            continue;
+          }
+          yield p.text;
+        }
       } catch { /* ignore malformed */ }
     }
+    if (strictFinishEnabled() && !finished) throw makeTruncatedStreamError('Gemini');
   },
 
   /**

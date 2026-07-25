@@ -9,6 +9,8 @@ description: "An MCP server exposes tools (callable functions) and resources (re
 
 An MCP server exposes **tools** (callable functions) and **resources** (readable data) to BOR. Install the GitHub MCP and BOR can manage your repos; install the Postgres MCP and it can query your database; install the filesystem MCP and it can work across a directory. MCP is how you extend BOR's *reach* into your other systems.
 
+> Looking for Gmail, Calendar, Slack, and the other everyday services? Those have their own one-click flow — the [connectors gallery](/features/connectors) — which wires them up as MCP servers for you automatically. The marketplace is for everything beyond that.
+
 ## The pieces
 
 - **The runtime** (`server/runtime/mcp.js`) — discovers configured servers, connects to them (stdio, SSE, or streamable-HTTP), and dispatches tool/resource calls.

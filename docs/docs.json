@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "linden",
   "name": "Bed of Roses",
-  "description": "An AI-native macOS companion. A draggable presence lives above your desktop; every chat turn can produce apps, widgets, files, theme changes, or tool calls.",
+  "description": "An AI companion that lives on your macOS desktop and does things — builds apps, connects to your services, browses the web, controls your Mac, and works while you're away.",
   "colors": {
     "primary": "#111111",
     "light": "#FBFBFA",
@@ -28,46 +28,27 @@
         "group": "Getting Started",
         "pages": [
           "introduction",
-          "getting-started/what-is-bor",
           "getting-started/installation",
-          "getting-started/quickstart",
           "getting-started/onboarding",
+          "getting-started/quickstart",
           "getting-started/configuration"
-        ]
-      },
-      {
-        "group": "Core Concepts",
-        "pages": [
-          "concepts/architecture",
-          "concepts/the-runtime",
-          "concepts/the-presence",
-          "concepts/surfaces",
-          "concepts/the-protocol",
-          "concepts/chat-loop",
-          "concepts/storage-and-data"
         ]
       },
       {
         "group": "Features",
         "pages": [
-          "features/apps",
-          "features/shortcuts",
-          "features/the-bridge",
-          "features/themes",
-          "features/memory",
-          "features/skills",
-          "features/multi-presence",
-          "features/cron-and-notifications"
-        ]
-      },
-      {
-        "group": "Agent Tools",
-        "pages": [
-          "features/file-editing",
+          "features/presence",
+          "features/building-apps",
+          "features/connectors",
+          "features/ambient-browser",
+          "features/files",
           "features/running-commands",
-          "features/the-browser",
           "features/computer-use",
-          "features/web-and-media"
+          "features/media",
+          "features/themes",
+          "features/background-tasks",
+          "features/memory-and-skills",
+          "features/multi-presence"
         ]
       },
       {
@@ -91,6 +72,14 @@
         ]
       },
       {
+        "group": "How It Works",
+        "pages": [
+          "concepts/the-presence",
+          "concepts/the-runtime",
+          "concepts/storage-and-data"
+        ]
+      },
+      {
         "group": "Command Line",
         "pages": ["cli/command-line"]
       },
@@ -99,7 +88,8 @@
         "pages": [
           "reference/tool-reference",
           "reference/http-api",
-          "reference/configuration-reference"
+          "reference/configuration-reference",
+          "features/the-bridge"
         ]
       },
       {

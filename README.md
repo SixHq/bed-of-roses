@@ -7,7 +7,7 @@
 **An AI companion that lives on your desktop and does things.**
 
 <p>
-  <a href="https://www.npmjs.com/package/bed-of-roses"><img src="https://img.shields.io/npm/v/bed-of-roses?style=for-the-badge&color=000000" alt="npm"></a>
+  <a href="https://www.npmjs.com/package/bed-of-roses"><img src="https://img.shields.io/npm/v/bed-of-roses?style=for-the-badge&color=000000&cacheSeconds=3600" alt="npm: bed-of-roses"></a>
   <a href="https://github.com/SixHq/bed-of-roses/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache_2.0-000000?style=for-the-badge" alt="License: Apache-2.0"></a>
   <img src="https://img.shields.io/badge/node-%E2%89%A520-000000?style=for-the-badge" alt="Node >= 20">
   <img src="https://img.shields.io/badge/platform-macOS-000000?style=for-the-badge" alt="Platform: macOS">

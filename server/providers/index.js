@@ -26,7 +26,13 @@ export function getProvider(id) {
  * No secrets, just metadata.
  */
 export function publicCatalog() {
-  return ALL_PROVIDERS.map((p) => ({
+  // TEMPORARILY hide the `bor` (BOR credits) provider from the onboarding
+  // grid and the model picker until the credits system ships. The provider
+  // stays registered in ALL_PROVIDERS so getProvider() still resolves it for
+  // any existing config. Restore by swapping the filtered line back to the
+  // original below. Do not delete.
+  // return ALL_PROVIDERS.map((p) => ({           // ← original (restore this)
+  return ALL_PROVIDERS.filter((p) => !p.isBorCredits).map((p) => ({
     id: p.id,
     label: p.label,
     description: p.description,

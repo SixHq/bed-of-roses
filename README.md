@@ -41,9 +41,7 @@ During onboarding (and any time after), BOR shows a connectors gallery: one Comp
 
 ### Browse the web like a person
 
-BOR drives a real Chrome window with its own profile. It reads pages structurally (not by squinting at pixels), clicks, types, fills multi-field forms, manages tabs, and can stay signed in to your sites. It verifies what happened on the page before it tells you it's done.
-
-<!-- TODO: screenshot: the ambient browser mid-task — a visible Chrome window BOR opened, with the presence's browser card showing the current page and action -->
+BOR drives a real Chrome window with its own profile. It reads pages structurally (not by squinting at pixels), clicks, types, fills multi-field forms, manages tabs, and can stay signed in to your sites. It verifies what happened on the page before it tells you it's done — and you watch it happen: the Chrome window works in the open while the presence's browser card narrates each step.
 
 ### Reach a hundred more tools through MCP
 

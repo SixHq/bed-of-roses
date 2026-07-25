@@ -17,15 +17,13 @@ While BOR works, a thought bubble opens and shows you everything as it happens. 
 - **Build cards** — apps and shortcut cards being generated show their build phase, then go live.
 - **Media, image, wait, and progress cards** — everything else BOR produces or waits on.
 
-<!-- TODO: screenshot: the thought bubble mid-task showing a reasoning card, an editor card streaming code, and a terminal card together -->
+<img src="/assets/thought_bubble_mid_chat.png" alt="The thought bubble mid-task: a collapsed reasoning card, BOR's narration of the plan, a Run-a-command tool chip, and a live terminal card streaming the scaffolding output — with Minimize and Stop in the footer" />
 
 The bubble is resizable from all eight edges (your size persists), and the minimize button collapses a running task to a small chip — the work continues, and clicking the chip brings the full thread back.
 
 ## Stop and resume
 
-The square stop button cancels a running task immediately. When a task is stopped, the button becomes a play triangle — press it (or the "Resume" action in the footer) and BOR picks the task back up exactly where it left off, with full context of what it had already done.
-
-<!-- TODO: screenshot: the head of the thought bubble with the stop button, and the same spot after stopping showing the play (resume) triangle -->
+The **Stop** button in the bubble's footer cancels a running task immediately — the thread stays open with a quiet "Stopped" line, and the footer's primary action becomes **Resume**. Press Resume and BOR picks the task back up exactly where it left off, with full context of what it had already done; send a new message instead and the old task stays cancelled. The **+** button in the bubble's head row starts a fresh thread at any time — the discarded conversation is still in History, resumable from there.
 
 ## History
 
@@ -33,15 +31,13 @@ The history button reopens past conversations — not as plain text, but with ev
 
 ## Notifications
 
-The bell opens the notifications inbox — where background tasks, scheduled jobs, and anything BOR wants to tell you later land. Unread items show as a badge on the orb and as a chip under the collapsed orb. Every notification has a **Continue in chat** action that opens a fresh conversation seeded with that notification's content, so "your 9am inbox summary is ready" becomes "…now draft replies to the two urgent ones" in one click. See [Background tasks](/features/background-tasks).
-
-<!-- TODO: screenshot: the notifications panel open with an unread item and its "Continue in chat" button -->
+The bell opens the notifications inbox — where background tasks, scheduled jobs, and anything BOR wants to tell you later land. Unread items show as a badge on the orb and as a chip under the collapsed orb. Every notification has a **Continue in chat** action that opens a fresh conversation seeded with that notification's content, so "your 9am inbox summary is ready" becomes "…now draft replies to the two urgent ones" in one click. The panel renders inside the bubble: unread items sit on top with a dot marker, opening one marks it read, and the panel is also reachable any time from the options menu (the three-line button in the input bar). See [Background tasks](/features/background-tasks).
 
 ## The model chip
 
 The input bar shows a chip with the active model's name. Click it to open the model picker: every provider you've connected, its models, and its connection state. Pick a row to switch models mid-conversation; unconfigured providers route you to their settings. Reasoning effort is set per provider in provider settings — see [Configuration](/getting-started/configuration).
 
-<!-- TODO: screenshot: the model chip in the input bar, and the opened model picker panel listing providers and models -->
+<img src="/assets/model_chip_plus_picker.png" alt="The model picker open above the input bar: Gemini models listed with one-line descriptions, the OpenAI-compatible provider active with kimi-k3 checked, and the model chip visible in the composer" />
 
 ## Attaching context
 
@@ -50,9 +46,7 @@ Two ways to give BOR files:
 - **Drag and drop** any file, image, folder — even a fresh macOS screenshot thumbnail — onto the composer or the bubble. The orb visibly catches the drop.
 - **The + button** opens a native file picker.
 
-Images (up to 8 MB) and PDFs (up to 20 MB) are read directly into the conversation; everything else — HEIC photos, folders, large files, any other type — is attached by path, and BOR reads it with its [file tools](/features/files). Attachments appear as removable chips above the input, and you can send attachments with no text at all ("Use the attached context." is implied).
-
-<!-- TODO: screenshot: a file being dragged onto the presence with the drop highlight, and the resulting attachment chips above the input -->
+Images (up to 8 MB) and PDFs (up to 20 MB) are read directly into the conversation; everything else — HEIC photos, folders, large files, any other type — is attached by path, and BOR reads it with its [file tools](/features/files). While a drag hovers anywhere near the orb or composer, the drop zone highlights to show it will catch the file; on release, each file appears as a removable chip above the input, named and typed. You can send attachments with no text at all ("Use the attached context." is implied).
 
 ## It behaves like part of the desktop
 

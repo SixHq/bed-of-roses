@@ -217,6 +217,10 @@ async function loadLogs() {
 }
 
 // ---- BOR credits & spend ----
+// TEMPORARILY DISABLED until the credits system ships — the tab + panel are
+// commented out in main-app.html too. Restore by uncommenting this block, the
+// renderSpend() calls below, and the HTML. Do not delete.
+/*
 // The detailed dashboard (graphs, history, controls) lives in the bor-web app,
 // opened in the system browser. Here we just list presences with a deep-link to
 // each one's spend view, plus a buy/manage button.
@@ -262,6 +266,9 @@ document.getElementById('spend-grid')?.addEventListener('click', (e) => {
   if (!btn) return;
   openWeb(`/dashboard?presence=${encodeURIComponent(btn.dataset.id)}`);
 });
+*/
+// Safe no-op while the spend tab is disabled (callers below still reference it).
+function renderSpend() {}
 
 // Live refresh when presences change (create/delete/update from main).
 api.onPresencesChanged?.(() => {

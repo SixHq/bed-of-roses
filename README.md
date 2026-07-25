@@ -73,6 +73,7 @@ Each presence is a fully separate companion — its own model, memory, apps, con
 
 <img src="docs/assets/run_as_many_presence_as_you_like_.png" alt="Multiple presence orbs running in parallel, each an isolated companion" width="840">
 
+
 ### And the rest
 
 - **Watch it think.** The thought bubble streams reasoning cards, code editors filling in line by line, terminal output, MCP calls, and browser sessions as they happen. Stop any task with one click; press play to resume exactly where it left off. History reopens past conversations with every card intact.

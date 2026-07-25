@@ -959,6 +959,17 @@ thoughtBody.addEventListener('click', (event) => {
   window.borHost?.revealPath?.(link.dataset.revealPath || '');
 }, true);
 
+// Credit-line links ("BOR by Sixth / drop a star") open in the user's DEFAULT
+// browser via the host's openExternal IPC — never window.open, which would
+// spawn an Electron popup from this window.
+document.getElementById('bubble-credit')?.addEventListener('click', (event) => {
+  const link = event.target.closest('a[data-external]');
+  if (!link) return;
+  event.preventDefault();
+  event.stopPropagation();
+  window.borHost?.openExternal?.(link.getAttribute('href') || '');
+});
+
 function shortText(value, max = 72) {
   const normalized = String(value || '').replace(/\s+/g, ' ').trim();
   return normalized.length > max ? `${normalized.slice(0, max - 1)}…` : normalized;

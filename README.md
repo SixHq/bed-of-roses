@@ -30,7 +30,7 @@
 
 ## 🔥 The Problem
 
-Every AI assistant today lives in the wrong place: **a chat window**.
+AI agents got good. **Claude Code**, **Codex**, **Cursor**, **Gemini CLI** — they genuinely do the work now. But they all live in the wrong place: **a terminal or an IDE**, built for one job — code.
 
 <table>
 <tr>
@@ -38,24 +38,24 @@ Every AI assistant today lives in the wrong place: **a chat window**.
 
 ### What Happens Now
 
-1. You open a browser tab, type a prompt
-2. The AI answers **in text** — code you must copy, steps you must follow
-3. You tab-switch to actually do the work yourself
-4. The results die in the scrollback
-5. Tomorrow you re-explain everything from zero
-6. Your "assistant" never touched your actual computer
+1. You open a browser tab **or an agent in your terminal**, type a prompt
+2. The AI performs the task — but your only window into it is **walls of scrolling text** with limited visibility
+3. It's built for **codebases, not your life** — it can't send your email, check your calendar, or reply to a message without developer-grade setup
+4. What it produces stays **trapped where it ran** — scripts in a repo, output in a scrollback, nothing you can open tomorrow as *a thing you keep*
+5. Close the terminal and it's **gone** — nothing runs while you're away, nothing notifies you, nothing is *there* when you sit back down
+6. And if you don't live in a terminal? **You never even get to start**
 
 </td>
 <td width="50%">
 
 ### What You Actually Want
 
-- An AI **on your desktop**, not behind a tab
-- One that **does the work** — builds the app, sends the email, runs the job
-- Work you can **watch happening** — files, terminals, browsers, live
-- Results that **persist** — apps you keep, memory that survives
-- Your services **connected** — mail, calendar, chat, code
-- **Your model, your machine, your keys**
+- An agent with a **presence on your desktop** — above every app, not inside a dev tool
+- Work you can **watch as it happens** — live reasoning, code editors, terminals, browser steps as cards, not a scrolling log
+- **Your daily life connected** — Gmail, Calendar, Slack, iMessage, ~100 services as one-click tools
+- Results that **outlive the session** — real apps that persist, memory that compounds, history that resumes
+- One that **keeps working when you walk away** — scheduled runs, notifications, an inbox
+- Something your **non-developer self could use too** — and still your model, your keys, your machine
 
 </td>
 </tr>
@@ -73,16 +73,17 @@ Every AI assistant today lives in the wrong place: **a chat window**.
 
 It builds you native Mac apps, connects to your Gmail and calendar, browses the web in a real Chrome, reads and writes your files, controls your Mac, plays media, and runs scheduled jobs while you're away — **and you watch every step of it happen** in a live thought bubble of streaming reasoning, code editors, and terminals.
 
-| | Chat assistants | **Bed of Roses** |
-|---|---|---|
-| Lives | in a browser tab | **on your desktop, above every app** |
-| Output | text you act on | **actions it performs** |
-| Apps | describes code | **ships native Mac windows that persist** |
-| Email | drafts you copy-paste | **sends through your connected Gmail** |
-| Web | quotes pages | **drives a real Chrome, verifies results** |
-| Between sessions | amnesia | **memory, apps, history, skills** |
-| Model | theirs | **yours — any provider, any key** |
-| Runs | on their servers | **100% on your machine** |
+| | Chat apps | Terminal / IDE agents | **Bed of Roses** |
+|---|---|---|---|
+| Lives | a browser tab | a terminal or editor | **on your desktop, above every app** |
+| Built for | conversation | codebases | **your whole day — life and code** |
+| You see | text answers | scrolling logs | **live cards: reasoning, editors, terminals, browser steps** |
+| Email & calendar | drafts you copy-paste | possible, with developer setup | **one-click connected, used as real tools** |
+| The web | quotes pages | scripts and APIs | **drives a real visible Chrome, verifies results** |
+| What persists | a transcript | commits in a repo | **native apps, memory, resumable history** |
+| While you're away | nothing | nothing | **scheduled runs, notifications inbox** |
+| Who can use it | anyone | developers | **anyone** |
+| Model | theirs | usually one vendor | **yours — any provider, any key, even local** |
 
 ---
 

@@ -5,7 +5,7 @@ import { readFile, writeFile, mkdir, readdir, unlink, rmdir, rm, stat } from 'no
 import { spawn } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { inflateSync } from 'node:zlib';
+import { inflateSync, inflateRawSync } from 'node:zlib';
 import { dirname, relative, resolve, normalize } from 'node:path';
 import { resolvePath, resolveForWrite, assertWritable, PROJECT_ROOT, DATA_DIR } from '../paths.js';
 import { containsElisionMarker, ELISION_MARKER_REASON } from '../../validator.js';
@@ -179,7 +179,7 @@ function looksBinary(buf) {
 // Run a stock macOS CLI and capture stdout (capped). Rejects on non-zero exit.
 function runTool(cmd, args, { maxBytes = 512 * 1024 } = {}) {
   return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     const out = [];
     const err = [];
     let bytes = 0;
@@ -242,6 +242,91 @@ async function qlThumbnail(absPath) {
   }
 }
 
+// --- Minimal stdlib ZIP reader -------------------------------------------
+// Replaces the external `unzip` CLI (absent on Windows) for Office XML
+// containers and archive listings. Central-directory walk + inflateRaw; no
+// encryption or zip64 support — those throw and the callers' existing error
+// paths handle it.
+function zipCentralEntries(buf) {
+  // EOCD record: signature 0x06054b50, within the last 65557 bytes.
+  const scanStart = Math.max(0, buf.length - 65557);
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= scanStart; i -= 1) {
+    if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('not a zip archive (no end-of-central-directory)');
+  const count = buf.readUInt16LE(eocd + 10);
+  let off = buf.readUInt32LE(eocd + 16);
+  const entries = [];
+  for (let n = 0; n < count; n += 1) {
+    if (off + 46 > buf.length || buf.readUInt32LE(off) !== 0x02014b50) break;
+    const method = buf.readUInt16LE(off + 10);
+    const compressedSize = buf.readUInt32LE(off + 20);
+    const nameLen = buf.readUInt16LE(off + 28);
+    const extraLen = buf.readUInt16LE(off + 30);
+    const commentLen = buf.readUInt16LE(off + 32);
+    const localOffset = buf.readUInt32LE(off + 42);
+    const name = buf.toString('utf8', off + 46, off + 46 + nameLen);
+    entries.push({ name, method, compressedSize, localOffset });
+    off += 46 + nameLen + extraLen + commentLen;
+  }
+  return entries;
+}
+
+function zipEntryBuffer(buf, entry) {
+  const off = entry.localOffset;
+  if (off + 30 > buf.length || buf.readUInt32LE(off) !== 0x04034b50) {
+    throw new Error(`bad local header for ${entry.name}`);
+  }
+  const nameLen = buf.readUInt16LE(off + 26);
+  const extraLen = buf.readUInt16LE(off + 28);
+  const start = off + 30 + nameLen + extraLen;
+  const data = buf.subarray(start, start + entry.compressedSize);
+  if (entry.method === 0) return Buffer.from(data);
+  if (entry.method === 8) return inflateRawSync(data);
+  throw new Error(`unsupported zip compression method ${entry.method}`);
+}
+
+// `patterns` use unzip-style globs ('xl/worksheets/sheet*.xml').
+function zipGlobToRegExp(pattern) {
+  const escaped = String(pattern).replace(/[.+^${}()|[\]\\?]/g, '\\$&').replaceAll('*', '.*');
+  return new RegExp(`^${escaped}$`);
+}
+
+// The reader loads the archive into memory — refuse anything huge.
+const ZIP_READ_MAX_BYTES = 256 * 1024 * 1024;
+async function readZipBuffer(absPath) {
+  const st = await stat(absPath);
+  if (st.size > ZIP_READ_MAX_BYTES) {
+    throw new Error(`archive is ${Math.round(st.size / (1024 * 1024))} MB — too large to inspect inline; use execute_command`);
+  }
+  return readFile(absPath);
+}
+
+async function zipMatchingText(absPath, patterns, { maxBytes = 4 * MAX_READ_BYTES } = {}) {
+  const buf = await readZipBuffer(absPath);
+  const res = patterns.map(zipGlobToRegExp);
+  const chunks = [];
+  let bytes = 0;
+  for (const entry of zipCentralEntries(buf)) {
+    if (!res.some((re) => re.test(entry.name))) continue;
+    const text = zipEntryBuffer(buf, entry).toString('utf8');
+    bytes += text.length;
+    chunks.push(text);
+    if (bytes > maxBytes) break;
+  }
+  if (!chunks.length) throw new Error(`no entries matching ${patterns.join(', ')}`);
+  return chunks.join('\n');
+}
+
+async function zipListing(absPath) {
+  const buf = await readZipBuffer(absPath);
+  return zipCentralEntries(buf).map((e) => e.name).join('\n');
+}
+
+// Exported for unit tests only.
+export const _zipInternal = { zipCentralEntries, zipEntryBuffer, zipMatchingText, zipListing, zipGlobToRegExp };
+
 function stripXmlToText(xml) {
   return String(xml || '')
     .replace(/<[^>]+>/g, ' ')
@@ -252,9 +337,10 @@ function stripXmlToText(xml) {
     .trim();
 }
 
-// Pull the text content out of an Office Open XML container with stock unzip.
+// Pull the text content out of an Office Open XML container (pure Node —
+// works on every platform, no `unzip` CLI needed).
 async function officeXmlText(absPath, patterns) {
-  const raw = await runTool('unzip', ['-p', absPath, ...patterns], { maxBytes: 4 * MAX_READ_BYTES });
+  const raw = await zipMatchingText(absPath, patterns, { maxBytes: 4 * MAX_READ_BYTES });
   return stripXmlToText(raw);
 }
 
@@ -387,7 +473,7 @@ async function readComplexFormat(abs, size, { tag, chunked = false, supportsDocu
   const imageMime = READ_IMAGE_MIME_BY_EXT[ext];
   if (imageMime) {
     if (size > READ_IMAGE_MAX_BYTES) {
-      return complexFail(tag, `image is ${Math.round(size / (1024 * 1024))} MB (max 8 MB for inline viewing). Downscale it first (e.g. execute_command with sips).`);
+      return complexFail(tag, `image is ${Math.round(size / (1024 * 1024))} MB (max 8 MB for inline viewing). Downscale it first with execute_command (sips on macOS, ImageMagick elsewhere).`);
     }
     const buf = await readFile(abs);
     return complexOk(tag, abs, size, `image (${imageMime})${noteChunked}`,
@@ -396,10 +482,13 @@ async function readComplexFormat(abs, size, { tag, chunked = false, supportsDocu
   }
 
   if (CONVERT_IMAGE_EXTS.has(ext)) {
+    if (process.platform !== 'darwin') {
+      return complexFail(tag, `${ext} images need transcoding to a provider-accepted format, and no built-in converter exists on this platform. Convert to PNG/JPEG with execute_command (e.g. ImageMagick) first.`);
+    }
     try {
       const jpeg = await sipsToJpeg(abs);
       if (jpeg.length > READ_IMAGE_MAX_BYTES) {
-        return complexFail(tag, `converted image is still over 8 MB. Downscale it first (execute_command with sips -Z).`);
+        return complexFail(tag, `converted image is still over 8 MB. Downscale it first with execute_command (sips -Z on macOS, ImageMagick elsewhere).`);
       }
       return complexOk(tag, abs, size, `image (${ext.slice(1)} → jpeg)${noteChunked}`,
         'The image (converted to JPEG) is attached below this tool result — look at it directly.',
@@ -421,6 +510,9 @@ async function readComplexFormat(abs, size, { tag, chunked = false, supportsDocu
             `${visible}${truncated ? '\n[truncated]' : ''}`);
         }
       } catch { /* fall through to textutil */ }
+    }
+    if (process.platform !== 'darwin') {
+      return complexFail(tag, `no built-in ${ext} text extractor on this platform. Ask the user for a plain-text, .docx, or PDF export, or convert it with execute_command (e.g. LibreOffice/pandoc).`);
     }
     try {
       const { visible, truncated } = clipText(await textutilExtract(abs));
@@ -497,9 +589,9 @@ async function readComplexFormat(abs, size, { tag, chunked = false, supportsDocu
 
   if (ext === '.zip' || ext === '.jar' || ext === '.epub') {
     try {
-      const { visible, truncated } = clipText(await runTool('unzip', ['-l', abs], { maxBytes: MAX_READ_BYTES }));
+      const { visible, truncated } = clipText(await zipListing(abs));
       return complexOk(tag, abs, size, `${ext.slice(1)} archive (listing)`,
-        `Archive contents:\n${visible}${truncated ? '\n[truncated]' : ''}\n\nExtract specific entries with execute_command (unzip -p / unzip -d) to read them.`);
+        `Archive contents:\n${visible}${truncated ? '\n[truncated]' : ''}\n\nExtract specific entries with execute_command to read them.`);
     } catch (error) {
       return complexFail(tag, `could not list archive (${error.message}).`);
     }

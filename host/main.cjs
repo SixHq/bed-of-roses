@@ -1,12 +1,14 @@
-const { app, BrowserWindow, Menu, globalShortcut, ipcMain, screen, shell, dialog, session, nativeImage } = require('electron');
+const { app, BrowserWindow, Menu, Tray, globalShortcut, ipcMain, screen, shell, dialog, session, nativeImage } = require('electron');
 const { spawn, execFile } = require('node:child_process');
 const fs = require('node:fs/promises');
 const { appendFileSync, watch } = require('node:fs');
+const os = require('node:os');
 const http = require('node:http');
 const net = require('node:net');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { syncNativeApps, writeHostControlDiscovery, writeMainAppWrapper } = require('./native-apps.cjs');
+const platform = require('./platform.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(ROOT, 'os-data');
@@ -120,25 +122,28 @@ const PRESENCE_COLLAPSED_ORB_CENTER = 26.25;
 
 app.setName('Bed of Roses');
 app.setPath('userData', ELECTRON_USER_DATA_DIR);
+platform.applyStartupSwitches(app);
 const singleInstanceLock = app.requestSingleInstanceLock();
 if (!singleInstanceLock) app.quit();
+
+const HOST_LOG_PATH = path.join(os.tmpdir(), 'bor-host.log');
 
 function log(message) {
   const line = `[bor-v2] ${message}`;
   console.log(line);
   try {
-    appendFileSync('/tmp/bor-host.log', `${new Date().toISOString()} ${line}\n`);
+    appendFileSync(HOST_LOG_PATH, `${new Date().toISOString()} ${line}\n`);
   } catch { /* ignore */ }
 }
 
 process.on('uncaughtException', (error) => {
   console.error('[bor-v2] uncaught exception:', error);
-  try { appendFileSync('/tmp/bor-host.log', `${new Date().toISOString()} [bor-v2] uncaught exception: ${error?.stack || error}\n`); } catch { /* ignore */ }
+  try { appendFileSync(HOST_LOG_PATH, `${new Date().toISOString()} [bor-v2] uncaught exception: ${error?.stack || error}\n`); } catch { /* ignore */ }
 });
 
 process.on('unhandledRejection', (reason) => {
   console.error('[bor-v2] unhandled rejection:', reason);
-  try { appendFileSync('/tmp/bor-host.log', `${new Date().toISOString()} [bor-v2] unhandled rejection: ${reason?.stack || reason}\n`); } catch { /* ignore */ }
+  try { appendFileSync(HOST_LOG_PATH, `${new Date().toISOString()} [bor-v2] unhandled rejection: ${reason?.stack || reason}\n`); } catch { /* ignore */ }
 });
 
 function showDockForSetup() {
@@ -272,6 +277,8 @@ const CONTEXT_TREE_IGNORE = new Set([
   'node_modules', '.git', '.DS_Store', 'dist', 'build', 'out', '.next', '.cache', 'coverage',
   'Library', 'Applications', 'Movies', 'Music', 'Pictures Library.photoslibrary',
   '.Trash', '.ssh', '.gnupg', '.npm', '.config', '.local',
+  // Windows/Linux home noise (harmless on mac).
+  'AppData', 'NTUSER.DAT', 'ntuser.dat', 'snap', '.steam', '.wine', '.mozilla',
 ]);
 
 function shouldSkipContextEntry(name) {
@@ -397,6 +404,10 @@ async function imagePixelDims(filePath) {
 // images keep their native size — `sips -Z` upscales, so we only apply it when
 // a dimension actually exceeds the cap. Throws if `sips` fails.
 async function heicToJpegBuffer(filePath) {
+  // `sips` is macOS-only; other platforms have no bundled transcoder.
+  if (process.platform !== 'darwin') {
+    throw new Error('HEIC images are not supported on this platform — convert to JPEG/PNG first');
+  }
   const out = path.join(app.getPath('temp'), `bor-heic-${randomUUID()}.jpg`);
   try {
     const args = ['-s', 'format', 'jpeg'];
@@ -710,6 +721,7 @@ async function registerWithLaunchServices(paths = []) {
   // Nudge Spotlight/LaunchServices to index freshly-written bundles. Best
   // effort — lsregister isn't guaranteed present and indexing happens anyway,
   // this just makes it immediate.
+  if (process.platform !== 'darwin') return;
   if (!paths.length) return;
   const lsregister = '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister';
   await Promise.all(paths.map((p) => new Promise((resolve) => {
@@ -744,6 +756,12 @@ async function syncNativeAppWrappers({ immediate = false } = {}) {
 }
 
 async function startNativeAppSync() {
+  // App shortcuts are per-platform in native-apps.cjs: .app bundles (mac),
+  // .desktop entries (linux), Start Menu .lnk (windows).
+  if (!['darwin', 'linux', 'win32'].includes(process.platform)) {
+    log('native-apps: no shortcut backend for this platform; skipping sync');
+    return;
+  }
   try {
     await writeHostControlDiscovery({
       hostControlUrl,
@@ -1070,10 +1088,8 @@ function createOnboardingWindow(entry, { settingsProvider = '', settingsConnecto
   // Without this the onboarding window opens BEHIND the screen-saver-level Main
   // app (and on a different Space when fullscreen), so it looks like onboarding
   // never appears and "Finish setup" does nothing.
-  try {
-    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-    win.setAlwaysOnTop(true, 'screen-saver');
-  } catch { /* non-macOS / unsupported */ }
+  platform.pinToAllWorkspaces(win, true);
+  platform.raiseAlwaysOnTop(win);
   win.on('close', (event) => {
     if (allowOnboardingClose) return;
     event.preventDefault();
@@ -1139,7 +1155,7 @@ function createOnboardingWindow(entry, { settingsProvider = '', settingsConnecto
   // behind the very panel that spawned it. Raise each popup one relative
   // level above screen-saver and hand it focus.
   win.webContents.on('did-create-window', (child) => {
-    try { child.setAlwaysOnTop(true, 'screen-saver', 1); } catch { /* best effort */ }
+    platform.raiseAlwaysOnTop(child, 1);
     try { child.focus(); } catch { /* best effort */ }
   });
   const settingsQuery = (settingsProvider ? `&provider-settings=${encodeURIComponent(settingsProvider)}` : '')
@@ -1322,9 +1338,9 @@ function bringPresenceForward(id, bounds = null) {
   // captured the whole area it would block clicks to apps underneath (Chrome,
   // etc.). The renderer re-enables capture only while the cursor is actually
   // over the orb/bubble (see bor:set-mouse-ignore + presence.js hit-testing).
-  win.setIgnoreMouseEvents(true, { forward: true });
-  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  win.setAlwaysOnTop(true, 'screen-saver');
+  platform.ignoreMouse(win);
+  platform.pinToAllWorkspaces(win, true);
+  platform.raiseAlwaysOnTop(win);
   win.showInactive();
   if (typeof win.moveTop === 'function') win.moveTop();
 }
@@ -1406,14 +1422,17 @@ function installPresenceHotReload() {
   }
 }
 
-// Global cursor poll — the drag-drop enabler. The presence window is
-// click-through (setIgnoreMouseEvents) and the renderer flips it to capturing
-// via forwarded mousemove. Native file drags (e.g. a screenshot dragged from
-// Finder) DON'T deliver mousemove, so without this the window stays
-// click-through and the drop falls through to whatever is behind it (the
-// terminal/desktop). Polling the global cursor works during a drag; we feed
-// window-relative coords to the renderer so its existing precise hit-test runs
-// and captures the window before the drop lands.
+// Global cursor poll — the drag-drop enabler, and on Linux the ONLY hover
+// signal. The presence window is click-through (setIgnoreMouseEvents) and the
+// renderer flips it to capturing via forwarded mousemove. Native file drags
+// (e.g. a screenshot dragged from Finder) DON'T deliver mousemove, so without
+// this the window stays click-through and the drop falls through to whatever
+// is behind it (the terminal/desktop). Polling the global cursor works during
+// a drag; we feed window-relative coords to the renderer so its existing
+// precise hit-test runs and captures the window before the drop lands.
+// On Linux, setIgnoreMouseEvents has no { forward } support — a click-through
+// window receives no events at all — so this poll is the primary mechanism
+// that ever re-enables capture there. Do not gate it to drag scenarios.
 let cursorPollTimer = null;
 const cursorInsidePresence = new Map(); // win.id -> bool
 function startCursorPoll() {
@@ -1501,8 +1520,8 @@ async function createPresenceWindow(entry) {
   // creation, but call setBackgroundThrottling explicitly so a future
   // Electron upgrade can't silently re-throttle us.
   try { win.webContents.setBackgroundThrottling(false); } catch { /* not available on older Electron */ }
-  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  win.setAlwaysOnTop(true, 'screen-saver');
+  platform.pinToAllWorkspaces(win, true);
+  platform.raiseAlwaysOnTop(win);
   win.loadFile(path.join(__dirname, 'presence.html'));
   installPresenceHotReload();
   win.once('ready-to-show', () => {
@@ -1796,8 +1815,8 @@ async function openWidgetPreview(presenceId, surfaceOrId, index = 0) {
   // Explicitly pin to a single Space (off = not all-spaces), and don't
   // request fullscreen-aux visibility. macOS will place this on a regular
   // desktop Space — when the user is in a fullscreen app, that means
-  // Space 1 (home desktop).
-  win.setVisibleOnAllWorkspaces(false, { visibleOnFullScreen: false });
+  // Space 1 (home desktop). (No-op on Windows; plain un-pin on Linux.)
+  platform.pinToAllWorkspaces(win, false);
   win.once('ready-to-show', () => {
     win.showInactive();
   });
@@ -2092,7 +2111,9 @@ async function streamChatToRenderer(sender, requestId, messages) {
           const preview = widgetPreviewWindows.get(parsed.data.id);
           if (preview && !preview.isDestroyed()) preview.close();
         }
-        if (parsed.event === 'set_theme' && parsed.data?.config) queueWallpaperApply(parsed.data.config);
+        if (parsed.event === 'set_theme' && parsed.data?.config) {
+          queueWallpaperApply(parsed.data.config, { reset: Boolean(parsed.data.reset) });
+        }
       }
       if (activeChatControllers.get(requestId) !== controller) return;
     }
@@ -2148,15 +2169,57 @@ function wallpaperHtml(config, width, height) {
   </style></head><body>${decor}</body></html>`;
 }
 
-function queueWallpaperApply(config) {
-  if (process.platform !== 'darwin') return;
+const WALLPAPER_SNAPSHOT_PATH = path.join(WALLPAPER_DIR, 'original.json');
+
+// Snapshot the user's PRE-BOR wallpaper once, before the first apply, so
+// <reset_theme> can put it back instead of leaving BOR's paint forever.
+async function snapshotOriginalWallpaper() {
+  try {
+    await fs.access(WALLPAPER_SNAPSHOT_PATH);
+    return; // already snapshotted
+  } catch { /* first apply — capture below */ }
+  try {
+    const value = await platform.getCurrentWallpaper();
+    await fs.mkdir(WALLPAPER_DIR, { recursive: true });
+    await fs.writeFile(WALLPAPER_SNAPSHOT_PATH, JSON.stringify({ value, platform: process.platform, savedAt: new Date().toISOString() }));
+    log(`wallpaper: snapshotted original (${value || 'unreadable'})`);
+  } catch (err) {
+    log(`wallpaper: snapshot failed: ${err.message}`);
+  }
+}
+
+async function restoreOriginalWallpaper() {
+  try {
+    const raw = await fs.readFile(WALLPAPER_SNAPSHOT_PATH, 'utf8');
+    const snap = JSON.parse(raw);
+    if (!snap?.value || snap.platform !== process.platform) return false;
+    const via = await platform.setWallpaper(snap.value);
+    log(`wallpaper: restored original via ${via}`);
+    return true;
+  } catch {
+    return false; // no snapshot / restore failed — the reset config's default gradient applies instead
+  }
+}
+
+const WALLPAPER_PLATFORMS = new Set(['darwin', 'win32', 'linux']);
+
+function queueWallpaperApply(config, { reset = false } = {}) {
+  if (!WALLPAPER_PLATFORMS.has(process.platform)) return;
   clearTimeout(wallpaperApplyTimer);
-  wallpaperApplyTimer = setTimeout(() => {
-    applyMacWallpaper(config).catch((error) => log(`wallpaper apply failed: ${error.message}`));
+  wallpaperApplyTimer = setTimeout(async () => {
+    try {
+      // reset_theme: put the user's original wallpaper back when we have it;
+      // fall through to painting the default theme only when we don't.
+      if (reset && await restoreOriginalWallpaper()) return;
+      await applyDesktopWallpaper(config);
+    } catch (error) {
+      log(`wallpaper apply failed: ${error.message}`);
+    }
   }, 500);
 }
 
-async function applyMacWallpaper(config) {
+async function applyDesktopWallpaper(config) {
+  await snapshotOriginalWallpaper();
   const display = screen.getPrimaryDisplay();
   const width = Math.max(1440, Math.round(display.size.width * display.scaleFactor));
   const height = Math.max(900, Math.round(display.size.height * display.scaleFactor));
@@ -2186,13 +2249,14 @@ async function applyMacWallpaper(config) {
     renderer.destroy();
   }
 
-  // Phase 5: prefer the Swift helper's NSWorkspace.setDesktopImageURL —
-  // it requires NO Apple Events permission grant, while osascript needs
+  // darwin: prefer the Swift helper's NSWorkspace.setDesktopImageURL — it
+  // requires NO Apple Events permission grant, while osascript needs
   // Automation access that users frequently haven't granted (and the
-  // resulting -1743 failure has been a recurring source of pain).
-  // Falls back to osascript if the helper isn't running.
+  // resulting -1743 failure has been a recurring source of pain). Falls back
+  // to osascript if the helper isn't running. win32/linux: platform module
+  // (SystemParametersInfo / gsettings / plasma).
   let appliedVia = null;
-  if (helperUrl) {
+  if (process.platform === 'darwin' && helperUrl) {
     try {
       const res = await fetch(`${helperUrl}/wallpaper/apply`, {
         method: 'POST',
@@ -2211,25 +2275,35 @@ async function applyMacWallpaper(config) {
     }
   }
   if (!appliedVia) {
-    await new Promise((resolve, reject) => {
-      const script = `tell application "System Events" to tell every desktop to set picture to POSIX file "${wallpaperPath.replaceAll('"', '\\"')}"`;
-      execFile('osascript', ['-e', script], (error) => error ? reject(error) : resolve());
-    });
-    appliedVia = 'osascript';
+    appliedVia = await platform.setWallpaper(wallpaperPath);
   }
-  log(`applied macOS wallpaper ${wallpaperPath} via ${appliedVia}`);
+  log(`applied desktop wallpaper ${wallpaperPath} via ${appliedVia}`);
 }
 
 function playNotificationSound() {
-  return new Promise((resolve) => {
-    const soundPath = process.env.BOR_NOTIFICATION_SOUND || '/System/Library/Sounds/Glass.aiff';
-    execFile('/usr/bin/afplay', [soundPath], { timeout: 3_000 }, (error) => {
-      if (!error) return resolve({ ok: true, sound: soundPath });
-      execFile('/usr/bin/osascript', ['-e', 'beep 1'], { timeout: 3_000 }, (fallbackError) => {
-        resolve({ ok: !fallbackError, sound: fallbackError ? null : 'beep', error: (fallbackError || error)?.message });
+  if (process.platform === 'darwin') {
+    return new Promise((resolve) => {
+      const soundPath = process.env.BOR_NOTIFICATION_SOUND || '/System/Library/Sounds/Glass.aiff';
+      execFile('/usr/bin/afplay', [soundPath], { timeout: 3_000 }, (error) => {
+        if (!error) return resolve({ ok: true, sound: soundPath });
+        execFile('/usr/bin/osascript', ['-e', 'beep 1'], { timeout: 3_000 }, (fallbackError) => {
+          resolve({ ok: !fallbackError, sound: fallbackError ? null : 'beep', error: (fallbackError || error)?.message });
+        });
       });
     });
-  });
+  }
+  if (process.platform === 'linux') {
+    // freedesktop sound theme ships on most desktops; fall back to a bell.
+    return new Promise((resolve) => {
+      const soundPath = process.env.BOR_NOTIFICATION_SOUND || '/usr/share/sounds/freedesktop/stereo/message.oga';
+      execFile('paplay', [soundPath], { timeout: 3_000 }, (error) => {
+        if (!error) return resolve({ ok: true, sound: soundPath });
+        try { shell.beep(); resolve({ ok: true, sound: 'beep' }); } catch (e) { resolve({ ok: false, error: e?.message }); }
+      });
+    });
+  }
+  // win32 and anything else: Electron's system beep.
+  try { shell.beep(); return Promise.resolve({ ok: true, sound: 'beep' }); } catch (e) { return Promise.resolve({ ok: false, error: e?.message }); }
 }
 
 function installIpcHandlers() {
@@ -2730,8 +2804,8 @@ function installIpcHandlers() {
     const id = presenceIdForEvent(event);
     const win = presenceWindows.get(id);
     if (!win || win.isDestroyed()) return;
-    if (ignore) win.setIgnoreMouseEvents(true, { forward: true });
-    else win.setIgnoreMouseEvents(false);
+    if (ignore) platform.ignoreMouse(win);
+    else platform.captureMouse(win);
   });
 }
 
@@ -2785,6 +2859,29 @@ async function readLegacyConfig() {
   }
 }
 
+// Tray icon — Windows/Linux only. On macOS the dock + ~/Applications wrapper
+// cover "reach the app when the orb is hidden"; elsewhere the tray is the only
+// such affordance (presence windows skip the taskbar).
+let trayRef = null;
+function createTrayIfNeeded() {
+  if (platform.IS_MAC || trayRef) return;
+  try {
+    let icon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'bloom-icon.png'));
+    if (!icon.isEmpty()) icon = icon.resize({ width: 16, height: 16 });
+    trayRef = new Tray(icon);
+    trayRef.setToolTip('Bed of Roses');
+    trayRef.setContextMenu(Menu.buildFromTemplate([
+      { label: 'Show presence', click: () => { reviveAllPresences().catch((e) => log(`tray revive failed: ${e.message}`)); } },
+      { label: 'Manage presences', click: () => { createMainAppWindow(); } },
+      { type: 'separator' },
+      { label: 'Quit Bed of Roses', click: () => { app.quit(); } },
+    ]));
+    trayRef.on('click', () => { reviveAllPresences().catch(() => {}); });
+  } catch (e) {
+    log(`tray: failed to create (${e?.message || e})`);
+  }
+}
+
 async function boot() {
   // Brand the app: show the bloom rose mark in the dock instead of the default
   // Electron logo (the dock icon is the visible one when running in dev).
@@ -2830,7 +2927,9 @@ async function boot() {
   installMediaRequestHeaders();
   installIpcHandlers();
   Menu.setApplicationMenu(null);
-  globalShortcut.register('CommandOrControl+Option+Space', () => {
+  createTrayIfNeeded();
+  // `Alt` is the portable spelling — Electron maps it to Option on macOS.
+  globalShortcut.register('CommandOrControl+Alt+Space', () => {
     // Toggle every presence orb; if none exist, recreate onboarded ones.
     let any = false;
     for (const [, win] of presenceWindows) {

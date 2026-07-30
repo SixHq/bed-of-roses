@@ -5,6 +5,8 @@ const runtimeUrl = runtimeArg ? runtimeArg.slice('--bor-runtime-url='.length) : 
 
 contextBridge.exposeInMainWorld('borHost', {
   runtimeUrl,
+  /** 'darwin' | 'win32' | 'linux' — for platform-flavored UI copy. */
+  platform: process.platform,
   getRuntimeUrl: () => ipcRenderer.invoke('bor:get-runtime-url'),
   getConfig: () => ipcRenderer.invoke('bor:get-config'),
   getPresenceBounds: () => ipcRenderer.invoke('bor:get-presence-bounds'),

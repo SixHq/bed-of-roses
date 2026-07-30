@@ -111,6 +111,18 @@ Top-level tags currently include: `say` (stream-only — never a tool), `attempt
 
 The shim treats every child as a flat string property. Tags whose children carry XML attributes (`set_theme`'s `<wallpaper from_prompt="..." size="..."/>` and `<fonts display="..." system="..." mono="..."/>`) currently work only in their string-body form via native tool calling — the `from_prompt` and `fonts` attribute forms need handler-side schema overrides. Track this for the Stage 5 cleanup if you touch `theme.js`.
 
+## Cross-platform (Windows/Linux beta)
+
+BOR runs on macOS (primary), Windows, and Linux. The port rules:
+
+- **Window primitives** live in `host/platform.cjs` (`raiseAlwaysOnTop`, `ignoreMouse`, `pinToAllWorkspaces`, `setWallpaper`, `getCurrentWallpaper`) — never call `setAlwaysOnTop('screen-saver')`/`setIgnoreMouseEvents(..., {forward})` directly in `host/main.cjs`. On Linux click-through has no mousemove forwarding; the global cursor poll in `main.cjs` is the primary hover signal — don't gate it.
+- **Shell**: `execute_command` runs bash (POSIX) / PowerShell (win32) via `execShell()` in `server/protocol/handlers/exec.js`; kill-tree is POSIX group-kill / `taskkill /T`. `server/validator.js` carries both POSIX and Windows danger patterns.
+- **Computer-use tags are darwin-only** — gated in `server/protocol/registry.js` (`DARWIN_ONLY_TAGS`): hidden from the prompt and stubbed to a refusal off-mac. `open_app` is cross-platform. The iMessage connector card is darwin-only via `platforms: ['darwin']` in `server/runtime/connectors.js`.
+- **App shortcuts**: per-platform backends in `host/native-apps.cjs` (mac .app bundles / linux .desktop / windows Start-Menu .lnk) sharing a Node launcher + `~/.bed-of-roses/host-control.json` discovery.
+- **Wallpaper**: compose is shared (offscreen render); apply is helper/osascript (mac), SystemParametersInfo (win), gsettings/plasma (linux). The user's original wallpaper is snapshotted before first apply and restored on `reset_theme`.
+- Prompt copy is parametrized via `PLATFORM_NOUNS` in `server/ai.js` — don't hardcode "Mac"/"Finder" in doctrine or always-on tool docs.
+- Tests: `npm test` (`test/platform-port.test.mjs`) fakes `process.platform` in child processes; CI (`.github/workflows/ci.yml`) runs tests + runtime/Electron boot smokes on ubuntu/windows/macos.
+
 ## Conventions
 
 - **Strict B&W aesthetic.** No emojis, gradients, or color in UI code. Apple-grade only. Run the design skill before any UI redesign — see `feedback_visual_taste.md` in memory.

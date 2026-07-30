@@ -246,6 +246,7 @@ const CATALOG = [
     tagline: 'Read and send texts from your Mac',
     category: 'daily life',
     auth: 'local-permission',
+    platforms: ['darwin'],
     docsUrl: 'https://support.apple.com/guide/mac-help/mchl211c911f/mac',
     fields: [],
     steps: [
@@ -281,7 +282,11 @@ const CATALOG = [
   },
 ];
 
-const BY_ID = new Map(CATALOG.map((def) => [def.id, def]));
+// Cards tied to a specific OS (def.platforms) are dropped everywhere else —
+// gallery, statuses, and system-prompt doctrine all flow from this filter.
+const PLATFORM_CATALOG = CATALOG.filter((def) => !def.platforms || def.platforms.includes(process.platform));
+
+const BY_ID = new Map(PLATFORM_CATALOG.map((def) => [def.id, def]));
 
 // Toolkit slugs already covered by static cards — hidden from the dynamic
 // app catalog so the UI never shows two paths to the same service.
@@ -290,7 +295,7 @@ const STATIC_TOOLKIT_SLUGS = new Set(
 );
 
 export function getConnectorCatalog() {
-  return CATALOG;
+  return PLATFORM_CATALOG;
 }
 
 // --- Config IO -------------------------------------------------------------
@@ -908,7 +913,7 @@ async function computeConnectorStatus(def, cfg, refresh) {
  */
 export async function listConnectors({ refresh = false } = {}) {
   const cfg = await readConfigFile();
-  const defs = [...CATALOG, ...dynamicConnectorDefs(cfg)];
+  const defs = [...PLATFORM_CATALOG, ...dynamicConnectorDefs(cfg)];
   return Promise.all(defs.map(async (def) => {
     let status = { status: 'not_connected', detail: 'Not connected' };
     try {
@@ -1090,7 +1095,7 @@ export function connectorEnv() {
   const env = {};
   try {
     const cfg = readConfigFileSync();
-    for (const def of CATALOG) {
+    for (const def of PLATFORM_CATALOG) {
       const fieldDefs = def.auth === 'apikey' ? def.fields : (def.manualFields || []);
       if (!fieldDefs.length) continue;
       const entry = connectorEntry(cfg, def.id);

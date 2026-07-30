@@ -123,7 +123,10 @@ export async function executeResetTheme(_block, ctx) {
   return {
     ok: true,
     event: 'set_theme',
-    payload: { config: ctx.publicConfig(next) },
+    // `reset: true` tells the host to restore the user's ORIGINAL desktop
+    // wallpaper (snapshotted before BOR's first apply) instead of painting
+    // the default BOR gradient over it.
+    payload: { config: ctx.publicConfig(next), reset: true },
     llmEcho: 'reset_theme',
   };
 }

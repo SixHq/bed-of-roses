@@ -235,7 +235,9 @@ function runFileQuick(file, args, timeoutMs = 9000) {
 // Privacy lists. Returns { accessibility, screenRecording }.
 async function probeComputerUsePermissions() {
   if (process.platform !== 'darwin') {
-    return { accessibility: true, screenRecording: true, platform: process.platform, note: 'computer-use permissions are macOS-only' };
+    // Be honest off-mac: computer-use is gated off entirely (see
+    // registry.js DARWIN_ONLY_TAGS), so nothing is "granted".
+    return { supported: false, control: false, screenRecording: false, platform: process.platform, note: 'computer-use is macOS-only' };
   }
   // Control probe: computer_click runs `osascript -> tell System Events to ...`.
   // That needs BOTH Automation (authorization to send Apple events to System

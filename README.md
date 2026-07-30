@@ -11,7 +11,7 @@
   <a href="https://www.npmjs.com/package/bed-of-roses"><img src="https://img.shields.io/npm/dm/bed-of-roses?style=for-the-badge&color=orange" alt="npm downloads"></a>
   <a href="https://github.com/SixHq/bed-of-roses/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-green?style=for-the-badge" alt="Apache-2.0 License"></a>
   <img src="https://img.shields.io/badge/node-%E2%89%A520-blue?style=for-the-badge" alt="Node >= 20">
-  <img src="https://img.shields.io/badge/platform-macOS-black?style=for-the-badge" alt="Platform: macOS">
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-black?style=for-the-badge" alt="Platform: macOS | Windows | Linux">
 </p>
 
 <p>
@@ -89,7 +89,7 @@ It builds you native Mac apps, connects to your Gmail and calendar, browses the 
 
 ## 🚀 Installation
 
-Requires **macOS** and **Node ≥ 20**.
+Requires **Node ≥ 20**. macOS is the primary platform; Windows and Linux are supported in beta.
 
 ```bash
 npm install -g bed-of-roses
@@ -97,6 +97,21 @@ bor onboard
 ```
 
 That's it. `bor onboard` walks you through naming your AI, picking one of eleven themes, choosing a presence style, connecting a model, and linking your services. Then the orb appears over your desktop and you start talking.
+
+### Platform support
+
+| Capability | macOS | Windows | Linux |
+|---|---|---|---|
+| Presence orb, thought bubble, chat | ✅ | ✅ | ✅ (X11; Wayland degraded) |
+| Generated apps, shortcuts, files, themes | ✅ | ✅ | ✅ |
+| Ambient browser (`browser_*`) & connectors | ✅ | ✅ | ✅ |
+| Shell commands | ✅ bash | ✅ PowerShell | ✅ bash |
+| Real wallpaper apply | ✅ | ✅ | ✅ GNOME/KDE |
+| App shortcuts in OS launcher | ✅ ~/Applications | ✅ Start Menu | ✅ app menu |
+| Computer-use (screen capture, clicks) | ✅ | — | — |
+| iMessage connector | ✅ | — | — |
+
+On Windows and Linux the AI is steered to the ambient browser and shell instead of macOS-only screen control. A tray icon stands in for the hidden dock.
 
 ### From source
 
@@ -216,7 +231,7 @@ Plus classic **web search** and **page fetch** for quick reads, and the browser-
 
 ---
 
-### 🖱 Your Mac, Hands On
+### 🖱 Your Mac, Hands On *(macOS only)*
 
 For everything that isn't on the web and isn't in a file — "rename these layers in Figma", "click Run in Xcode" — BOR uses your Mac the way you do.
 

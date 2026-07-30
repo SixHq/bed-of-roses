@@ -593,6 +593,23 @@ async function pressKey(combo) {
 async function openMacApp(name) {
   const appName = String(name || '').trim();
   if (!appName) throw new Error('app name required');
+  if (process.platform === 'win32') {
+    // `start` resolves App Paths registrations and PATH entries.
+    const result = await runFile('cmd', ['/c', 'start', '', appName]);
+    if (!result.ok) throw new Error(result.stderr || `failed to open ${appName}`);
+    return;
+  }
+  if (process.platform === 'linux') {
+    // gtk-launch takes a .desktop id; fall back to running the name as a
+    // command for CLI-launchable apps (code, firefox, …).
+    const desktopId = appName.toLowerCase().replaceAll(' ', '-');
+    const viaGtk = await runFile('gtk-launch', [desktopId]).catch(() => ({ ok: false }));
+    if (viaGtk.ok) return;
+    const quoted = `'${appName.replaceAll("'", `'\\''`)}'`;
+    const direct = await runFile('sh', ['-c', `nohup ${quoted} >/dev/null 2>&1 &`]);
+    if (!direct.ok) throw new Error(direct.stderr || `failed to open ${appName}`);
+    return;
+  }
   const result = await runFile('open', ['-a', appName]);
   if (!result.ok) throw new Error(result.stderr || `failed to open ${appName}`);
 }

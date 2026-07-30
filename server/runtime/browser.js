@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-export const PROJECT_ROOT = resolve(new URL('../..', import.meta.url).pathname);
+export const PROJECT_ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 export const BROWSER_DATA_ROOT = resolvePath(process.env.BOR_BROWSER_DATA_DIR || join(PROJECT_ROOT, '.bed-of-roses', 'browser'));
 export const MCP_PROFILE_DIR = resolvePath(process.env.BOR_BROWSER_USER_DATA_DIR || join(BROWSER_DATA_ROOT, 'profile'));
 export const USER_PROFILE_DIR = resolvePath(process.env.BOR_USER_BROWSER_USER_DATA_DIR || join(BROWSER_DATA_ROOT, 'user-profile'));

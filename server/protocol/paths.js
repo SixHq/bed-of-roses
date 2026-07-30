@@ -14,7 +14,7 @@
 // Audit logs always record the absolute resolved path.
 
 import { resolve, isAbsolute, normalize, relative, join } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 
@@ -56,10 +56,16 @@ export function resolvePath(rawPath, { cwd = PROJECT_ROOT } = {}) {
   return isAbsolute(trimmed) ? normalize(trimmed) : resolve(cwd, trimmed);
 }
 
+// Windows paths are case-insensitive; compare prefixes case-folded there so
+// `c:\Users\…` matches HOME `C:\Users\…`. Elsewhere compare exactly.
+const foldCase = (p) => (process.platform === 'win32' ? String(p).toLowerCase() : String(p));
+const ALLOWED_WRITE_ROOTS = [HOME, tmpdir(), '/tmp', '/var/folders'].filter(Boolean).map(foldCase);
+
 /** Throws if `absPath` is in the reserved set. */
 export function assertWritable(absPath) {
-  // Refuse absolute paths outside the user's home dir.
-  if (!absPath.startsWith(HOME) && !absPath.startsWith('/tmp') && !absPath.startsWith('/var/folders')) {
+  // Refuse absolute paths outside the user's home dir (tmp dirs allowed).
+  const folded = foldCase(absPath);
+  if (!ALLOWED_WRITE_ROOTS.some((root) => folded.startsWith(root))) {
     throw new Error(`refused: path outside $HOME (${absPath})`);
   }
   // Refuse anything inside the running OS source tree we care about.

@@ -306,14 +306,14 @@ const TOOL_META = {
   edit_file: ['Edit a file', 'streaming changes', '✎'],
   replace_in_file: ['Edit a file', 'patching content', '✎'],
   execute_command: ['Run a command', 'shell executor', '⌘'],
-  screen_capture: ['Read the screen', 'capturing Mac display', '⌕'],
+  screen_capture: ['Read the screen', 'capturing display', '⌕'],
   browser_action: ['Use the browser', 'headless Chromium', '◍'],
   locate_screen_element: ['Locate UI element', 'computer vision', '⌖'],
-  computer_click: ['Click in app', 'macOS accessibility', '⌖'],
-  computer_type: ['Type in app', 'focused Mac app', '⌨'],
+  computer_click: ['Click in app', 'system accessibility', '⌖'],
+  computer_type: ['Type in app', 'focused app', '⌨'],
   computer_key: ['Press shortcut', 'keyboard control', '⌘'],
-  open_app: ['Open app', 'macOS launch services', '↗'],
-  computer_use: ['Control Mac app', 'computer use loop', '⌖'],
+  open_app: ['Open app', 'app launcher', '↗'],
+  computer_use: ['Control an app', 'computer use loop', '⌖'],
   use_mcp_tool: ['Call MCP tool', 'MCP server call', '◍'],
   generate_image: ['Generate image', 'painting canvas', '◐'],
   create_svg: ['Add wallpaper item', 'placing SVG', '✦'],
@@ -902,19 +902,24 @@ function escapeHtml(value) {
 // The model wraps file/folder paths it mentions in
 // <hyper_link_file>PATH</hyper_link_file> (see the `say` tag docs in
 // server/protocol/registry.js). We turn those — plus bare `.bor/…`,
-// `os-data/…`, `~/…`, `/Users/…` paths as a fallback — into anchors that
-// reveal the file in Finder via window.borHost.revealPath. Input to
+// `os-data/…`, `~/…`, `/Users/…` (mac), `/home/…` (linux), and `C:\…`
+// (windows) paths as a fallback — into anchors that reveal the file in the
+// system file manager via window.borHost.revealPath. Input to
 // linkifyFileRefs is ALREADY escapeHtml'd, so the wrapped form appears as
 // `&lt;hyper_link_file&gt;…&lt;/hyper_link_file&gt;`. One combined regex,
 // single pass, so the bare-path alternative can never re-match inside an
 // anchor generated for the wrapped form.
-const FILE_REF_RE = /&lt;hyper_link_file&gt;\s*([\s\S]*?)\s*&lt;\/hyper_link_file&gt;|(?<![\w.~/-])((?:\.bor|os-data|~|\/Users)(?:\/[\w@%+~-]+(?:\.[\w@%+~-]+)*)+\/?)/gi;
+const FILE_REF_RE = /&lt;hyper_link_file&gt;\s*([\s\S]*?)\s*&lt;\/hyper_link_file&gt;|(?<![\w.~/-])((?:\.bor|os-data|~|\/Users|\/home|[A-Za-z]:)(?:[\\/][\w@%+~-]+(?:\.[\w@%+~-]+)*)+[\\/]?)/gi;
+
+const REVEAL_LABEL = window.borHost?.platform === 'win32' ? 'Show in Explorer'
+  : window.borHost?.platform === 'linux' ? 'Show in file manager'
+  : 'Reveal in Finder';
 
 function linkifyFileRefs(escapedText) {
   return String(escapedText || '').replace(FILE_REF_RE, (match, wrapped, bare) => {
     const target = String(wrapped ?? bare ?? '').trim();
     if (!target) return match;
-    return `<a class="file-link" data-reveal-path="${target}" title="Reveal in Finder">${target}</a>`;
+    return `<a class="file-link" data-reveal-path="${target}" title="${REVEAL_LABEL}">${target}</a>`;
   });
 }
 
@@ -997,6 +1002,11 @@ function withQueryParams(url, params = {}) {
 
 function localPathToFileUrl(value) {
   const raw = String(value || '').trim();
+  // Windows absolute path (C:\… or C:/…) → file:///C:/…
+  if (/^[A-Za-z]:[\\/]/.test(raw)) {
+    const forward = raw.replaceAll('\\', '/');
+    return `file:///${forward.split('/').map((part, i) => (i === 0 ? part : encodeURIComponent(part))).join('/')}`;
+  }
   if (!raw.startsWith('/')) return raw;
   return `file://${raw.split('/').map((part) => encodeURIComponent(part)).join('/')}`;
 }
@@ -1005,7 +1015,10 @@ function resolveMediaUrl(value) {
   const raw = String(value || '').trim();
   if (!raw) return '';
   if (/^(https?:|data:|blob:|file:)/i.test(raw)) return raw;
-  if (/^\/(?:Users|Volumes|private|tmp)\//.test(raw)) return localPathToFileUrl(raw);
+  // Absolute local media paths per platform (mac /Users|/Volumes|/private|/tmp,
+  // linux /home|/mnt|/media|/tmp, windows drive letters) → file:// URLs.
+  if (/^\/(?:Users|Volumes|private|tmp|home|mnt|media)\//.test(raw)) return localPathToFileUrl(raw);
+  if (/^[A-Za-z]:[\\/]/.test(raw)) return localPathToFileUrl(raw);
   if (raw.startsWith('/')) return `${runtimeUrl()}${raw}`;
   return raw;
 }
@@ -5244,7 +5257,9 @@ promptInput.addEventListener('keydown', (event) => {
     setMode(collapsedModeForNotifications());
     return;
   }
-  if (event.key === 'Enter' && (event.metaKey || !event.shiftKey)) {
+  // Cmd+Enter (mac) / Ctrl+Enter (win/linux) always submit; plain Enter
+  // submits unless Shift is held (Shift+Enter = newline).
+  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey || !event.shiftKey)) {
     event.preventDefault();
     submitPrompt();
   }

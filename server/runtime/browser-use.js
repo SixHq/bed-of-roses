@@ -86,6 +86,18 @@ export async function detectBrowserUse(opts = {}) {
   if (inflight) return inflight;
 
   inflight = (async () => {
+    // The browser-use CLI harness is POSIX-only (heredoc/stdin interface);
+    // don't even probe for it on Windows.
+    if (process.platform === 'win32') {
+      const result = {
+        installed: false,
+        cliGeneration: null,
+        detail: 'browser-use CLI is not supported on Windows',
+      };
+      cache = { result, expiresAt: now + CACHE_TTL_MS };
+      inflight = null;
+      return result;
+    }
     // `command -v` is more portable than `which` and works in zsh/bash/sh.
     const whichProbe = await probe('/bin/sh', ['-lc', 'command -v browser-use']);
     const path = whichProbe.ok ? whichProbe.stdout.trim() : '';

@@ -8,7 +8,7 @@
 
 import { mkdir, readFile, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { basename, resolve, dirname, join, relative } from 'node:path';
+import { basename, resolve, dirname, join, relative, parse } from 'node:path';
 import * as os from 'node:os';
 
 import { getProvider } from './providers/index.js';
@@ -594,12 +594,26 @@ const TREE_IGNORE_NAMES = new Set([
   // Sixth-style project tree ignores.
   'node_modules', '.git', '.DS_Store', 'dist', 'build', 'out', '.next', '.cache', 'coverage',
   '.env.local', '.env.production.local', '.env.development.local', '.env.test.local',
-  // Mac/home directories that are huge, noisy, or likely to contain secrets.
+  // Home directories that are huge, noisy, or likely to contain secrets
+  // (macOS, Windows, and Linux flavors — extra names are harmless).
   'Library', 'Applications', 'Movies', 'Music', 'Pictures Library.photoslibrary',
   '.Trash', '.ssh', '.gnupg', '.npm', '.cache', '.config', '.local', '.claude', '.gemini',
+  'AppData', 'NTUSER.DAT', 'ntuser.dat', 'snap', '.steam', '.wine', '.mozilla', '.var',
   // Repo/tooling outputs.
   '.turbo', '.vite', '.parcel-cache', 'DerivedData',
 ]);
+
+// Platform-flavored nouns for the system prompt — the doctrine names the
+// desktop the user actually has instead of assuming macOS everywhere.
+const PLATFORM_NOUNS = (() => {
+  if (process.platform === 'win32') {
+    return { os: 'Windows', desktop: 'Windows desktop', fileManager: 'File Explorer', examplePath: 'C:\\Users\\me\\foo.txt', shellName: 'PowerShell' };
+  }
+  if (process.platform === 'linux') {
+    return { os: 'Linux', desktop: 'Linux desktop', fileManager: 'file manager', examplePath: '/home/me/foo.txt', shellName: 'bash' };
+  }
+  return { os: 'macOS', desktop: 'macOS desktop', fileManager: 'Finder', examplePath: '/Users/me/foo.txt', shellName: 'bash' };
+})();
 
 const TREE_ALLOWED_DOT_NAMES = new Set(['.bor', '.bed-of-roses']);
 const FILESYSTEM_TREE_TTL_MS = 30_000;
@@ -749,7 +763,10 @@ async function renderFilesystemSnapshot() {
   const projectDepth = envInt('BOR_PROMPT_PROJECT_TREE_DEPTH', 3, { min: 1, max: 6 });
   const homeDepth = envInt('BOR_PROMPT_HOME_TREE_DEPTH', 2, { min: 1, max: 5 });
   const parts = [];
-  parts.push(await renderAsciiTree('/', {
+  // On Windows there is no single '/' root — anchor the device tree at the
+  // home drive (C:\ typically) instead.
+  const deviceRoot = process.platform === 'win32' ? parse(os.homedir()).root : '/';
+  parts.push(await renderAsciiTree(deviceRoot, {
     label: 'device:/',
     maxDepth: 1,
     maxEntries: envInt('BOR_PROMPT_DEVICE_TREE_ENTRIES', 180, { min: 50, max: 1000 }),
@@ -831,7 +848,7 @@ This is the *only* default writable root. Never scatter into the repository root
 
 - "Save this to my Desktop" → \`~/Desktop/<name>\`
 - "Put it in ~/Documents/Reports" → use that exact path
-- "Edit this file: /Users/me/foo.txt" → use that exact path
+- "Edit this file: ${PLATFORM_NOUNS.examplePath}" → use that exact path
 - Existing file mentioned by path → edit IN PLACE, do not move to \`.bor\`.
 
 ### Always announce the path
@@ -862,7 +879,7 @@ Without this the user has no way to find what you made. The tool result confirms
 - Project root: ${PROJECT_ROOT}
 - Project root relative to home: ${cwdRel && !cwdRel.startsWith('..') ? `~/${cwdRel}` : PROJECT_ROOT}
 - User home: ${os.homedir()}
-- Shell: ${process.env.SHELL || 'unknown'}
+- Shell: \`execute_command\` runs through ${PLATFORM_NOUNS.shellName}${process.env.SHELL ? ` (login shell: ${process.env.SHELL})` : ''}
 - Platform: ${os.type()} ${os.release()} (${process.platform}/${process.arch})
 - Hostname: ${os.hostname()}
 - Node: ${process.version}
@@ -975,18 +992,18 @@ async function buildSystemPrompt({ aiName, personality, widgets, registry, baseT
   const connectorsBlock = await renderConnectorsBlock();
   const resolvedHostMode = hostMode === 'v2' || process.env.BOR_HOST_MODE === 'v2' ? 'v2' : 'classic';
   const hostBlock = resolvedHostMode === 'v2'
-    ? `# CURRENT HOST MODE — MAC COMPANION
+    ? `# CURRENT HOST MODE — DESKTOP COMPANION (${PLATFORM_NOUNS.os})
 
-Bed of Roses is running as a Mac-first ambient companion, not a full browser desktop replacement.
+Bed of Roses is running as an ambient desktop companion on the user's real ${PLATFORM_NOUNS.os} machine, not a full browser desktop replacement.
 
 - The user completes setup in the existing onboarding window.
-- After onboarding, the always-on presence (the thought bubble) is the main UI. It is draggable and floats above the user's real macOS desktop.
-- Apps created with \`<create_app>\` open as normal resizable Mac windows the user dock-tabs to.
+- After onboarding, the always-on presence (the thought bubble) is the main UI. It is draggable and floats above the user's real ${PLATFORM_NOUNS.desktop}.
+- Apps created with \`<create_app>\` open as normal resizable desktop windows alongside the user's other apps.
 - Shortcuts created with \`<create_shortcut>\` render as live sandboxed iframe cards INSIDE the thought bubble itself — adjacent to the conversation, not on the desktop.
 - Bridge APIs (\`getState/setState\`, \`askAI\`, \`searchWeb\`, \`fetchUrl\`, \`generateImage\`, \`launchApp\`) work inside both apps and shortcuts.
-- \`<set_theme>\` and wallpaper/decorative SVG changes apply to the user's real Mac background.
+- \`<set_theme>\` and wallpaper/decorative SVG changes apply to the user's real desktop background.
 
-Design apps as standalone Mac windows that can live beside the user's existing Mac apps. Design shortcuts as conversation-adjacent micro-interactions that fit inside the bubble. Do not assume a fake full-screen OS canvas.`
+Design apps as standalone desktop windows that can live beside the user's existing apps. Design shortcuts as conversation-adjacent micro-interactions that fit inside the bubble. Do not assume a fake full-screen OS canvas.`
     : `# CURRENT HOST MODE — CLASSIC SHELL
 
 Bed of Roses is running in the browser-hosted shell. Apps, shortcuts, wallpaper items, and presence visuals live inside the Bed of Roses canvas.`;
@@ -1071,7 +1088,7 @@ For long-running tasks, chain the tools you need. You can research, fetch source
 
 ## Real coding work vs BOR surfaces — DO NOT confuse these
 
-Coding is one of BOR's primary use cases. When the user asks you to **write code, build a project, or work on an existing codebase**, that is NEVER \`<create_app>\` or \`<create_shortcut>\`. Those tags create BOR-INTERNAL surfaces (a Mac window in BOR for apps, a sandboxed iframe card in the bubble for shortcuts). They are not for shipping real software the user will run as their own project, deploy, version-control, or open in their own editor.
+Coding is one of BOR's primary use cases. When the user asks you to **write code, build a project, or work on an existing codebase**, that is NEVER \`<create_app>\` or \`<create_shortcut>\`. Those tags create BOR-INTERNAL surfaces (a desktop window in BOR for apps, a sandboxed iframe card in the bubble for shortcuts). They are not for shipping real software the user will run as their own project, deploy, version-control, or open in their own editor.
 
 Use file tools (\`<write_file>\` / \`<write_to_file>\` / \`<replace_in_file>\` / \`<read_file>\`) plus \`<execute_command>\` when the user says ANY of:
 
@@ -1113,7 +1130,7 @@ When the target platform is unspecified and the request could plausibly be more 
 
 Pick by where the user will look at the result:
 
-- \`<create_app>\` — the result deserves its own Mac window the user will return to. Multi-screen, full-screen, dock-presented, long-lived. *"Build me a calorie tracker / journal / focus app / dashboard / CRM."*
+- \`<create_app>\` — the result deserves its own desktop window the user will return to. Multi-screen, full-screen, dock-presented, long-lived. *"Build me a calorie tracker / journal / focus app / dashboard / CRM."*
 - \`<create_shortcut>\` — a live iframe card inside the thought bubble. Stateful, adjacent to the conversation, persists across turns. *Pay button + amount input, translator input + output, tiny travel itinerary, one-step API caller, waveform player, settings toggle.*
 - \`<suggest_shortcut>\` — you suspect a shortcut would help but the user hasn't explicitly asked. Cheap inline Yes/No card; click Yes and you create the shortcut in the next pass.
 
@@ -1173,7 +1190,7 @@ Use the data tools:
 - After the tool result, emit \`<mutate_surface_data state_path="os-data/surfaces/<id>/state.json"><![CDATA[...json ops...]]></mutate_surface_data>\`.
 - Supported operations are \`add\`, \`replace\`, \`remove\`, and \`merge\`. Use \`add\` with paths ending in \`/-\` to append to arrays, but use the app's actual array path from the state you just read.
 - Preserve the existing state schema exactly. If the state has \`notes\`, write to \`/notes/-\`; if it has \`entries\`, write to \`/entries/-\`; if it has \`tasks\`, write to \`/tasks/-\`. Never invent a new nested top-level collection because the UI will not render it. Add root fields only when the app schema clearly expects them or the user explicitly asks for a new setting.
-- In v2 Mac companion mode, \`<mutate_surface_data>\` refreshes the affected app window and surface UI automatically, so the UI should reflect the new data if the app reads state through \`getState()\`.
+- In v2 desktop companion mode, \`<mutate_surface_data>\` refreshes the affected app window and surface UI automatically, so the UI should reflect the new data if the app reads state through \`getState()\`.
 - If the state schema is unclear, read the surface doc first, then read the state. The doc tells you what the app expects; the state tells you what exists now.
 
 When the user asks to open, launch, show, bring back, or switch to one of your existing apps/shortcuts, do not ask the user to click it manually. Use \`<launch_app>\` or \`<launch_shortcut>\` with the id from the existing apps/shortcuts list. If you only know the display name and it might be ambiguous, call \`<list_surfaces/>\` first.
@@ -1208,9 +1225,9 @@ Tag-routing summary (tight reference — earlier sections have the nuance):
 - Live data (news, prices, weather, anything time-sensitive) → \`<web_search>\` + \`<web_fetch>\` → \`<say>\` with sources.
 - Long task → announce with \`<say>\`, chain tools, keep going until done or a real blocker.
 - Need user input/action → ask clearly, then end with \`<wait_for_human_input>\`. Do not use \`<attempt_completion>\` for this.
-- Mac app/UI control → \`<open_app>\` + \`<screen_capture>\` + \`<computer_click>\`/\`<computer_type>\`/\`<computer_key>\` or \`<computer_use>\` for multi-step flows.
+${process.platform === 'darwin' ? `- Mac app/UI control → \`<open_app>\` + \`<screen_capture>\` + \`<computer_click>\`/\`<computer_type>\`/\`<computer_key>\` or \`<computer_use>\` for multi-step flows.` : `- Launching a local app → \`<open_app name="…"/>\`. Screen capture / synthetic clicks are macOS-only and unavailable here — for anything interactive use the browser_* tools or execute_command.`}
 - Browser-required tasks (web apps, dashboards, signups, checkouts, forms, logged-in sites) → CONNECTOR FIRST: if a connected MCP server covers the service (mail, calendar, docs, …), use its tools — never drive a browser at a service a connector already handles. Otherwise use the ambient browser: \`<browser_open url="…"/>\`, read the returned snapshot, then act by ref with \`<browser_click>\` / \`<browser_type>\` / \`<browser_fill_form>\` — every action returns a fresh snapshot; only refs from the LATEST snapshot are valid. Before any identity-touching action in a signed-in session (sending, posting, purchasing), confirm with \`<wait_for_human_input kind="profile_choice">\`. On a hard ambient-browser failure, fall back to the browser-use CLI (\`<use_skill name="browser-use"/>\`, only if it appears in SKILLS), then visible Chrome via computer-use.
-- Apps + shortcuts → \`<create_app>\` (full Mac window) / \`<create_shortcut>\` (bubble iframe card) or \`<update_*>\` if a similar surface exists. Always include a designed \`<thumbnail>\`. App requests need research first; shortcuts usually don't.
+- Apps + shortcuts → \`<create_app>\` (full desktop window) / \`<create_shortcut>\` (bubble iframe card) or \`<update_*>\` if a similar surface exists. Always include a designed \`<thumbnail>\`. App requests need research first; shortcuts usually don't.
 - Existing surface → \`<launch_app id="…"/>\` or \`<launch_shortcut id="…"/>\`; data-only changes → \`<read_surface_data>\` + \`<mutate_surface_data>\`, never rewrite UI.
 - OS customization → \`<create_svg>\` for objects/stickers/mascots; \`<write_file path="shell/themes/${theme.id}/user-extras.css">\` for ambient CSS. \`<set_theme>\` only when the user explicitly asks for wallpaper/palette changes.
 - File / command / image / skill / MCP → use the matching tag (\`<read_file>\`, \`<replace_in_file>\`, \`<execute_command>\`, \`<generate_image>\`, \`<use_skill>\`, \`<use_mcp_tool>\`). Prefer \`<replace_in_file>\` over full rewrites.
@@ -1366,9 +1383,9 @@ This is not a chat UI. **The user reads the presence thought bubble.** Anything 
 - Numbers as words when natural — "twenty-three degrees" reads better than "23°C".
 - One \`<say>\` per emotional beat. Open a new \`<say>\` to shift register.
 
-# APPS — full-screen Mac windows the user returns to
+# APPS — full-screen desktop windows the user returns to
 
-An app is a full-screen HTML product opened in its own Mac window (Swift helper). It is not a static mockup or a marketing page. It should feel like something the user can actually rely on day-over-day — the dock-presented surface they switch to.
+An app is a full-screen HTML product opened in its own desktop window. It is not a static mockup or a marketing page. It should feel like something the user can actually rely on day-over-day — the dock-presented surface they switch to.
 
 When building an app:
 - Start from the category's real expectations. Research if the category has established patterns or domain requirements.
@@ -1386,7 +1403,7 @@ Use the same bridge helper documented below. Apps get the same powers as shortcu
 
 # THUMBNAILS
 
-Every \`<create_app>\` and \`<create_shortcut>\` must include a \`<thumbnail>\` child. Thumbnails appear in the inventory/launcher UI — NOT inside the bubble (the live iframe is the surface for shortcuts) nor inside an app's Mac window. Use:
+Every \`<create_app>\` and \`<create_shortcut>\` must include a \`<thumbnail>\` child. Thumbnails appear in the inventory/launcher UI — NOT inside the bubble (the live iframe is the surface for shortcuts) nor inside an app's window. Use:
 
 1. **Inline HTML** (full \`<!DOCTYPE html>\` in CDATA) — preferred. Show a representative state (the route, the temp, the next event) — not a logo.
 2. **Inline SVG** — for graphic-leaning previews. Multiple paths, soft gradient, theme tokens.
@@ -1482,7 +1499,7 @@ const listNotifications = ()                  => _bridge({type:'notifications-li
 
 All bridge methods are your toolkit. Always wrap calls in \`try { … } catch (err) { /* show graceful state */ }\` — the bridge can fail (rate limit, network, provider doesn't support image gen, invalid cron schedule, etc).
 
-The same bridge helper also works inside a widget's \`<thumbnail>\` when BOR is running in v2 Mac companion mode. Treat widget thumbnails as live Mac desktop previews, not static screenshots: show useful changing content, read cached state when helpful, use timers for clocks/countdowns, and keep click interactions out of the preview because clicking the preview opens the full widget window.
+The same bridge helper also works inside a widget's \`<thumbnail>\` when BOR is running in v2 desktop companion mode. Treat widget thumbnails as live desktop previews, not static screenshots: show useful changing content, read cached state when helpful, use timers for clocks/countdowns, and keep click interactions out of the preview because clicking the preview opens the full widget window.
 
 The system prompt for \`askAI\` is your only opportunity to constrain output — be precise: "Output only the translated text, nothing else." beats "translate this" by a wide margin.
 

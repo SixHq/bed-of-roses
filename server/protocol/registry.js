@@ -38,7 +38,7 @@ export const TAGS = {
   // ---------- THOUGHT BUBBLE ----------
   say: {
     description:
-      "Display text in the presence thought bubble. Each <say> renders as ONE bubble. Put one coherent thought per <say> — a greeting + an offer + a question that all flow together belong in ONE <say>, not three. Only open a new <say> when the tone genuinely shifts (warm → thoughtful, thoughtful → apologetic) or when there's a real beat/pause between thoughts (e.g. a narration before a tool call, then a different narration before the next one). Anything outside <say> tags is silent. FILE LINKS (required): whenever you mention a file or folder path in user-facing text — something you created, edited, or are pointing the user to — you MUST (a) write the FULL path exactly as it exists on disk, either relative to the project root (`.bor/...`, `os-data/...`) or absolute, never a shortened basename like `index.html`, and (b) wrap it in <hyper_link_file>...</hyper_link_file> inside the <say> body, e.g. <hyper_link_file>.bor/workspaces/site/index.html</hyper_link_file>. The presence renders it as a clickable link that reveals the file in Finder.",
+      "Display text in the presence thought bubble. Each <say> renders as ONE bubble. Put one coherent thought per <say> — a greeting + an offer + a question that all flow together belong in ONE <say>, not three. Only open a new <say> when the tone genuinely shifts (warm → thoughtful, thoughtful → apologetic) or when there's a real beat/pause between thoughts (e.g. a narration before a tool call, then a different narration before the next one). Anything outside <say> tags is silent. FILE LINKS (required): whenever you mention a file or folder path in user-facing text — something you created, edited, or are pointing the user to — you MUST (a) write the FULL path exactly as it exists on disk, either relative to the project root (`.bor/...`, `os-data/...`) or absolute, never a shortened basename like `index.html`, and (b) wrap it in <hyper_link_file>...</hyper_link_file> inside the <say> body, e.g. <hyper_link_file>.bor/workspaces/site/index.html</hyper_link_file>. The presence renders it as a clickable link that reveals the file in the system file manager.",
     params: {
       attrs: {
         tone: 'optional. one of: neutral, warm, excited, delighted, playful, curious, calm, tender, serious, thoughtful, mysterious, whisper, commanding, apologetic, proud, surprised, sad, amused. default: warm.',
@@ -133,7 +133,7 @@ export const TAGS = {
   // ---------- APPS ----------
   create_app: {
     description:
-      "Create a full-screen Mac app window via the Swift helper. MUST call <get_ux_ui_strict_guidelines/> first (its tool result has the design contract — do not duplicate). Pick app over shortcut when the result deserves its own Mac window the user will return to: multi-screen, CRUD, dashboards, full workflows, settings, history — anything dock-presented. Tile is just the launcher preview; clicking opens the full app. Use <update_app> if similar exists. Must be responsive, theme-aware, stateful, real (no placeholders). Third-party APIs requiring keys MUST include in-app settings UI (masked input, save/clear, how-to-generate, key-needed initial state). Apps may use the BOR bridge for state, LLM, web, image generation, cron jobs (`type:'cron'`), and notifications (`type:'notification-push'`). <doc> required.",
+      "Create a full-screen desktop app window. MUST call <get_ux_ui_strict_guidelines/> first (its tool result has the design contract — do not duplicate). Pick app over shortcut when the result deserves its own window the user will return to: multi-screen, CRUD, dashboards, full workflows, settings, history — anything dock-presented. Tile is just the launcher preview; clicking opens the full app. Use <update_app> if similar exists. Must be responsive, theme-aware, stateful, real (no placeholders). Third-party APIs requiring keys MUST include in-app settings UI (masked input, save/clear, how-to-generate, key-needed initial state). Apps may use the BOR bridge for state, LLM, web, image generation, cron jobs (`type:'cron'`), and notifications (`type:'notification-push'`). <doc> required.",
     params: {
       attrs: {
         name: 'required. short display name, <=32 chars.',
@@ -199,7 +199,7 @@ Camera-first nutrition tracking app.
 
   launch_app: {
     description:
-      "Open or bring forward an existing BOR-built app on the user's Mac. Use this when the user asks to open, launch, show, bring back, or switch to an app that Bed of Roses created. Prefer id from the existing apps/widgets list; name is allowed when it uniquely identifies one app. If you need the id first, call <list_surfaces/>.",
+      "Open or bring forward an existing BOR-built app on the user's desktop. Use this when the user asks to open, launch, show, bring back, or switch to an app that Bed of Roses created. Prefer id from the existing apps/widgets list; name is allowed when it uniquely identifies one app. If you need the id first, call <list_surfaces/>.",
     params: {
       attrs: {
         id: 'optional if name is provided. app-* id from the existing apps/widgets list.',
@@ -224,7 +224,7 @@ Camera-first nutrition tracking app.
   // ---------- SHORTCUTS (iframe cards inside the thought bubble) ----------
   create_shortcut: {
     description:
-      "Create a stateful shortcut — a small live iframe card that renders INSIDE the thought bubble (not on the desktop). Use for results that live adjacent to the conversation: a payment input + Pay button, a quick translator, a tiny travel itinerary that streams its own AI content, a waveform player, a one-step API caller, a settings toggle. MUST call <get_ux_ui_strict_guidelines/> first — the tool result includes design-guideline/shortcut-card.md with the exact contract (tokens, allowed primitives, API-key-UI pattern). Pick <create_app> when the result deserves its own full-screen Mac window the user will return to. Third-party APIs that need keys MUST ship in-shortcut settings UI (masked input, save/clear, how-to-generate, key-needed initial state) as the first interaction. Shortcuts may use the BOR bridge for state, LLM, web, image generation, cron jobs (`type:'cron'`), notifications (`type:'notification-push'`), and app launching. <doc> required.",
+      "Create a stateful shortcut — a small live iframe card that renders INSIDE the thought bubble (not on the desktop). Use for results that live adjacent to the conversation: a payment input + Pay button, a quick translator, a tiny travel itinerary that streams its own AI content, a waveform player, a one-step API caller, a settings toggle. MUST call <get_ux_ui_strict_guidelines/> first — the tool result includes design-guideline/shortcut-card.md with the exact contract (tokens, allowed primitives, API-key-UI pattern). Pick <create_app> when the result deserves its own full-screen window the user will return to. Third-party APIs that need keys MUST ship in-shortcut settings UI (masked input, save/clear, how-to-generate, key-needed initial state) as the first interaction. Shortcuts may use the BOR bridge for state, LLM, web, image generation, cron jobs (`type:'cron'`), notifications (`type:'notification-push'`), and app launching. <doc> required.",
     params: {
       attrs: {
         name: 'required. short display name, ≤24 chars.',
@@ -453,7 +453,7 @@ Quick payment shortcut for the user's recurring Lagos transfers.
 
   mutate_surface_data: {
     description:
-      "CRUD on an app/widget's state.json without rewriting UI. MUST <read_surface_data> for the same id/path earlier in the same turn. Body: one op, an array, or {\"operations\":[...]}. Ops: add, replace, remove, merge. Paths are JSON Pointers; /- appends to arrays. Mutate the EXACT schema you just read — don't invent /entries when the state uses /notes. In v2 Mac mode the host refreshes affected windows after success.",
+      "CRUD on an app/widget's state.json without rewriting UI. MUST <read_surface_data> for the same id/path earlier in the same turn. Body: one op, an array, or {\"operations\":[...]}. Ops: add, replace, remove, merge. Paths are JSON Pointers; /- appends to arrays. Mutate the EXACT schema you just read — don't invent /entries when the state uses /notes. In v2 desktop mode the host refreshes affected windows after success.",
     params: {
       attrs: {
         id: 'optional if state_path is provided. app-* or widget-* id from the existing apps/widgets list.',
@@ -852,9 +852,9 @@ defs:shell
 
   open_app: {
     description:
-      "Open or activate a real Mac application by name using macOS Launch Services. Use this before operating apps like Figma, Chrome, Xcode, Finder, Terminal, or VS Code.",
+      "Open or activate a real desktop application by name (macOS Launch Services, Windows start, or Linux gtk-launch). Use this before operating apps like Figma, Chrome, Xcode, or VS Code.",
     params: {
-      attrs: { name: 'required unless body is provided. macOS application name, e.g. Figma, Google Chrome, Finder.' },
+      attrs: { name: 'required unless body is provided. Application name, e.g. Figma, Google Chrome, Finder.' },
       body: 'optional app name alternative',
     },
     examples: [`<open_app name="Figma"/>`, `<open_app>Google Chrome</open_app>`],
@@ -1253,6 +1253,27 @@ https://www.youtube.com/watch?v=abcXYZ
     execute: media.executeDisplayMedia,
   },
 };
+
+// --- Platform gating -------------------------------------------------------
+// The computer-use family drives macOS-only binaries (osascript, cliclick,
+// screencapture, PyObjC). Off-mac those tags are hidden from the system
+// prompt, and a stray invocation (replayed history, model habit) gets a clear
+// refusal steering to the cross-platform paths instead of an ENOENT stack.
+// `open_app` is NOT gated — its handler has per-platform launchers.
+const DARWIN_ONLY_TAGS = ['screen_capture', 'locate_screen_element', 'computer_click', 'computer_type', 'computer_key', 'computer_use'];
+if (process.platform !== 'darwin') {
+  for (const name of DARWIN_ONLY_TAGS) {
+    const def = TAGS[name];
+    if (!def) continue;
+    def.hidden = true;
+    def.execute = async () => ({
+      ok: false,
+      event: 'tool_error',
+      payload: { tag: name, reason: 'not available on this platform' },
+      llmEcho: `${name} failed: screen/desktop control is only available on macOS. For web tasks use the browser_* tools; for local files and apps use execute_command or open_app.`,
+    });
+  }
+}
 
 export const TAG_NAMES = Object.keys(TAGS);
 

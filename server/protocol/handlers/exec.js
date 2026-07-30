@@ -11,10 +11,10 @@
 //   - Last 8 runs are retained in memory so the model can call
 //     `read_command_tail` for captured output omitted from the preview.
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, delimiter } from 'node:path';
 import { resolvePath, PROJECT_ROOT } from '../paths.js';
 import { validateShellCommand, matchBrowserUseHeredoc } from '../../validator.js';
 import { connectorEnv } from '../../runtime/connectors.js';
@@ -118,22 +118,56 @@ function resolveTimeoutMs(attr) {
 // Natural-language full-agent mode (`browser-use "book me a flight"`) stays
 // blocked: scripts only.
 
-// Commands run through /bin/bash -c with the app's inherited environment —
-// which, when Electron is launched from Finder, lacks the user's login PATH.
-// User-level tool dirs (uv/pipx installs like browser-use live in
-// ~/.local/bin) are appended so CLIs resolve the same as in a terminal.
-const EXTRA_PATH_DIRS = [
+// The per-platform shell every execute_command runs through.
+//   darwin/linux → bash -c (PATH-resolved; /bin/sh fallback for minimal
+//                  distros without bash)
+//   win32        → PowerShell -Command (ships on every supported Windows;
+//                  cmd.exe syntax like `dir` still works for most commands
+//                  the model emits, and the prompt tells it which shell runs)
+let posixShellCache = null;
+export function execShell(platform = process.platform) {
+  if (platform === 'win32') {
+    return { command: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-Command'], name: 'PowerShell' };
+  }
+  if (!posixShellCache) {
+    // bash from PATH (not /bin/bash — NixOS etc. keep it elsewhere); sh as
+    // the last-resort fallback for minimal distros without bash.
+    let command = 'bash';
+    try {
+      const probe = spawnSync('bash', ['-c', 'true'], { timeout: 3_000 });
+      if (probe.error) command = 'sh';
+    } catch {
+      command = 'sh';
+    }
+    posixShellCache = { command, args: ['-c'], name: command };
+  }
+  return posixShellCache;
+}
+
+// Commands run through the platform shell with the app's inherited
+// environment — which, when Electron is launched from Finder/the desktop,
+// lacks the user's login PATH. User-level tool dirs (uv/pipx installs like
+// browser-use live in ~/.local/bin) are appended so CLIs resolve the same as
+// in a terminal. Homebrew dirs are darwin-only but harmless elsewhere.
+const EXTRA_PATH_DIRS = process.platform === 'win32' ? [] : [
   join(homedir(), '.local', 'bin'),
   '/opt/homebrew/bin',
   '/usr/local/bin',
 ];
 
+// Windows env vars are case-insensitive and PATH is conventionally `Path`.
+function pathEnvKey() {
+  if (process.platform !== 'win32') return 'PATH';
+  return Object.keys(process.env).find((k) => k.toUpperCase() === 'PATH') || 'Path';
+}
+
 function execEnv() {
-  const current = process.env.PATH || '';
-  const parts = current.split(':');
+  const key = pathEnvKey();
+  const current = process.env[key] || '';
+  const parts = current.split(delimiter);
   const additions = EXTRA_PATH_DIRS.filter((dir) => !parts.includes(dir));
   const base = additions.length
-    ? { ...process.env, PATH: `${current}:${additions.join(':')}` }
+    ? { ...process.env, [key]: `${current}${delimiter}${additions.join(delimiter)}` }
     : process.env;
   // Connected API-key services (Slack/Notion/GitHub/Composio) are exposed as
   // env vars so the model can curl their REST APIs directly.
@@ -535,11 +569,24 @@ export async function execute(block, ctx) {
     // passed `&&`/`|`/`cd` as LITERAL argv — so `mkdir -p w && cd w && npm ...`
     // literally created directories named `&&`, `cd`, `npm`, `vite@latest`.
     // `detached:true` makes the child a process-group leader so killTree can
-    // terminate the whole tree (npm/vite spawn their own children).
-    const child = spawn('/bin/bash', ['-c', cmd], { cwd, detached: true, env: execEnv() });
+    // terminate the whole tree (npm/vite spawn their own children). Windows
+    // has no process groups — killTree uses `taskkill /T` there instead, and
+    // detached would open a new console window, so it stays off.
+    const shell = execShell();
+    const child = spawn(shell.command, [...shell.args, cmd], {
+      cwd,
+      detached: process.platform !== 'win32',
+      env: execEnv(),
+      windowsHide: true,
+    });
     let settled = false;
     const settle = (value) => { if (!settled) { settled = true; resolveP(value); } };
     const killTree = (sig = 'SIGTERM') => {
+      if (process.platform === 'win32') {
+        try { spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }); }
+        catch { try { child.kill(sig); } catch { /* already gone */ } }
+        return;
+      }
       try { process.kill(-child.pid, sig); }
       catch { try { child.kill(sig); } catch { /* already gone */ } }
     };

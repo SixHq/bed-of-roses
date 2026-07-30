@@ -123,6 +123,17 @@ const SHELL_DANGER_PATTERNS = [
   { pattern: /(^|[\s;&|])electron(\s|$)/, reason: 'refused: launching Electron restarts the host and closes open surfaces. Use <launch_app>/<launch_shortcut> to reopen a surface instead.' },
   { pattern: /\bnpx\s+bor\b/, reason: 'refused: npx bor starts another host instance, closing open surfaces. Use <launch_app>/<launch_shortcut> instead.' },
   { pattern: /bin\/bed-of-roses(\.cjs)?\b/, reason: 'refused: that starts another host instance, closing open surfaces. Use <launch_app>/<launch_shortcut> instead.' },
+  // Windows equivalents of the catastrophic patterns above. Commands run
+  // through PowerShell on win32 (see exec.js execShell), where the POSIX
+  // rm/dd/mkfs rules never match — these cover the same accidents in
+  // PowerShell/cmd vocabulary. Harmless on POSIX (patterns just never match).
+  { pattern: /\b(rd|rmdir)\s+\/s\b[^&|;]*\s([a-z]:)?[\\/]\s*($|[&|;])/i, reason: 'refused: recursive delete of a drive root' },
+  { pattern: /\bRemove-Item\b[^&|;]*-Recurse\b[^&|;]*\s(([a-z]:)?[\\/]|\$env:USERPROFILE|\$HOME|~)[\\/]?\s*($|[&|;-])/i, reason: 'refused: recursive delete of a root or the home directory' },
+  { pattern: /\bformat(\.com)?\s+[a-z]:/i, reason: 'refused: disk format' },
+  { pattern: /\b(iex|Invoke-Expression)\s*\(?\s*\(?\s*(iwr|Invoke-WebRequest|irm|Invoke-RestMethod)\b/i, reason: 'refused: pipe-to-shell from network' },
+  { pattern: /\b(iwr|Invoke-WebRequest|irm|Invoke-RestMethod)\b[^|]*\|\s*(iex|Invoke-Expression)\b/i, reason: 'refused: pipe-to-shell from network' },
+  { pattern: /\bSet-MpPreference\b[^&|;]*-Disable/i, reason: 'refused: disabling Windows Defender' },
+  { pattern: /\bvssadmin\s+delete\s+shadows\b/i, reason: 'refused: deleting volume shadow copies' },
 ];
 
 // ---------- browser-use v3 heredoc carve-out ----------

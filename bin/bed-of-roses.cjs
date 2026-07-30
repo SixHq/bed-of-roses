@@ -6,7 +6,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const hostEntry = path.join(root, 'host', 'main.cjs');
 
-const USAGE = `Bed of Roses — AI-native macOS companion
+const USAGE = `Bed of Roses — AI-native desktop companion
 
 Usage:
   bor                       Launch the host (default).
@@ -86,7 +86,12 @@ function launchHost() {
   });
 
   child.on('exit', (code, signal) => {
-    if (signal) process.kill(process.pid, signal);
+    // Re-raise the child's death signal so shells see the real cause. On
+    // Windows `signal` is effectively never set and arbitrary signal names
+    // throw — fall through to a plain exit.
+    if (signal) {
+      try { process.kill(process.pid, signal); } catch { /* ignore */ }
+    }
     process.exit(code ?? 0);
   });
 }

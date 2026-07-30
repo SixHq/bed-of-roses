@@ -22,10 +22,12 @@ For multi-step goals, BOR runs this see-find-act-verify loop on its own until th
 
 ## Permissions
 
-Computer use needs two macOS permissions, both requested during onboarding (and grantable later in System Settings → Privacy & Security):
+Computer use needs two macOS permissions (System Settings → Privacy & Security):
 
 - **Screen Recording** — to see the screen.
 - **Accessibility** — to click and type.
+
+There's no setup screen for these — they're requested **on the fly**. The first time BOR tries to look at the screen or click without the grant, it tells you exactly which toggle to flip and offers to open the right System Settings pane for you. Say yes and grant it, or decline — either way BOR keeps working; a missing permission only takes the screen-control tools off the table, and everything else (browser, files, commands, connectors) carries on.
 
 Vision-guided finding requires a vision-capable model on your configured provider.
 

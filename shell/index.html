@@ -185,53 +185,11 @@
       </div>
     </div>
 
-    <!-- Pane 5: permissions — macOS computer-use permissions (Accessibility + Screen Recording) -->
-    <div class="pane" data-pane="permissions">
-      <div class="pane-content tools-content">
-        <h1 class="headline">Allow computer control.</h1>
-        <p class="subheadline">To watch your screen and click/type in real Mac apps (computer-use), Bed of Roses needs two macOS permissions. Grant them now, or skip and do it later — chat, browser-use, and files all work without them.</p>
+    <!-- Permissions pane removed: computer-use permissions are requested on
+         the fly — the first tool call that hits a missing grant walks the
+         user through enabling it (server/protocol/handlers/computer.js). -->
 
-        <div class="tools-list" id="perm-list">
-          <article class="tool-card" id="perm-control" data-status="checking">
-            <div class="tool-head">
-              <div class="tool-title">
-                <span class="tool-name">Control your Mac</span>
-                <span class="tool-badge" id="perm-control-badge">checking…</span>
-              </div>
-              <p class="tool-blurb">Lets me click, type, and press keys inside apps on your behalf. This needs <strong>two</strong> macOS permissions — <strong>Automation</strong> (allow Bed of Roses to control "System Events") and <strong>Accessibility</strong>. Without both you'll see "not authorized to send Apple events" (-1743) errors.</p>
-              <p class="tool-detail-line" id="perm-control-hint"></p>
-            </div>
-            <div class="tool-actions">
-              <button class="btn btn-tertiary" data-perm-open="automation" type="button">Open Automation settings</button>
-              <button class="btn btn-tertiary" data-perm-open="accessibility" type="button">Open Accessibility settings</button>
-            </div>
-          </article>
-
-          <article class="tool-card" id="perm-screen" data-status="checking">
-            <div class="tool-head">
-              <div class="tool-title">
-                <span class="tool-name">Screen Recording</span>
-                <span class="tool-badge" id="perm-screen-badge">checking…</span>
-              </div>
-              <p class="tool-blurb">Lets me see your screen so I can find what to click. <strong>Without it, computer-use is operating blind.</strong></p>
-            </div>
-            <div class="tool-actions">
-              <button class="btn btn-tertiary" data-perm-open="screen" type="button">Open Screen Recording settings</button>
-            </div>
-          </article>
-        </div>
-
-        <p class="tool-detail-line">Toggle each permission on in System Settings, then <strong>quit and reopen Bed of Roses</strong> for it to take effect, and click Re-check. These are optional — you can skip and grant them later.</p>
-
-        <div class="btn-row">
-          <button class="btn btn-secondary" id="permissions-back" type="button">Back</button>
-          <button class="btn btn-tertiary" id="permissions-recheck" type="button">Re-check</button>
-          <button class="btn btn-primary" id="permissions-next" type="button">Continue</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Pane 6: connect — provider tile grid -->
+    <!-- Pane 5: connect — provider tile grid -->
     <div class="pane" data-pane="connect">
       <div class="pane-content connect-content">
         <h1 class="headline">Connect a model.</h1>

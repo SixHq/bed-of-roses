@@ -660,8 +660,38 @@ function toolResult(event, payload, echo, extra = {}) {
   return { ok: true, event, payload, llmEcho: echo, ...extra };
 }
 
+// --- On-the-fly permission guidance ----------------------------------------
+// There is NO onboarding permission screen anymore: the first computer-use
+// call that hits a missing macOS grant fails right here, and the enriched
+// tool error teaches the model to (a) tell the user exactly which toggle to
+// flip, (b) offer to open the right System Settings pane for them, and
+// (c) keep working — a missing permission blocks only THIS tool, never the
+// rest of the run.
+const PERMISSION_PANE_COMMANDS = {
+  accessibility: 'open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"',
+  automation: 'open "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation"',
+  screen: 'open "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"',
+};
+
+function permissionAdvice(tag, message) {
+  const msg = String(message || '');
+  let perm = null;
+  if (/-1743|not authorized to send apple events/i.test(msg)) perm = { name: 'Automation (allow controlling "System Events")', pane: 'automation' };
+  else if (/-25211|assistive access|not allowed assistive|accessibility/i.test(msg)) perm = { name: 'Accessibility', pane: 'accessibility' };
+  else if (/screen recording/i.test(msg)) perm = { name: 'Screen Recording', pane: 'screen' };
+  if (!perm) return null;
+  return [
+    `${tag} failed: the macOS ${perm.name} permission is missing (${msg.trim()}).`,
+    `This blocks ONLY this tool — everything else (browser_*, files, execute_command, MCP) still works, so do not stop the task.`,
+    `Tell the user, in one short sentence, to enable Bed of Roses (or Electron / their terminal during development) under System Settings → Privacy & Security → ${perm.name.split(' (')[0]}, then quit and reopen Bed of Roses.`,
+    `Offer to open that settings pane for them; if they want it opened, run: <execute_command><command>${PERMISSION_PANE_COMMANDS[perm.pane]}</command></execute_command>.`,
+    `If they decline or don't answer, continue the task by another route (usually the ambient browser) or without this step.`,
+  ].join(' ');
+}
+
 function toolError(tag, reason) {
-  return { ok: false, event: 'tool_error', payload: { tag, reason }, llmEcho: `${tag} failed: ${reason}` };
+  const advice = process.platform === 'darwin' ? permissionAdvice(tag, reason) : null;
+  return { ok: false, event: 'tool_error', payload: { tag, reason }, llmEcho: advice || `${tag} failed: ${reason}` };
 }
 
 export async function executeScreenCapture(block, ctx) {

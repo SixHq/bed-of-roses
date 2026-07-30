@@ -793,7 +793,11 @@ function startHudClock() {
 }
 
 // --- Onboarding pane router ------------------------------------------------
-const PANES = ['welcome', 'name', 'theme', 'presence', 'permissions', 'connect', 'tools'];
+// No permissions pane: macOS computer-use permissions are requested on the
+// fly — the first tool call that hits a missing grant returns an enriched
+// error and the AI walks the user through enabling it (see
+// server/protocol/handlers/computer.js permissionAdvice).
+const PANES = ['welcome', 'name', 'theme', 'presence', 'connect', 'tools'];
 let currentPaneIdx = 0;
 
 function gotoPane(idx) {
@@ -819,10 +823,6 @@ function gotoPane(idx) {
 
   // Refresh connector status when the user lands on the final connectors pane.
   if (next === 'tools') refreshConnectors();
-
-  // Probe macOS computer-use permissions when landing on the permissions pane
-  // (the probe also triggers the first-run macOS permission prompts).
-  if (next === 'permissions') refreshComputerUsePermissions();
 
   // Re-trigger headline reveal on each pane entry
   const nextPane = qs(`.pane[data-pane="${next}"]`);
@@ -4038,61 +4038,6 @@ function wireConnectorDrawer(card, c) {
   });
 }
 
-// Probe + render the two macOS computer-use permissions (Accessibility +
-// Screen Recording). Hitting the endpoint also triggers the first-run macOS
-// permission prompts the very first time.
-async function refreshComputerUsePermissions() {
-  const setBadge = (id, cls, text) => {
-    const badge = $(id);
-    if (!badge) return;
-    badge.className = 'tool-badge' + (cls ? ` ${cls}` : '');
-    badge.textContent = text;
-  };
-  const setCard = (id, status) => { const c = $(id); if (c) c.dataset.status = status; };
-  const hint = $('perm-control-hint');
-  setBadge('perm-control-badge', '', 'checking…');
-  setBadge('perm-screen-badge', '', 'checking…');
-  if (hint) hint.textContent = '';
-  try {
-    const res = await fetch('/api/system/permissions');
-    if (!res.ok) throw new Error(`status ${res.status}`);
-    const p = await res.json();
-    if (p.platform && p.platform !== 'darwin') {
-      setBadge('perm-control-badge', 'ok', 'not needed');
-      setBadge('perm-screen-badge', 'ok', 'not needed');
-      setCard('perm-control', 'installed');
-      setCard('perm-screen', 'installed');
-      return;
-    }
-    if (p.cliclick) {
-      // Primary input path is cliclick (CGEvents) — needs ONLY Accessibility.
-      const ready = p.control; // osascript-ok implies Accessibility is on too
-      setBadge('perm-control-badge', ready ? 'ok' : 'warn', ready ? '✓ ready' : 'grant Accessibility');
-      setCard('perm-control', ready ? 'installed' : 'missing');
-      if (hint) {
-        hint.textContent = ready
-          ? 'Ready (using cliclick). Automation is not required.'
-          : 'Computer-use uses cliclick (CGEvents) and needs ONLY Accessibility — not Automation. Toggle Bed of Roses (or Electron) ON under Accessibility, then quit & reopen BOR. If clicks do nothing, that grant isn\'t active yet.';
-      }
-    } else {
-      setBadge('perm-control-badge', p.control ? 'ok' : 'warn', p.control ? '✓ granted' : 'not granted');
-      setCard('perm-control', p.control ? 'installed' : 'missing');
-      if (hint) {
-        hint.textContent = p.control
-          ? ''
-          : p.controlNeeds === 'accessibility'
-            ? 'Missing: Accessibility. Toggle Bed of Roses (or Electron) on, then quit & reopen BOR.'
-            : 'Missing: Automation → "System Events" (or install cliclick to avoid it). Enable it for Bed of Roses (or Electron), then quit & reopen BOR.';
-      }
-    }
-    setBadge('perm-screen-badge', p.screenRecording ? 'ok' : 'warn', p.screenRecording ? '✓ granted' : 'not granted');
-    setCard('perm-screen', p.screenRecording ? 'installed' : 'missing');
-  } catch {
-    setBadge('perm-control-badge', 'err', 'check failed');
-    setBadge('perm-screen-badge', 'err', 'check failed');
-  }
-}
-
 function showOnboardingError(msg) {
   const el = $('onboarding-error');
   el.textContent = msg;
@@ -4445,7 +4390,7 @@ function wireOnboarding() {
   });
 
   // Final pane — connectors gallery ("Connect Bed of Roses to your daily life").
-  $('tools-back').addEventListener('click', () => gotoPane(5)); // -> connect
+  $('tools-back').addEventListener('click', () => gotoPane(4)); // -> connect
   $('connectors-recheck').addEventListener('click', () => refreshConnectors(true));
   $('tools-next').addEventListener('click', async () => {
     // Settings mode (?connectors=1): connector actions already saved
@@ -4482,26 +4427,7 @@ function wireOnboarding() {
     }
   });
 
-  // Permissions pane (computer-use macOS perms).
-  $('permissions-back').addEventListener('click', () => gotoPane(3)); // -> presence
-  $('permissions-next').addEventListener('click', () => gotoPane(5)); // -> connect
-  $('permissions-recheck').addEventListener('click', () => refreshComputerUsePermissions());
-  qsa('[data-perm-open]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const pane = btn.getAttribute('data-perm-open');
-      try {
-        await fetch('/api/system/permissions/open', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ pane }),
-        });
-      } catch { /* ignore */ }
-      // Re-check shortly after, in case they toggle it immediately.
-      setTimeout(() => refreshComputerUsePermissions(), 1500);
-    });
-  });
-
-  $('connect-back').addEventListener('click', () => gotoPane(4)); // -> permissions
+  $('connect-back').addEventListener('click', () => gotoPane(3)); // -> presence
 
   $('connect-finish').addEventListener('click', async () => {
     // Settings mode: nothing to commit beyond what the drawers already saved —
@@ -4515,7 +4441,7 @@ function wireOnboarding() {
       return;
     }
     // Identity commit happens on the FINAL (tools) pane — see tools-next.
-    gotoPane(6); // -> tools (connectors gallery, last step)
+    gotoPane(5); // -> tools (connectors gallery, last step)
   });
 
   $('ai-name').addEventListener('keydown', (e) => {
@@ -4863,7 +4789,7 @@ async function boot() {
   // window — connector actions save server-side as they happen.
   if (SETTINGS_CONNECTORS) {
     show('onboarding');
-    gotoPane(6); // connectors pane (also triggers refreshConnectors)
+    gotoPane(5); // connectors pane (also triggers refreshConnectors)
     $('tools-back')?.classList.add('hidden');
     const finish = $('tools-next');
     if (finish) finish.textContent = 'Done';
@@ -4877,7 +4803,7 @@ async function boot() {
     show('onboarding');
     state.expandedProvider = (SETTINGS_PROVIDER === 'current' ? cfg?.defaultProvider : SETTINGS_PROVIDER) || null;
     renderProviderGrid();
-    gotoPane(5); // connect pane
+    gotoPane(4); // connect pane
     const back = $('connect-back');
     if (back) back.classList.add('hidden');
     const finish = $('connect-finish');

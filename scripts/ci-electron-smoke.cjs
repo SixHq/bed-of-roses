@@ -21,7 +21,9 @@ try {
 // NOTE: CI-only. The host anchors its presence registry at <repo>/os-data —
 // fine on a disposable CI checkout, but running this locally would create a
 // throwaway presence in your real registry.
-const child = spawn(electronBinary, [path.join(ROOT, 'host', 'main.cjs'), '--disable-gpu'], {
+// --no-sandbox: GitHub runners can't grant the chrome-sandbox helper SUID
+// root, and Chromium aborts (SIGTRAP) rather than run half-sandboxed.
+const child = spawn(electronBinary, [path.join(ROOT, 'host', 'main.cjs'), '--disable-gpu', '--no-sandbox'], {
   cwd: ROOT,
   env: {
     ...process.env,
